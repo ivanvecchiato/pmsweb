@@ -88,6 +88,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import axios from 'axios';
 
 const rooms = ref([
   { id: 1, name: 'Camera 101 - Singola' },
@@ -245,9 +246,22 @@ const getSelectedGuest = () => {
   return booking ? booking.guest : '';
 };
 
+const getRooms = () =>{
+  const url = 'http://localhost:8081/api/pms/getrooms'; // Sostituisci con il tuo endpoint API reale
+  axios.get(url)
+    .then(response => {
+      console.log('Camere caricate:', response.data);
+//      rooms.value = response.data;
+    })
+    .catch(error => {
+      console.error('Errore nel caricamento delle camere:', error);
+    });
+}
+
 onMounted(() => {
   window.addEventListener('mousemove', handleMouseMove);
   window.addEventListener('mouseup', handleMouseUp);
+  getRooms();
 });
 
 onUnmounted(() => {
