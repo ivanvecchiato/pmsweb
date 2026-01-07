@@ -251,6 +251,7 @@ const handleMouseMove = (e) => {
       if (!wouldConflict(booking.id, newRoomId, newStartDay, booking.duration)) {
         booking.startDay = newStartDay;
         booking.roomId = newRoomId;
+        movingReservation = booking;
       }
     }
   } else if (resizing.value) {
