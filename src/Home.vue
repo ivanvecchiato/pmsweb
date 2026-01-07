@@ -98,7 +98,7 @@ const rooms = ref([
   { id: 5, name: 'Camera 202 - Singola' }
 ]);
 
-const startDate = ref(new Date(2025, 0, 1));
+const startDate = ref(new Date(2026, 0, 1));
 const days = ref(61);
 
 const bookings = ref([
@@ -246,12 +246,52 @@ const getSelectedGuest = () => {
   return booking ? booking.guest : '';
 };
 
+const getReservations = () =>{
+  const fromDate = startDate.value.toISOString().split('T')[0];
+  const toDateObj = new Date(startDate.value);
+  toDateObj.setDate(toDateObj.getDate() + days.value - 1);
+  const toDate = toDateObj.toISOString().split('T')[0];
+
+  var url = 'http://localhost:8081/api/pms/getbookingsbyrange';
+  url += `?from=${fromDate}&to=${toDate}`;
+  console.log('Fetching reservations from:', url);
+  axios.get(url)
+    .then(response => {
+      console.log('Prenotazioni caricate:', response.data);
+      //bookings.value = response.data;
+      convertReservations(response.data);
+    })
+    .catch(error => {
+      console.error('Errore nel caricamento delle prenotazioni:', error);
+    });
+};
+
+const convertRooms = (apiRooms) => {
+  rooms.value = apiRooms.map(r => ({
+    id: r.id,
+    name: r.description
+  }));
+};
+
+const convertReservations = (apiReservations) => {
+  bookings.value = apiReservations.bookings.map(res => ({
+    id: res.id,
+    roomId: res.roomId,
+    startDay: Math.floor((new Date(res.checkin) - startDate.value) / (1000 * 60 * 60 * 24)) + 1,
+    duration: res.duration,
+    guest: res.accountholder.firstname + ' ' + res.accountholder.lastname,
+    color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
+  }));
+};
+
 const getRooms = () =>{
   const url = 'http://localhost:8081/api/pms/getrooms'; // Sostituisci con il tuo endpoint API reale
   axios.get(url)
     .then(response => {
       console.log('Camere caricate:', response.data);
+      convertRooms(response.data);
 //      rooms.value = response.data;
+      getReservations();
     })
     .catch(error => {
       console.error('Errore nel caricamento delle camere:', error);
