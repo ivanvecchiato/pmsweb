@@ -112,6 +112,7 @@ const bookings = ref([
 const dragging = ref(null);
 const resizing = ref(null);
 const selectedBooking = ref(null);
+var movingReservation = ref(null);
 
 const cellWidth = 60;
 const cellHeight = 60;
@@ -188,6 +189,8 @@ const handleMouseMove = (e) => {
       if (roomIndex >= 0 && roomIndex < rooms.value.length) {
         booking.roomId = rooms.value[roomIndex].id;
       }
+
+      movingReservation = booking;
     }
   } else if (resizing.value) {
     const deltaX = e.clientX - resizing.value.startX;
@@ -206,13 +209,34 @@ const handleMouseMove = (e) => {
           booking.duration = newDuration;
         }
       }
+      movingReservation = booking;
     }
   }
+};
+
+const updateReservation = (booking) => {
+  console.log('Aggiornamento prenotazione:', booking.id);
+  const obj = {
+    id: booking.id,
+    roomId: booking.roomId,
+    checkin: new Date(startDate.value.getTime() + (booking.startDay) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    duration: booking.duration
+  }
+  axios.post('http://localhost:8081/api/pms/updatereservation', obj)
+    .then(response => {
+      movingReservation = null;
+      console.log('Prenotazione aggiornata con successo:', response.data);
+    })
+    .catch(error => {
+      movingReservation = null;
+      console.error('Errore nell\'aggiornamento della prenotazione:', error);
+    });
 };
 
 const handleMouseUp = () => {
   dragging.value = null;
   resizing.value = null;
+  updateReservation(movingReservation);
 };
 
 const addBooking = () => {
