@@ -465,9 +465,13 @@ const bookingQuote = computed(() => {
   const start = new Date(checkin);
   const end = new Date(checkout);
   const room = rooms.value.find(r => r.id === roomId);
-  const numPeople = parseInt(adults) + parseInt(children);
+  
+  // Calcolo occupanti totali
+  const numAdults = parseInt(adults) || 0;
+  const numChildren = parseInt(children) || 0;
+  const totalPeople = numAdults + numChildren;
 
-  if (!room || start >= end) return null;
+  if (!room || start >= end || totalPeople === 0) return null;
 
   let totalCalculated = 0;
   const days = [];
@@ -476,22 +480,35 @@ const bookingQuote = computed(() => {
   while (current < end) {
     const dateStr = current.toISOString().split('T')[0];
     const dayData = timetable.value.find(t => t.date === dateStr);
-    const pricelist = pricelists.value.find(p => p.id === dayData?.pricelist);
     
-    const roomRate = pricelist?.prices.find(p => p.roomType === room.type)?.tariffa || 0;
+    // Cerchiamo il listino (usando String() per evitare errori di tipo id 1 vs "1")
+    const pricelist = pricelists.value.find(p => String(p.id) === String(dayData?.pricelist));
     
-    let surcharge = 0;
-    if (board === 'hb') surcharge = (pricelist?.surcharges?.hb || 0) * numPeople;
-    if (board === 'fb') surcharge = (pricelist?.surcharges?.fb || 0) * numPeople;
+    // 1. Quota Camera PER PERSONA
+    const ratePerPerson = pricelist?.prices.find(p => p.roomType === room.type)?.tariffa || 0;
+    const totalRoomRateDay = ratePerPerson * totalPeople;
 
-    const dayTotal = roomRate + surcharge;
-    days.push({ date: dateStr, dayTotal, listino: pricelist?.description || 'Standard' });
-    
+    // 2. Supplemento Trattamento PER PERSONA
+    let surchargePerPerson = 0;
+    if (board === 'hb') surchargePerPerson = pricelist?.surcharges?.hb || 0;
+    if (board === 'fb') surchargePerPerson = pricelist?.surcharges?.fb || 0;
+    const totalSurchargeDay = surchargePerPerson * totalPeople;
+
+    const dayTotal = totalRoomRateDay + totalSurchargeDay;
+
+    days.push({
+      date: dateStr,
+      ratePerPerson,
+      surchargePerPerson,
+      totalPeople,
+      dayTotal,
+      listino: pricelist?.description || 'N/A'
+    });
+
     totalCalculated += dayTotal;
     current.setDate(current.getDate() + 1);
   }
 
-  // Se l'utente ha attivato il prezzo manuale, usiamo quello per il totale
   const finalTotal = newBookingData.value.isManualPrice 
     ? newBookingData.value.manualPrice 
     : totalCalculated;
@@ -847,7 +864,8 @@ const getReservations = () => {
 const convertRooms = (apiRooms) => {
   rooms.value = apiRooms.map(r => ({
     id: String(r.id), // Forza ID a stringa
-    name: r.description
+    name: r.description,
+    type: r.room_type.label
   }));
 };
 
