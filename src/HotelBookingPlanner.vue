@@ -87,9 +87,6 @@
                 
                 <div class="booking-content">
                   <div class="booking-guest">{{ booking.guest }}</div>
-                  <div class="booking-duration">
-                    {{ booking.duration }} {{ booking.duration === 1 ? 'notte' : 'notti' }}
-                  </div>
                 </div>
 
                 <div
@@ -160,6 +157,17 @@
           </div>
         </div>
 
+        <div class="form-section">
+          <label>Trattamento</label>
+          <div class="board-radio-group">
+            <label v-for="mode in ['bb', 'hb', 'fb']" :key="mode" 
+                  class="board-radio-card" :class="{ 'is-selected': newBookingData.board === mode }">
+              <input type="radio" v-model="newBookingData.board" :value="mode" class="hidden-radio">
+              <span class="board-name">{{ mode.toUpperCase() }}</span>
+            </label>
+          </div>
+        </div>
+        
         <div class="form-row">
           <div class="form-section">
             <label>Check-in</label>
@@ -168,6 +176,37 @@
           <div class="form-section">
             <label>Check-out</label>
             <input type="date" v-model="newBookingData.checkout" required />
+          </div>
+        </div>
+
+        <div class="form-row price-management-row">
+          <div class="form-section">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="newBookingData.isManualPrice">
+              <span>Applica Prezzo Manuale</span>
+            </label>
+          </div>
+          
+          <div class="form-section" v-if="newBookingData.isManualPrice">
+            <label>Totale Concordato (€)</label>
+            <input type="number" v-model.number="newBookingData.manualPrice" class="input-manual-highlight">
+          </div>
+        </div>
+
+        <div v-if="bookingQuote" class="quote-box" :class="{ 'manual-active': newBookingData.isManualPrice }">
+          <div class="quote-details">
+            <div v-for="day in bookingQuote.days" :key="day.date" class="quote-line">
+              <span>{{ day.date }}</span>
+              <span>€{{ day.dayTotal }}</span>
+            </div>
+          </div>
+          <div class="quote-summary-footer">
+            <div v-if="newBookingData.isManualPrice" class="price-strikethrough">
+              Calcolato: €{{ bookingQuote.totalCalculated }}
+            </div>
+            <div class="final-price-display">
+              TOTALE: €{{ bookingQuote.finalTotal }}
+            </div>
           </div>
         </div>
 
@@ -185,6 +224,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
+import { watch } from 'vue';
 
 const rooms = ref([
   { id: 1, name: 'Camera 101 - Singola' },
@@ -214,7 +254,7 @@ const tempBooking = ref(null);
 var movingReservation = ref(null);
 
 const cellWidth = 60;
-const cellHeight = 60;
+const cellHeight = 40;
 
 const mouseLineX = ref(0);
 const hoverDate = ref('');
@@ -296,7 +336,23 @@ const newBookingData = ref({
   adults: 1,
   children: 0,
   checkin: '',
-  checkout: ''
+  checkout: '',
+  board: 'bb',
+  isManualPrice: false,
+  manualPrice: 0
+});
+
+// 1. AUTOMAZIONE DATE: Il checkout segue il checkin
+watch(() => newBookingData.value.checkin, (newIn) => {
+  if (!newIn) return;
+  const dateIn = new Date(newIn);
+  const dateOut = new Date(newBookingData.value.checkout);
+
+  if (!newBookingData.value.checkout || dateOut <= dateIn) {
+    const nextDay = new Date(dateIn);
+    nextDay.setDate(nextDay.getDate() + 1);
+    newBookingData.value.checkout = nextDay.toISOString().split('T')[0];
+  }
 });
 
 const addBooking = () => {
@@ -400,6 +456,47 @@ const todayLineStyle = computed(() => {
 
   // Se oggi non è nel periodo visualizzato, nascondi
   return { display: 'none' };
+});
+
+const bookingQuote = computed(() => {
+  const { checkin, checkout, roomId, board, adults, children } = newBookingData.value;
+  if (!checkin || !checkout || !roomId) return null;
+
+  const start = new Date(checkin);
+  const end = new Date(checkout);
+  const room = rooms.value.find(r => r.id === roomId);
+  const numPeople = parseInt(adults) + parseInt(children);
+
+  if (!room || start >= end) return null;
+
+  let totalCalculated = 0;
+  const days = [];
+  let current = new Date(start);
+
+  while (current < end) {
+    const dateStr = current.toISOString().split('T')[0];
+    const dayData = timetable.value.find(t => t.date === dateStr);
+    const pricelist = pricelists.value.find(p => p.id === dayData?.pricelist);
+    
+    const roomRate = pricelist?.prices.find(p => p.roomType === room.type)?.tariffa || 0;
+    
+    let surcharge = 0;
+    if (board === 'hb') surcharge = (pricelist?.surcharges?.hb || 0) * numPeople;
+    if (board === 'fb') surcharge = (pricelist?.surcharges?.fb || 0) * numPeople;
+
+    const dayTotal = roomRate + surcharge;
+    days.push({ date: dateStr, dayTotal, listino: pricelist?.description || 'Standard' });
+    
+    totalCalculated += dayTotal;
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Se l'utente ha attivato il prezzo manuale, usiamo quello per il totale
+  const finalTotal = newBookingData.value.isManualPrice 
+    ? newBookingData.value.manualPrice 
+    : totalCalculated;
+
+  return { totalCalculated, finalTotal, days };
 });
 
 const formatDate = (date) => {
@@ -822,10 +919,27 @@ const getDateRange = () => {
   return `${formatDate(start)} - ${formatDate(end)}`;
 };
 
+const pricelists = ref([]); // Da pricesDB.json
+const timetable = ref([]);   // Da timeTableDB.json
+
+const loadPricingData = async () => {
+  try {
+    const [resPrices, resTime] = await Promise.all([
+      axios.get('http://localhost:8081/api/pms/getrates'),
+      axios.get('http://localhost:8081/api/pms/gettimetable')
+    ]);
+    pricelists.value = resPrices.data;
+    timetable.value = resTime.data;
+  } catch (err) {
+    console.error("Errore caricamento listini:", err);
+  }
+};
+
 onMounted(() => {
   window.addEventListener('mousemove', handleMouseMove);
   window.addEventListener('mouseup', handleMouseUp);
   getRooms();
+  loadPricingData();
 });
 
 onUnmounted(() => {
@@ -1000,22 +1114,21 @@ onUnmounted(() => {
   border-bottom: 1px solid #e5e7eb;
 }
 
-.room-row:hover {
-  background: #f9fafb;
-}
-
+/* Altezza ridotta per la cella con il nome della camera */
 .room-cell {
   width: 200px;
   flex-shrink: 0;
   border-right: 1px solid #e5e7eb;
   background: white;
   font-weight: 500;
-  padding: 0.75rem;
+  padding: 0 0.75rem; /* Ridotto il padding verticale a 0 */
   display: flex;
   align-items: center;
+  height: 40px; /* Deve corrispondere a cellHeight */
   position: sticky;
   left: 0;
   z-index: 10;
+  font-size: 0.85rem; /* Testo leggermente più piccolo per equilibrio */
 }
 
 .days-container {
@@ -1029,13 +1142,16 @@ onUnmounted(() => {
   border-right: 1px solid #e5e7eb;
 }
 
+/* Riduciamo anche i margini verticali della barra prenotazione */
 .booking {
   position: absolute;
   cursor: move;
-  border-radius: 0.5rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border: 2px solid;
+  border-radius: 0.3rem; /* Angoli meno arrotondati per altezze piccole */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid; /* Bordo più sottile */
   transition: all 0.1s;
+  top: 3px !important;    /* Margine superiore minimo */
+  bottom: 3px !important; /* Margine inferiore minimo */
 }
 
 .booking-selected {
@@ -1047,11 +1163,16 @@ onUnmounted(() => {
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
 }
 
+
+/* Padding ridotto per la prenotazione */
 .booking-content {
-  padding: 0.5rem 0.75rem;
+  padding: 2px 8px; /* Padding minimo per far stare il nome al centro */
   color: white;
   font-weight: 500;
-  font-size: 0.875rem;
+  font-size: 0.8rem; /* Font leggermente ridotto */
+  height: 100%;
+  display: flex;
+  align-items: center;
   overflow: hidden;
 }
 
@@ -1164,15 +1285,15 @@ onUnmounted(() => {
 }
 
 .mouse-tooltip {
+  top: -40px; /* Avvicinato alla riga */
+  padding: 3px 10px;
+  font-size: 10px;
   position: absolute;
-  top: -45px; /* Alzato leggermente per non coprire il bordo superiore */
   left: 50%;
   transform: translateX(-50%);
   background: #1e293b;
   color: white;
-  padding: 5px 12px;
   border-radius: 6px;
-  font-size: 11px;
   white-space: nowrap;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
   display: flex;
@@ -1182,10 +1303,6 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* Stile per evidenziare meglio la riga intera al passaggio */
-.room-row:hover {
-  background-color: rgba(59, 130, 246, 0.04);
-}
 .mouse-tooltip::after {
   content: "";
   position: absolute;
@@ -1291,4 +1408,264 @@ onUnmounted(() => {
 /* Animazione */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.quote-summary {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.quote-scroll {
+  max-height: 120px;
+  overflow-y: auto;
+  margin: 10px 0;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.quote-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  padding: 4px 0;
+  color: #475569;
+}
+
+.quote-total {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: #1e293b;
+  padding-top: 10px;
+}
+
+.quote-summary h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #334155;
+  text-transform: uppercase;
+}
+
+/* Radio Buttons come Card */
+.board-radio-group {
+  display: flex;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.board-radio-card {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+
+.board-radio-card.is-selected {
+  background: #3b82f6;
+  color: white;
+  border-color: #2563eb;
+  font-weight: bold;
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+}
+
+.hidden-radio {
+  display: none;
+}
+
+/* Prezzo Manuale */
+.input-manual-highlight {
+  border: 2px solid #ef4444 !important; /* Rosso per indicare "attenzione/manuale" */
+  background: #fef2f2;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.quote-box.manual-active {
+  border-left: 4px solid #ef4444;
+  background: #fff5f5;
+}
+
+.price-strikethrough {
+  text-decoration: line-through;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.final-price-display {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.quote-preview {
+  margin-top: 15px;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+}
+.quote-list { max-height: 100px; overflow-y: auto; margin: 8px 0; }
+.quote-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  padding: 4px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.quote-footer {
+  display: flex;
+  justify-content: space-between;
+  font-weight: bold;
+  font-size: 1rem;
+  padding-top: 8px;
+  border-top: 2px solid #cbd5e1;
+}
+.manual-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.manual-input {
+  border: 2px solid #3b82f6 !important;
+  background: #eff6ff;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.quote-container {
+  margin-top: 15px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.quote-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 4px 0;
+}
+
+.original-price {
+  text-decoration: line-through;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.final-price {
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: #1e293b;
+}
+
+.animate-fade {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Contenitore principale del preventivo */
+.quote-box {
+  margin-top: 20px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* Evidenziazione quando il prezzo è manuale */
+.quote-box.manual-active {
+  border-left: 5px solid #ef4444;
+  background: #fff5f5;
+}
+
+/* Area scrollabile con l'elenco delle notti */
+.quote-details {
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 12px;
+  background: white;
+  margin: 10px;
+  border-radius: 6px;
+  border: 1px solid #edf2f7;
+}
+
+/* Singola riga del giorno */
+.quote-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.quote-line:last-child {
+  border-bottom: none;
+}
+
+.quote-line span:first-child {
+  font-family: monospace; /* Rende le date più allineate */
+}
+
+/* Footer con il calcolo finale */
+.quote-summary-footer {
+  padding: 15px;
+  background: #f1f5f9;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.quote-box.manual-active .quote-summary-footer {
+  background: #fee2e2;
+}
+
+/* Prezzo originale barrato (quando c'è il manuale) */
+.price-strikethrough {
+  text-decoration: line-through;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  margin-bottom: 2px;
+}
+
+/* Prezzo finale grande */
+.final-price-display {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.quote-box.manual-active .final-price-display {
+  color: #b91c1c;
+}
 </style>
