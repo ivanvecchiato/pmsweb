@@ -12,6 +12,11 @@ const router = createRouter({
       path: '/customers',
       name: 'CustomerManagement',
       component: () => import('../CustomerManagement.vue')
+    },
+    {
+      path: '/Listino',
+      name: 'PriceManagement',
+      component: () => import('../PriceManagement.vue')
     }
   ],
 })
