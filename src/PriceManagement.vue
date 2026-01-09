@@ -26,11 +26,14 @@
     <div class="main-content">
       <div class="calendar-grid">
         <div v-for="day in timetable" :key="day.date" 
-             class="day-box" 
-             :class="{ 'in-selection': isInRange(day.date) }"
-             :style="getDayStyle(day)"
-             @mousedown="handleMouseDown(day.date)"
-             @mouseenter="handleMouseEnter(day.date)">
+            class="day-box" 
+            :class="{ 
+              'in-selection': isInRange(day.date),
+              'is-sunday': isSunday(day.date) 
+            }"
+            :style="getDayStyle(day)"
+            @mousedown="handleMouseDown(day.date)"
+            @mouseenter="handleMouseEnter(day.date)">
           <span class="day-num">{{ getDayOfMonth(day.date) }}</span>
           <small>{{ getMonthName(day.date) }}</small>
         </div>
@@ -51,6 +54,11 @@ const selectedPricelist = ref(null);
 const selectionStart = ref(null);
 const selectionEnd = ref(null);
 const isSelecting = ref(false);
+
+const isSunday = (dateStr) => {
+  const date = new Date(dateStr);
+  return date.getDay() === 0; // 0 rappresenta la domenica in JavaScript
+};
 
 const handleMouseDown = (date) => {
   if (!selectedPricelist.value) return;
@@ -224,5 +232,17 @@ onMounted(loadData);
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
+}
+.day-box.is-sunday {
+  background-color: #fff1f2; /* Un rosso chiarissimo di sfondo */
+  border-color: #fecaca;    /* Bordo rosato */
+}
+
+.day-box.is-sunday .day-num {
+  color: #e11d48; /* Numero del giorno in rosso */
+}
+
+.day-box.is-sunday small {
+  color: #fb7185; /* Nome del mese in rosso chiaro */
 }
 </style>
