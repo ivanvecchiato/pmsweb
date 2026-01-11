@@ -28,6 +28,20 @@
           <span class="label">Clienti</span>
         </router-link>
 
+                <router-link
+          to="/inventory"
+          :class="['menu-item', { active: route.path === '/inventory' }]"
+          aria-label="Magazzino"
+        >
+          <span class="icon" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span class="label">Magazzino</span>
+        </router-link>
+
+
         <router-link
           to="/listino"
           :class="['menu-item', { active: route.path === '/listino' }]"

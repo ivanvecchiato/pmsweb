@@ -17,6 +17,11 @@ const router = createRouter({
       path: '/Listino',
       name: 'PriceManagement',
       component: () => import('../PriceManagement.vue')
+    },
+    {
+      path: '/inventory',
+      name: 'InventoryManagement',
+      component: () => import('../InventoryManagement.vue')
     }
   ],
 })
