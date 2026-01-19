@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import axios from 'axios';
 
 // --- STATO DATI ---
@@ -7,13 +7,19 @@ const products = ref([]);
 const loading = ref(false);
 const searchQuery = ref('');
 
-// --- STATO MODALE ---
+// --- STATO MODALE SINGOLO ---
 const isModalOpen = ref(false);
 const selectedProduct = ref(null);
-const movementData = ref({
-  type: 'purchase',
-  quantity: 1,
-  note: ''
+const movementData = ref({ type: 'purchase', quantity: 1, note: '' });
+
+// --- STATO CARICO MASSIVO (BOLLA) ---
+const isBulkModalOpen = ref(false);
+const bulkDelivery = ref({
+  supplierName: '',
+  docNumber: '',
+  items: [
+    { productId: null, productName: '', quantity: 1, purchase_price: 0 }
+  ]
 });
 
 const movementTypes = [
@@ -31,6 +37,7 @@ const stats = ref({
   self_consumption: { totalValue: 0, items: 0 }
 });
 
+// --- LOGICA FETCH ---
 const fetchStats = async () => {
   try {
     const end = new Date().toISOString();
@@ -56,33 +63,65 @@ const fetchInventory = async () => {
   }
 };
 
-const confirmMovement = async () => {
-  try {
-    await axios.post('http://localhost:8088/api/inventory/movement', {
-      productId: selectedProduct.value.id,
-      ...movementData.value
-    });
-    isModalOpen.value = false;
-    await Promise.all([fetchInventory(), fetchStats()]);
-  } catch (err) {
-    alert("Errore salvataggio");
+// --- LOGICA CARICO MASSIVO ---
+const addBulkRow = () => {
+  bulkDelivery.value.items.push({ productId: null, productName: '', quantity: 1, purchase_price: 0 });
+};
+
+const removeBulkRow = (index) => {
+  if (bulkDelivery.value.items.length > 1) bulkDelivery.value.items.splice(index, 1);
+};
+
+// Quando l'utente seleziona o scrive un prodotto, cerchiamo l'ID e il prezzo di default
+const onProductInput = (item) => {
+  const found = products.value.find(p => p.name === item.productName);
+  if (found) {
+    item.productId = found.id;
+    item.purchase_price = found.purchase_price; // Prezzo di default da anagrafica
+  } else {
+    item.productId = null;
   }
 };
 
+const confirmBulkDelivery = async () => {
+  const validItems = bulkDelivery.value.items.filter(i => i.productId);
+  if (validItems.length === 0) return alert("Inserisci almeno un prodotto valido");
+  if (!bulkDelivery.value.docNumber) return alert("Inserisci il numero della bolla");
+  
+  try {
+    loading.value = true;
+    const promises = validItems.map(item => 
+      axios.post('http://localhost:8088/api/inventory/movement', {
+        productId: item.productId,
+        type: 'purchase',
+        quantity: item.quantity,
+        purchase_price: item.purchase_price, // Inviamo il prezzo specifico della bolla
+        note: `BOLLA ${bulkDelivery.value.docNumber} - ${bulkDelivery.value.supplierName}`
+      })
+    );
+
+    await Promise.all(promises);
+    isBulkModalOpen.value = false;
+    bulkDelivery.value = { supplierName: '', docNumber: '', items: [{ productId: null, productName: '', quantity: 1, purchase_price: 0 }] };
+    await Promise.all([fetchInventory(), fetchStats()]);
+  } catch (err) {
+    alert("Errore nel salvataggio");
+  } finally {
+    loading.value = false;
+  }
+};
+
+// --- LOGICA FILTRI E MODALE SINGOLO ---
 const filteredProducts = computed(() => {
   const query = searchQuery.value.toLowerCase();
-  return products.value
-    .filter(p => {
-      const productName = p.name.toLowerCase();
-      // Cerchiamo nel primo fornitore disponibile
-      const supplierName = p.inventory.suppliers?.[0]?.supplier?.toLowerCase() || '';
-      return productName.includes(query) || supplierName.includes(query);
-    })
-    .map(p => {
-      const margin = p.price - p.purchase_price;
-      const marginPercent = p.price > 0 ? (margin / p.price) * 100 : 0;
-      return { ...p, margin, marginPercent };
-    });
+  return products.value.filter(p => 
+    p.name.toLowerCase().includes(query) || 
+    (p.inventory.suppliers?.[0]?.supplier?.toLowerCase() || '').includes(query)
+  ).map(p => ({
+    ...p,
+    margin: p.price - p.purchase_price,
+    marginPercent: p.price > 0 ? ((p.price - p.purchase_price) / p.price) * 100 : 0
+  }));
 });
 
 const openMovementModal = (product, type = 'purchase') => {
@@ -93,10 +132,19 @@ const openMovementModal = (product, type = 'purchase') => {
   isModalOpen.value = true;
 };
 
-onMounted(() => {
-  fetchInventory();
-  fetchStats();
-});
+const confirmMovement = async () => {
+  try {
+    await axios.post('http://localhost:8088/api/inventory/movement', {
+      productId: selectedProduct.value.id,
+      ...movementData.value,
+      purchase_price: selectedProduct.value.purchase_price // Anche qui salviamo il prezzo corrente
+    });
+    isModalOpen.value = false;
+    await Promise.all([fetchInventory(), fetchStats()]);
+  } catch (err) { alert("Errore"); }
+};
+
+onMounted(() => { fetchInventory(); fetchStats(); });
 </script>
 
 <template>
@@ -104,19 +152,14 @@ onMounted(() => {
     <header class="inv-header">
       <div class="title-group">
         <h1>Gestione Magazzino</h1>
-        <p class="subtitle">
-          {{ filteredProducts.length }} prodotti trovati 
-          <span v-if="searchQuery">per "{{ searchQuery }}"</span>
-        </p>
+        <p class="subtitle">{{ filteredProducts.length }} prodotti in elenco</p>
       </div>
       <div class="header-actions">
+        <button @click="isBulkModalOpen = true" class="btn-bulk">📦 Registra Bolla</button>
         <div class="search-container">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input v-model="searchQuery" placeholder="Cerca prodotto o fornitore..." class="search-input" />
+          <input v-model="searchQuery" placeholder="Filtra tabella..." class="search-input" />
         </div>
-        <button @click="fetchInventory" class="btn-refresh" :disabled="loading">
-          {{ loading ? '...' : 'Sincronizza' }}
-        </button>
+        <button @click="fetchInventory" class="btn-refresh">🔄</button>
       </div>
     </header>
 
@@ -156,9 +199,7 @@ onMounted(() => {
               </div>
               <div class="product-details">
                 <span class="p-name">{{ p.name }}</span>
-                <span class="p-supplier">
-                  🏢 {{ p.inventory.suppliers?.[0]?.supplier || 'Fornitore non settato' }}
-                </span>
+                <span class="p-supplier">🏢 {{ p.inventory.suppliers?.[0]?.supplier || 'N/D' }}</span>
               </div>
             </td>
             <td class="text-center">
@@ -171,9 +212,7 @@ onMounted(() => {
             <td>
               <div class="margin-info">
                 <span class="m-val">€ {{ p.margin.toFixed(2) }}</span>
-                <span class="m-perc" :class="p.marginPercent < 20 ? 'text-red' : ''">
-                  {{ p.marginPercent.toFixed(1) }}%
-                </span>
+                <span class="m-perc" :class="p.marginPercent < 20 ? 'text-red' : ''">{{ p.marginPercent.toFixed(1) }}%</span>
               </div>
             </td>
             <td class="text-right">
@@ -188,7 +227,80 @@ onMounted(() => {
       </table>
     </div>
 
-    <Teleport to="body">
+<Teleport to="body">
+  <Transition name="fade-scale">
+    <div v-if="isBulkModalOpen" class="modal-backdrop" @click.self="isBulkModalOpen = false">
+      <div class="modal-card bulk-card">
+        <div class="modal-header">
+          <div class="m-title">
+            <h3>Carico da Bolla / DDT</h3>
+            <p>Inserisci i prezzi reali della bolla per statistiche accurate</p>
+          </div>
+          <button @click="isBulkModalOpen = false" class="btn-close">&times;</button>
+        </div>
+
+        <div class="modal-body scrollable-body">
+          <div class="bulk-header-inputs">
+            <div class="form-group">
+              <label>Fornitore</label>
+              <input v-model="bulkDelivery.supplierName" placeholder="es. Beverage Srl" class="input-main" />
+            </div>
+            <div class="form-group">
+              <label>N° Documento</label>
+              <input v-model="bulkDelivery.docNumber" placeholder="es. DDT 456/A" class="input-main" />
+            </div>
+          </div>
+
+          <div class="bulk-rows-container">
+            <div class="bulk-row header-row">
+              <span class="col-prod">Prodotto (Autocompletamento)</span>
+              <span class="col-qty text-center">Qtà</span>
+              <span class="col-price text-center">Costo Unit.</span>
+              <span class="col-action"></span>
+            </div>
+
+            <div v-for="(item, index) in bulkDelivery.items" :key="index" class="bulk-row entry-row">
+              <div class="col-prod">
+                <input 
+                  list="product-options" 
+                  v-model="item.productName" 
+                  @input="onProductInput(item)"
+                  placeholder="Cerca prodotto..."
+                  class="input-main"
+                />
+              </div>
+              
+              <div class="col-qty">
+                <input type="number" v-model.number="item.quantity" class="input-main text-center" />
+              </div>
+              
+              <div class="col-price">
+                <div class="price-field">
+                  <span class="currency-prefix">€</span>
+                  <input type="number" step="0.01" v-model.number="item.purchase_price" class="input-main" />
+                </div>
+              </div>
+
+              <div class="col-action">
+                <button @click="removeBulkRow(index)" class="btn-remove-mini">✕</button>
+              </div>
+            </div>
+          </div>
+
+          <button @click="addBulkRow" class="btn-add-line">
+            <span>+</span> Aggiungi riga alla bolla
+          </button>
+        </div>
+
+        <div class="modal-footer">
+          <button @click="isBulkModalOpen = false" class="btn-ghost">Annulla</button>
+          <button @click="confirmBulkDelivery" class="btn-dark" :disabled="loading">
+            {{ loading ? 'Salvataggio...' : 'Conferma e Carica' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Transition>
       <Transition name="fade-scale">
         <div v-if="isModalOpen" class="modal-backdrop" @click.self="isModalOpen = false">
           <div class="modal-card">
@@ -225,10 +337,145 @@ onMounted(() => {
         </div>
       </Transition>
     </Teleport>
+
+    <datalist id="product-options">
+      <option v-for="p in products" :key="p.id" :value="p.name">
+        {{ p.inventory.suppliers?.[0]?.supplier || 'N/D' }}
+      </option>
+    </datalist>
+
   </div>
 </template>
 
 <style scoped>
+/* Layout specifico per il Modale Bulk */
+.bulk-card {
+  width: 900px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.scrollable-body {
+  padding: 25px;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.bulk-header-inputs {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 25px;
+}
+
+.bulk-header-inputs .form-group {
+  flex: 1;
+}
+
+/* Griglia Righe Bolla */
+.bulk-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 140px 40px; /* Definisce le proporzioni delle colonne */
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.header-row {
+  background: #f8fafc;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 15px;
+}
+
+.entry-row {
+  padding: 0 5px;
+}
+
+/* Prezzo con prefisso € interno */
+.price-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.currency-prefix {
+  position: absolute;
+  left: 12px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.price-field .input-main {
+  padding-left: 30px !important;
+  text-align: right;
+}
+
+/* Bottoni */
+.btn-remove-mini {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: #fee2e2;
+  color: #ef4444;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.btn-remove-mini:hover { background: #fecaca; }
+
+.btn-add-line {
+  width: 100%;
+  padding: 12px;
+  margin-top: 15px;
+  border: 2px dashed #e2e8f0;
+  background: white;
+  border-radius: 12px;
+  color: #64748b;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-add-line:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+/* Stili comuni input */
+.input-main {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  outline: none;
+  box-sizing: border-box; /* Cruciale per evitare che l'input esca dai bordi */
+}
+
+.bulk-header-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.bulk-header-inputs label { font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 5px; display: block; }
+
+.bulk-row-header { display: grid; grid-template-columns: 1fr 100px 130px 40px; gap: 10px; padding: 10px; background: #f8fafc; border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 10px; }
+
+.price-input-wrapper { position: relative; display: flex; align-items: center; }
+.currency-addon { position: absolute; left: 10px; color: #94a3b8; font-weight: 600; font-size: 0.9rem; }
+.price-input { padding-left: 25px !important; text-align: right; }
+
+.qty-input { text-align: center; font-weight: 700; }
+.btn-remove-row { border: none; background: #fee2e2; color: #ef4444; border-radius: 6px; height: 38px; cursor: pointer; }
+.btn-add-row { width: 100%; padding: 12px; margin-top: 10px; border: 2px dashed #e2e8f0; background: transparent; color: #64748b; font-weight: 600; border-radius: 10px; cursor: pointer; }
+
 .inventory-view { padding: 40px; background: #f8fafc; min-height: 100vh; font-family: 'Inter', sans-serif; color: #1e293b; }
 .inv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
 .title-group h1 { font-size: 1.8rem; font-weight: 800; margin: 0; }
@@ -299,4 +546,23 @@ onMounted(() => {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   transition: all 0.2s ease;
 }
+.btn-bulk {
+  background: #6366f1;
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-bulk:hover { background: #4f46e5; }
+
+.select-prod { appearance: auto; }
+.qty-input { text-align: center; }
+
+.btn-remove-row { background: #fee2e2; color: #ef4444; border: none; border-radius: 8px; height: 40px; cursor: pointer; font-size: 1.2rem; }
+.btn-add-row { width: 100%; padding: 10px; background: #f8fafc; border: 2px dashed #e2e8f0; border-radius: 10px; color: #64748b; font-weight: 600; cursor: pointer; }
+.btn-add-row:hover { background: #f1f5f9; border-color: #cbd5e1; }
+
 </style>
