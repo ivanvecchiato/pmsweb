@@ -392,7 +392,7 @@ const submitNewBooking = () => {
     duration: duration
   };
 
-  axios.post('http://localhost:8081/api/pms/createreservation', payload)
+  axios.post('http://localhost:8081/api/pms/hotel/new_reservation', payload)
     .then(() => {
       showModal.value = false;
       getReservations(); // Ricarica i dati per mostrare la nuova barra
