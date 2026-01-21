@@ -63,6 +63,51 @@ const fetchInventory = async () => {
   }
 };
 
+const movements = ref([]); // Popolato da un'apposita chiamata API
+
+const fetchMovements = async () => {
+  try {
+    const res = await axios.get('http://localhost:8088/api/inventory/movements');
+    // Ordiniamo dal più recente al più vecchio prima di raggruppare
+    movements.value = res.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  } catch (err) {
+    console.error("Errore recupero movimenti:", err);
+  }
+};
+
+const groupedMovements = computed(() => {
+  const groups = [];
+  
+  movements.value.forEach(m => {
+    // Identifichiamo se il movimento fa parte di una bolla cercando "BOLLA" nella nota
+    const isBulk = m.note && m.note.startsWith('BOLLA');
+    const groupKey = isBulk ? m.note : `single-${m.id}`;
+
+    let group = groups.find(g => g.key === groupKey);
+
+    if (!group) {
+      group = {
+        key: groupKey,
+        isBulk: isBulk,
+        timestamp: m.timestamp,
+        supplier: isBulk ? m.note.split(' - ')[1] : null,
+        docNumber: isBulk ? m.note.split(' - ')[0] : 'Movimento Singolo',
+        items: []
+      };
+      groups.push(group);
+    }
+    
+    // Cerchiamo il nome del prodotto (puoi fare un join con la lista prodotti)
+    const product = products.value.find(p => p.id === m.productId);
+    group.items.push({
+      ...m,
+      productName: product ? product.name : 'Prodotto eliminato'
+    });
+  });
+
+  return groups;
+});
+
 // --- LOGICA CARICO MASSIVO ---
 const addBulkRow = () => {
   bulkDelivery.value.items.push({ productId: null, productName: '', quantity: 1, purchase_price: 0 });
@@ -144,7 +189,11 @@ const confirmMovement = async () => {
   } catch (err) { alert("Errore"); }
 };
 
-onMounted(() => { fetchInventory(); fetchStats(); });
+onMounted(() => {
+  fetchInventory();
+  fetchStats();
+  fetchMovements();
+});
 </script>
 
 <template>
@@ -225,6 +274,45 @@ onMounted(() => { fetchInventory(); fetchStats(); });
           </tr>
         </tbody>
       </table>
+
+      <div class="movements-history">
+  <div class="section-header">
+    <h2>Cronologia Movimenti</h2>
+  </div>
+
+  <div class="timeline">
+    <div v-for="group in groupedMovements" :key="group.key" class="timeline-group">
+      <div class="group-header" :class="{ 'bulk-header': group.isBulk }">
+        <div class="group-info">
+          <span class="group-icon">{{ group.isBulk ? '📦' : '📝' }}</span>
+          <div>
+            <span class="group-title">{{ group.docNumber }}</span>
+            <small v-if="group.supplier" class="group-supplier"> | {{ group.supplier }}</small>
+          </div>
+        </div>
+        <span class="group-date">{{ new Date(group.timestamp).toLocaleString() }}</span>
+      </div>
+
+      <div class="group-content">
+        <div v-for="item in group.items" :key="item.id" class="history-item">
+          <div class="item-main">
+            <span class="item-name">{{ item.productName }}</span>
+            <span class="item-type-badge" :class="item.type">{{ item.type }}</span>
+          </div>
+          <div class="item-details">
+            <span class="item-qty" :class="item.direction">
+              {{ item.direction === 'in' ? '+' : '-' }}{{ item.quantity }}
+            </span>
+            <span class="item-stock-snap">
+              Stock: {{ item.previous_stock }} → <strong>{{ item.new_stock }}</strong>
+            </span>
+            <span class="item-price">€ {{ (item.purchase_price || 0).toFixed(2) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
     </div>
 
 <Teleport to="body">
@@ -565,4 +653,56 @@ onMounted(() => { fetchInventory(); fetchStats(); });
 .btn-add-row { width: 100%; padding: 10px; background: #f8fafc; border: 2px dashed #e2e8f0; border-radius: 10px; color: #64748b; font-weight: 600; cursor: pointer; }
 .btn-add-row:hover { background: #f1f5f9; border-color: #cbd5e1; }
 
+.movements-history { margin-top: 50px; }
+
+.timeline-group {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.group-header {
+  padding: 12px 20px;
+  background: #f8fafc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bulk-header { background: #eff6ff; border-left: 4px solid #3b82f6; }
+
+.group-info { display: flex; align-items: center; gap: 10px; }
+.group-title { font-weight: 700; color: #1e293b; }
+.group-date { font-size: 0.85rem; color: #64748b; }
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.history-item:last-child { border-bottom: none; }
+
+.item-main { display: flex; align-items: center; gap: 15px; }
+.item-name { font-weight: 600; width: 200px; }
+
+.item-type-badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.item-type-badge.purchase { background: #dcfce7; color: #166534; }
+.item-type-badge.breakage { background: #fee2e2; color: #991b1b; }
+
+.item-details { display: flex; gap: 25px; align-items: center; font-size: 0.9rem; }
+.item-qty.in { color: #10b981; font-weight: 800; }
+.item-qty.out { color: #ef4444; font-weight: 800; }
+.item-stock-snap { color: #64748b; }
 </style>
