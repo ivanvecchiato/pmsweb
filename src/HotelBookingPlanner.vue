@@ -389,7 +389,9 @@ const submitNewBooking = () => {
     adults: parseInt(newBookingData.value.adults),
     children: parseInt(newBookingData.value.children),
     checkin: newBookingData.value.checkin,
-    duration: duration
+    duration: duration,
+    board: newBookingData.value.board,
+    fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null
   };
 
   axios.post('http://localhost:8081/api/pms/hotel/new_reservation', payload)
