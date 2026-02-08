@@ -14,9 +14,14 @@ const router = createRouter({
       component: () => import('../CustomerManagement.vue')
     },
     {
-      path: '/Listino',
+      path: '/listino',
       name: 'PriceManagement',
       component: () => import('../PriceManagement.vue')
+    },
+    {
+      path: '/listino_beach',
+      name: 'BeachManagementDashboard',
+      component: () => import('../BeachManagementDashboard.vue')
     },
     {
       path: '/inventory',
