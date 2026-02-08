@@ -73,7 +73,13 @@ watch(() => props.selectedDate, fetchData);
 
     <div class="sea-line">MARE 🌊</div>
 
-    <div v-if="loading" class="loader">Caricamento mappa...</div>
+    <div v-if="loading" class="skeleton">
+      <div class="skeleton-line wide"></div>
+      <div class="skeleton-line"></div>
+      <div class="skeleton-grid">
+        <div v-for="n in 60" :key="n" class="skeleton-cell"></div>
+      </div>
+    </div>
 
     <div v-else class="beach-area">
       <div v-for="sector in sectorsMap" :key="sector.name" class="sector-block">
@@ -135,4 +141,32 @@ watch(() => props.selectedDate, fetchData);
 .umbrella-spot:hover { transform: scale(1.2); box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
 .umbrella-spot.is-occupied { background: #ef4444; border-color: #991b1b; color: white; cursor: not-allowed; }
 .umbrella-spot.is-premium { background: #fffbeb; border-width: 3px; }
+
+.skeleton { display: flex; flex-direction: column; gap: 16px; padding: 20px; }
+.skeleton-line {
+  height: 14px;
+  width: 40%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(226,232,240,0.6), rgba(226,232,240,0.95), rgba(226,232,240,0.6));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+.skeleton-line.wide { width: 65%; height: 18px; }
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+  gap: 10px;
+}
+.skeleton-cell {
+  height: 32px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(241,245,249,0.7), rgba(226,232,240,0.95), rgba(241,245,249,0.7));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 </style>
