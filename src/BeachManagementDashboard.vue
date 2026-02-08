@@ -2,8 +2,11 @@
 import { ref } from 'vue';
 import BeachLayoutConfig from './BeachLayoutConfig.vue';
 import BeachPriceManagement from './BeachPriceManagement.vue';
+import BeachMap from './BeachMap.vue';
 
-const activeTab = ref('layout'); // 'layout' o 'prices'
+const activeTab = ref('layout'); // 'layout' | 'prices' | 'map'
+const selectedDate = ref(new Date().toISOString().split('T')[0]);
+const selectedPlace = ref(null);
 
 // Stato condiviso per forzare il refresh del listino dopo il cambio layout
 const layoutVersion = ref(0);
@@ -11,6 +14,10 @@ const layoutVersion = ref(0);
 const handleLayoutGenerated = () => {
   layoutVersion.value++;
   activeTab.value = 'prices'; // Passa automaticamente ai prezzi dopo la generazione
+};
+
+const handlePlaceSelect = (place) => {
+  selectedPlace.value = place;
 };
 </script>
 
@@ -38,6 +45,12 @@ const handleLayoutGenerated = () => {
         >
           2. Listini e Tariffe
         </button>
+        <button 
+          @click="activeTab = 'map'" 
+          :class="{ active: activeTab === 'map' }"
+        >
+          3. Mappa Posti
+        </button>
       </div>
     </nav>
 
@@ -46,8 +59,20 @@ const handleLayoutGenerated = () => {
         <div v-if="activeTab === 'layout'" key="layout">
           <BeachLayoutConfig @generated="handleLayoutGenerated" />
         </div>
-        <div v-else key="prices">
+        <div v-else-if="activeTab === 'prices'" key="prices">
           <BeachPriceManagement :key="layoutVersion" />
+        </div>
+        <div v-else key="map">
+          <div class="map-toolbar">
+            <div class="toolbar-left">
+              <label for="beach-date">Data</label>
+              <input id="beach-date" type="date" v-model="selectedDate" />
+            </div>
+            <div v-if="selectedPlace" class="selected-place">
+              Selezionato: {{ selectedPlace.name }} (Fila {{ selectedPlace.row }}, Col {{ selectedPlace.column }})
+            </div>
+          </div>
+          <BeachMap :selectedDate="selectedDate" @select="handlePlaceSelect" />
         </div>
       </Transition>
     </main>
@@ -98,6 +123,41 @@ const handleLayoutGenerated = () => {
   flex: 1;
   overflow-y: auto;
   background: #f8fafc;
+}
+
+.map-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.toolbar-left input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-weight: 600;
+}
+
+.selected-place {
+  font-size: 0.9rem;
+  color: #1e293b;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-weight: 600;
 }
 
 /* Animazioni */

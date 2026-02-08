@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
 
 const props = defineProps({
@@ -39,7 +39,7 @@ const sectorsMap = computed(() => {
 const fetchData = async () => {
   loading.value = true;
   try {
-    const resData = await axios.get('http://localhost:8081/api/pms/beach/getplan?mode=flat&includeReservations=true');
+    const resData = await axios.get(`http://localhost:8081/api/pms/beach/getplan?mode=flat&includeReservations=true&date=${props.selectedDate}`);
     resources.value = resData.data.map(normalizeResource);
   } catch (err) {
     console.error("Errore caricamento mappa:", err);
@@ -60,6 +60,7 @@ const handleUmbrellaClick = (umbrella) => {
 
 const emit = defineEmits(['select']);
 onMounted(fetchData);
+watch(() => props.selectedDate, fetchData);
 </script>
 
 <template>
