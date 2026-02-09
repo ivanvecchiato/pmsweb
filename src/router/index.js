@@ -24,6 +24,11 @@ const router = createRouter({
       component: () => import('../BeachManagementDashboard.vue')
     },
     {
+      path: '/beach-bookings',
+      name: 'BeachBookingPlanner',
+      component: () => import('../BeachBookingPlanner.vue')
+    },
+    {
       path: '/inventory',
       name: 'InventoryManagement',
       component: () => import('../InventoryManagement.vue')
