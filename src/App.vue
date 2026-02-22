@@ -1,137 +1,171 @@
 <template>
   <div id="app">
-    <aside class="sidebar" role="navigation" aria-label="Sidebar menu">
-      <nav class="menu">
-        <!-- AREA PMS -->
-        <div class="menu-section">
-          <div class="section-label">PMS</div>
-          
-          <router-link
-            to="/"
-            :class="['menu-item', { active: route.path === '/' }]"
-            aria-label="Vai alla Home"
-          >
-            <span class="icon" aria-hidden>
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </span>
-            <span class="label">Home</span>
-          </router-link>
-
-          <router-link
-            to="/customers"
-            :class="['menu-item', { active: route.path === '/customers' }]"
-            aria-label="Gestione Clienti"
-          >
-            <span class="icon" aria-hidden>
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </span>
-            <span class="label">Clienti</span>
-          </router-link>
-
-          <router-link
-            to="/beach-bookings"
-            :class="['menu-item', { active: route.path === '/beach-bookings' }]"
-            aria-label="Prenotazioni Spiaggia"
-          >
-            <span class="icon" aria-hidden>
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4 20h16M6 20v-9m6 9V6m6 14v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </span>
-            <span class="label">Prenotazioni Spiaggia</span>
-          </router-link>
-        </div>
-
-        <!-- AREA BAR -->
-        <div class="menu-section">
-          <div class="section-label">BAR</div>
-          
-          <router-link
-            to="/inventory"
-            :class="['menu-item', { active: route.path === '/inventory' }]"
-            aria-label="Magazzino"
-          >
-            <span class="icon" aria-hidden>
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </span>
-            <span class="label">Magazzino</span>
-          </router-link>
-
-          <div class="menu-group">
-            <button 
-              @click="isStatsOpen = !isStatsOpen"
-              :class="['menu-item', 'menu-trigger', { active: route.path.startsWith('/stats') }]"
+    <!-- Mostra la vista principale solo se autenticato -->
+    <div v-if="isAuthenticated" style="display: flex; width: 100%; height: 100vh;">
+      <aside class="sidebar" role="navigation" aria-label="Sidebar menu">
+        <nav class="menu">
+          <!-- AREA PMS -->
+          <div v-if="hasPermission('home') || hasPermission('customers') || hasPermission('beach-bookings')" class="menu-section">
+            <div class="section-label">PMS</div>
+            
+            <router-link
+              v-if="hasPermission('home')"
+              to="/"
+              :class="['menu-item', { active: route.path === '/' }]"
+              aria-label="Vai alla Home"
             >
-              <span class="icon">
+              <span class="icon" aria-hidden>
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M18 20V10M12 20V4M6 20v-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </span>
-              <span class="label">Statistiche</span>
-              <span class="arrow-icon" :class="{ rotated: isStatsOpen }">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </span>
-            </button>
+              <span class="label">Home</span>
+            </router-link>
 
-            <div v-if="isStatsOpen" class="submenu">
-              <router-link to="/stats/sales" class="submenu-item">Vendite</router-link>
-              <router-link to="/stats/products" class="submenu-item">Prodotti</router-link>
-              <router-link to="/stats/operators" class="submenu-item">Operatori</router-link>
+            <router-link
+              v-if="hasPermission('customers')"
+              to="/customers"
+              :class="['menu-item', { active: route.path === '/customers' }]"
+              aria-label="Gestione Clienti"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Clienti</span>
+            </router-link>
+
+            <router-link
+              v-if="hasPermission('beach-bookings')"
+              to="/beach-bookings"
+              :class="['menu-item', { active: route.path === '/beach-bookings' }]"
+              aria-label="Prenotazioni Spiaggia"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 20h16M6 20v-9m6 9V6m6 14v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Prenotazioni Spiaggia</span>
+            </router-link>
+          </div>
+
+          <!-- AREA BAR -->
+          <div v-if="hasPermission('inventory') || hasPermission('stats')" class="menu-section">
+            <div class="section-label">BAR</div>
+            
+            <router-link
+              v-if="hasPermission('inventory')"
+              to="/inventory"
+              :class="['menu-item', { active: route.path === '/inventory' }]"
+              aria-label="Magazzino"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Magazzino</span>
+            </router-link>
+
+            <div v-if="hasPermission('stats')" class="menu-group">
+              <button 
+                @click="isStatsOpen = !isStatsOpen"
+                :class="['menu-item', 'menu-trigger', { active: route.path.startsWith('/stats') }]"
+              >
+                <span class="icon">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M18 20V10M12 20V4M6 20v-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                <span class="label">Statistiche</span>
+                <span class="arrow-icon" :class="{ rotated: isStatsOpen }">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+              </button>
+
+              <div v-if="isStatsOpen" class="submenu">
+                <router-link to="/stats/sales" class="submenu-item">Vendite</router-link>
+                <router-link to="/stats/products" class="submenu-item">Prodotti</router-link>
+                <router-link to="/stats/operators" class="submenu-item">Operatori</router-link>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- AREA CONFIGURAZIONE -->
-        <div class="menu-section">
-          <div class="section-label">CONFIGURAZIONE</div>
-          
-          <router-link
-            to="/listino"
-            :class="['menu-item', { active: route.path === '/listino' }]"
-            aria-label="Listino Hotel"
-          >
-            <span class="icon" aria-hidden>
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </span>
-            <span class="label">Listino Hotel</span>
-          </router-link>
+          <!-- AREA CONFIGURAZIONE -->
+          <div v-if="hasPermission('listino') || hasPermission('listino_beach')" class="menu-section">
+            <div class="section-label">CONFIGURAZIONE</div>
+            
+            <router-link
+              v-if="hasPermission('listino')"
+              to="/listino"
+              :class="['menu-item', { active: route.path === '/listino' }]"
+              aria-label="Listino Hotel"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Listino Hotel</span>
+            </router-link>
 
-          <router-link
-            to="/listino_beach"
-            :class="['menu-item', { active: route.path === '/listino_beach' }]"
-            aria-label="Gestione Spiaggia"
-          >
-            <span class="icon" aria-hidden>
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </span>
-            <span class="label">Gestione Spiaggia</span>
-          </router-link>
-        </div>
-      </nav>
-    </aside>
+            <router-link
+              v-if="hasPermission('listino_beach')"
+              to="/listino_beach"
+              :class="['menu-item', { active: route.path === '/listino_beach' }]"
+              aria-label="Gestione Spiaggia"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Gestione Spiaggia</span>
+            </router-link>
+          </div>
 
-    <main class="content">
-      <router-view />
-    </main>
+          <!-- Logout button -->
+          <div class="menu-section" style="margin-top: auto;">
+            <button @click="handleLogout" class="menu-item logout-btn">
+              <span class="icon">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Logout</span>
+            </button>
+            <small class="user-info">{{ userName }} ({{ userRole }})</small>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <router-view />
+      </main>
+    </div>
+
+    <!-- Altrimenti mostra il router (login page) -->
+    <router-view v-else />
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuth } from './composables/useAuth'
 
 const route = useRoute()
+const router = useRouter()
+const { isAuthenticated, logout, hasPermission, userRole, userName } = useAuth()
+
 const isStatsOpen = ref(false)
+
+const handleLogout = () => {
+  logout()
+  router.push('/login')
+}
 </script>
 
 <style scoped>
@@ -267,4 +301,31 @@ const isStatsOpen = ref(false)
 }
 
 .menu-item:focus { outline: 2px solid rgba(255,255,255,0.25); outline-offset: 2px; }
+
+.logout-btn {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 107, 107, 0.15);
+}
+
+.user-info {
+  display: block;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+  margin-top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-weight: 600;
+}
+
+@media(min-width:600px) {
+  .user-info {
+    text-align: left;
+  }
+}
 </style>
