@@ -32,7 +32,25 @@ const router = createRouter({
       path: '/inventory',
       name: 'InventoryManagement',
       component: () => import('../InventoryManagement.vue')
-    }
+    },
+    {
+      path: '/stats/products',
+      name: 'StatsProducts',
+      component: () => import('../StatsProducts.vue')
+    },
+    {
+      path: '/stats/operators',
+      name: 'StatsOperators',
+      component: () => import('../StatsOperators.vue')
+    },
+    {
+      path: '/stats/various',
+      name: 'StatsVarious',
+      component: () => import('../StatsVarious.vue')    },
+    {
+      path: '/stats/sales',
+      name: 'StatsSales',
+      component: () => import('../StatsSales.vue')    }
   ],
 })
 

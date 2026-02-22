@@ -53,6 +53,7 @@
               @mousemove="handleMouseMoveGrid($event, room)"
               @mouseenter="hoveredRoomId = room.id" 
               @mouseleave="hoveredRoomId = null"
+              @click="addBooking"
             >
               <div v-if="hoveredRoomId === room.id" :style="mouseLineStyle">
                 <div class="mouse-tooltip">
@@ -78,7 +79,7 @@
                 }"
                 :style="getBookingStyle(booking)"
                 @mousedown="handleMouseDown($event, booking, 'move')"
-                @click="selectedBooking = booking.id"
+                @click.prevent.stop="openEditBooking(booking)" @dblclick.prevent.stop="openEditBooking(booking)"
               >
                 <div
                   class="resize-handle resize-left"
@@ -100,7 +101,7 @@
       </div>
     </div>
 
-    <div v-if="selectedBooking" class="footer">
+    <div v-if="selectedBooking && !showModal" class="footer">
       <div class="footer-content">
         <div class="input-group">
           <label class="input-label">Nome Cliente</label>
@@ -121,7 +122,7 @@
   <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Nuova Prenotazione</h3>
+        <h3>{{ editingBooking ? 'Modifica Prenotazione' : 'Nuova Prenotazione' }}</h3>
         <button @click="showModal = false" class="close-btn">&times;</button>
       </div>
       
@@ -212,7 +213,10 @@
 
         <div class="modal-footer">
           <button type="button" @click="showModal = false" class="btn btn-cancel">Annulla</button>
-          <button type="submit" class="btn btn-save">Conferma Prenotazione</button>
+          <button v-if="editingBooking" type="button" class="btn btn-danger" @click.prevent="deleteBooking(); showModal=false">
+            Elimina
+          </button>
+          <button type="submit" class="btn btn-save">{{ editingBooking ? 'Salva' : 'Conferma Prenotazione' }}</button>
         </div>
       </form>
     </div>
@@ -329,6 +333,7 @@ const mouseLineStyle = computed(() => {
 });
 
 const showModal = ref(false);
+const editingBooking = ref(null);
 const newBookingData = ref({
   roomId: '',
   guestName: '',
@@ -356,6 +361,8 @@ watch(() => newBookingData.value.checkin, (newIn) => {
 });
 
 const addBooking = () => {
+  selectedBooking.value = null;
+  editingBooking.value = null;
   // Inizializza con la prima camera disponibile e date vuote
   newBookingData.value = {
     roomId: rooms.value[0]?.id || '',
@@ -365,6 +372,29 @@ const addBooking = () => {
     children: 0,
     checkin: new Date().toISOString().split('T')[0], // Oggi come default
     checkout: ''
+  };
+  showModal.value = true;
+};
+
+const openEditBooking = (booking) => {
+  console.log('editing hotel booking', booking);
+  selectedBooking.value = booking.id;
+  editingBooking.value = booking;
+  const start = new Date(booking.startDate);
+  const end = new Date(start);
+  end.setDate(end.getDate() + booking.duration);
+
+  newBookingData.value = {
+    roomId: booking.roomId,
+    guestName: booking.guestName || booking.guest || '',
+    guestSurname: booking.guestSurname || '',
+    adults: booking.adults || 1,
+    children: booking.children || 0,
+    checkin: start.toISOString().split('T')[0],
+    checkout: end.toISOString().split('T')[0],
+    board: booking.board || 'bb',
+    isManualPrice: booking.fixedPrice != null,
+    manualPrice: booking.fixedPrice || 0
   };
   showModal.value = true;
 };
@@ -394,15 +424,30 @@ const submitNewBooking = () => {
     fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null
   };
 
-  axios.post('http://localhost:8081/api/pms/hotel/new_reservation', payload)
-    .then(() => {
-      showModal.value = false;
-      getReservations(); // Ricarica i dati per mostrare la nuova barra
-    })
-    .catch(err => {
-      console.error("Errore creazione:", err);
-      alert("Errore durante il salvataggio della prenotazione");
-    });
+  if (editingBooking.value) {
+    // update existing booking
+    payload.id = editingBooking.value.id;
+    axios.post('http://localhost:8081/api/pms/hotel/update_reservation', payload)
+      .then(() => {
+        showModal.value = false;
+        editingBooking.value = null;
+        getReservations();
+      })
+      .catch(err => {
+        console.error("Errore aggiornamento:", err);
+        alert("Errore durante l'aggiornamento della prenotazione");
+      });
+  } else {
+    axios.post('http://localhost:8081/api/pms/hotel/new_reservation', payload)
+      .then(() => {
+        showModal.value = false;
+        getReservations(); // Ricarica i dati per mostrare la nuova barra
+      })
+      .catch(err => {
+        console.error("Errore creazione:", err);
+        alert("Errore durante il salvataggio della prenotazione");
+      });
+  }
 };
 
 const dates = computed(() => {
@@ -694,6 +739,11 @@ const getBookingStyle = (booking) => {
 };
 
 const handleMouseDown = (e, booking, type) => {
+  if (e.detail > 1 && type === 'move') {
+    e.stopPropagation();
+    openEditBooking(booking);
+    return;
+  }
   e.stopPropagation();
   if (type === 'move') {
     dragging.value = {
@@ -824,8 +874,21 @@ const handleMouseUp = () => {
 };
 
 const deleteBooking = () => {
-  bookings.value = bookings.value.filter(b => b.id !== selectedBooking.value);
-  selectedBooking.value = null;
+  if (editingBooking.value) {
+    // call backend to delete
+    axios.post('http://localhost:8081/api/pms/hotel/delete_reservation', { id: editingBooking.value.id })
+      .then(() => {
+        bookings.value = bookings.value.filter(b => b.id !== editingBooking.value.id);
+        selectedBooking.value = null;
+        editingBooking.value = null;
+      })
+      .catch(err => {
+        console.error('Errore eliminazione:', err);
+      });
+  } else {
+    bookings.value = bookings.value.filter(b => b.id !== selectedBooking.value);
+    selectedBooking.value = null;
+  }
 };
 
 const updateGuest = (value) => {

@@ -2,106 +2,120 @@
   <div id="app">
     <aside class="sidebar" role="navigation" aria-label="Sidebar menu">
       <nav class="menu">
-        <router-link
-          to="/"
-          :class="['menu-item', { active: route.path === '/' }]"
-          aria-label="Vai alla Home"
-        >
-          <span class="icon" aria-hidden>
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-          <span class="label">Home</span>
-        </router-link>
-
-        <router-link
-          to="/customers"
-          :class="['menu-item', { active: route.path === '/customers' }]"
-          aria-label="Gestione Clienti"
-        >
-          <span class="icon" aria-hidden>
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-          <span class="label">Clienti</span>
-        </router-link>
-
-                <router-link
-          to="/inventory"
-          :class="['menu-item', { active: route.path === '/inventory' }]"
-          aria-label="Magazzino"
-        >
-          <span class="icon" aria-hidden>
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-          <span class="label">Magazzino</span>
-        </router-link>
-
-
-        <router-link
-          to="/listino"
-          :class="['menu-item', { active: route.path === '/listino' }]"
-          aria-label="Listino"
-        >
-          <span class="icon" aria-hidden>
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-          <span class="label">Listino</span>
-        </router-link>
-
-        <router-link
-          to="/beach-bookings"
-          :class="['menu-item', { active: route.path === '/beach-bookings' }]"
-          aria-label="Prenotazioni Spiaggia"
-        >
-          <span class="icon" aria-hidden>
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 20h16M6 20v-9m6 9V6m6 14v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-          <span class="label">Prenotazioni Spiaggia</span>
-        </router-link>
-
-        <router-link
-          to="/listino_beach"
-          :class="['menu-item', { active: route.path === '/listino_beach' }]"
-          aria-label="Gestione Spiaggia"
-        >
-          <span class="icon" aria-hidden>
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-          <span class="label">Gestione Spiaggia</span>
-        </router-link>
-
-        <div class="menu-group">
-          <button 
-            @click="isStatsOpen = !isStatsOpen"
-            :class="['menu-item', 'menu-trigger', { active: route.path.startsWith('/stats') }]"
+        <!-- AREA PMS -->
+        <div class="menu-section">
+          <div class="section-label">PMS</div>
+          
+          <router-link
+            to="/"
+            :class="['menu-item', { active: route.path === '/' }]"
+            aria-label="Vai alla Home"
           >
-            <span class="icon">
+            <span class="icon" aria-hidden>
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M18 20V10M12 20V4M6 20v-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </span>
-            <span class="label">Statistiche</span>
-            <span class="arrow-icon" :class="{ rotated: isStatsOpen }">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </span>
-          </button>
+            <span class="label">Home</span>
+          </router-link>
 
-          <div v-if="isStatsOpen" class="submenu">
-            <router-link to="/stats/products" class="submenu-item">Prodotti</router-link>
-            <router-link to="/stats/operators" class="submenu-item">Operatori</router-link>
-            <router-link to="/stats/various" class="submenu-item">Varie</router-link>
+          <router-link
+            to="/customers"
+            :class="['menu-item', { active: route.path === '/customers' }]"
+            aria-label="Gestione Clienti"
+          >
+            <span class="icon" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="label">Clienti</span>
+          </router-link>
+
+          <router-link
+            to="/beach-bookings"
+            :class="['menu-item', { active: route.path === '/beach-bookings' }]"
+            aria-label="Prenotazioni Spiaggia"
+          >
+            <span class="icon" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 20h16M6 20v-9m6 9V6m6 14v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="label">Prenotazioni Spiaggia</span>
+          </router-link>
+        </div>
+
+        <!-- AREA BAR -->
+        <div class="menu-section">
+          <div class="section-label">BAR</div>
+          
+          <router-link
+            to="/inventory"
+            :class="['menu-item', { active: route.path === '/inventory' }]"
+            aria-label="Magazzino"
+          >
+            <span class="icon" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="label">Magazzino</span>
+          </router-link>
+
+          <div class="menu-group">
+            <button 
+              @click="isStatsOpen = !isStatsOpen"
+              :class="['menu-item', 'menu-trigger', { active: route.path.startsWith('/stats') }]"
+            >
+              <span class="icon">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M18 20V10M12 20V4M6 20v-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Statistiche</span>
+              <span class="arrow-icon" :class="{ rotated: isStatsOpen }">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+            </button>
+
+            <div v-if="isStatsOpen" class="submenu">
+              <router-link to="/stats/sales" class="submenu-item">Vendite</router-link>
+              <router-link to="/stats/products" class="submenu-item">Prodotti</router-link>
+              <router-link to="/stats/operators" class="submenu-item">Operatori</router-link>
+            </div>
           </div>
+        </div>
+
+        <!-- AREA CONFIGURAZIONE -->
+        <div class="menu-section">
+          <div class="section-label">CONFIGURAZIONE</div>
+          
+          <router-link
+            to="/listino"
+            :class="['menu-item', { active: route.path === '/listino' }]"
+            aria-label="Listino Hotel"
+          >
+            <span class="icon" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="label">Listino Hotel</span>
+          </router-link>
+
+          <router-link
+            to="/listino_beach"
+            :class="['menu-item', { active: route.path === '/listino_beach' }]"
+            aria-label="Gestione Spiaggia"
+          >
+            <span class="icon" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="label">Gestione Spiaggia</span>
+          </router-link>
         </div>
       </nav>
     </aside>
@@ -162,7 +176,33 @@ const isStatsOpen = ref(false)
 }
 
 /* Menu Styles */
-.menu { display: flex; flex-direction: column; gap: 8px; width: 100%; align-items: center; }
+.menu { display: flex; flex-direction: column; gap: 12px; width: 100%; align-items: center; }
+
+.menu-section { 
+  width: 100%; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 8px; 
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+
+.menu-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+  padding: 0 12px;
+  text-align: center;
+  display: none;
+}
+
 .menu-group { width: 100%; }
 
 .menu-item { 
@@ -181,12 +221,35 @@ const isStatsOpen = ref(false)
 
 /* Sottomenu */
 .submenu {
-  display: flex; flex-direction: column; background: rgba(0,0,0,0.1); margin-top: 4px; border-radius: 8px; overflow: hidden;
+  display: flex; 
+  flex-direction: column; 
+  background: rgba(0, 0, 0, 0.25);
+  margin-top: 8px; 
+  border-radius: 8px; 
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
+
 .submenu-item {
-  padding: 10px; color: rgba(255,255,255,0.8); text-decoration: none; font-size: 0.85rem; text-align: center;
+  padding: 10px 16px; 
+  color: rgba(255, 255, 255, 0.95);
+  text-decoration: none; 
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: center;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-.submenu-item:hover { background: rgba(255,255,255,0.1); color: white; }
+
+.submenu-item:last-child {
+  border-bottom: none;
+}
+
+.submenu-item:hover { 
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  transform: translateX(2px);
+}
 
 /* Schermi larghi: espansione sidebar */
 @media(min-width:600px) {
@@ -195,7 +258,12 @@ const isStatsOpen = ref(false)
   .menu-item { justify-content: flex-start; padding: 10px 12px; }
   .menu-item .label { display: inline-block; }
   .arrow-icon { display: block; margin-left: auto; }
-  .submenu-item { text-align: left; padding-left: 40px; }
+  .submenu-item { 
+    text-align: left; 
+    padding: 10px 12px 10px 40px;
+    font-size: 0.9rem;
+  }
+  .section-label { display: block; text-align: left; }
 }
 
 .menu-item:focus { outline: 2px solid rgba(255,255,255,0.25); outline-offset: 2px; }

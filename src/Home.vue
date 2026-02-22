@@ -27,7 +27,7 @@
         <div class="grid-body">
           <div v-for="room in rooms" :key="room.id" class="room-row">
             <div class="room-cell">{{ room.name }}</div>
-            <div class="days-container" :style="{ height: cellHeight + 'px' }">
+            <div class="days-container" :style="{ height: cellHeight + 'px' }" @click="addBooking">
               <div
                 v-for="(date, idx) in dates"
                 :key="idx"
@@ -42,7 +42,7 @@
                 :class="{ 'booking-selected': selectedBooking === booking.id }"
                 :style="getBookingStyle(booking)"
                 @mousedown="handleMouseDown($event, booking, 'move')"
-                @click="selectedBooking = booking.id"
+                @click.prevent.stop="openEditBooking(booking)" @dblclick.prevent.stop="openEditBooking(booking)"
               >
                 <div
                   class="resize-handle resize-left"
@@ -67,7 +67,7 @@
       </div>
     </div>
 
-    <div v-if="selectedBooking" class="footer">
+    <div v-if="selectedBooking && !showModal" class="footer">
       <div class="footer-content">
         <div class="input-group">
           <label class="input-label">Nome Cliente</label>
@@ -83,6 +83,52 @@
         </button>
       </div>
     </div>
+
+    <!-- modal for new/edit booking -->
+    <transition name="fade">
+      <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>{{ editingBookingId ? 'Dettagli Prenotazione' : 'Nuova Prenotazione' }}</h3>
+            <button @click="showModal = false" class="close-btn">&times;</button>
+          </div>
+          <form @submit.prevent="submitBooking" class="booking-form">
+            <div class="form-section">
+              <label>Camera</label>
+              <select v-model="bookingForm.roomId" required>
+                <option value="" disabled>Seleziona camera</option>
+                <option v-for="r in rooms" :key="r.id" :value="r.id">
+                  {{ r.name }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-section">
+              <label>Cliente</label>
+              <input type="text" v-model="bookingForm.guest" required placeholder="Nome e Cognome" />
+            </div>
+
+            <div class="form-row">
+              <div class="form-section">
+                <label>Check-in</label>
+                <input type="date" v-model="bookingForm.checkin" required />
+              </div>
+              <div class="form-section">
+                <label>Check-out</label>
+                <input type="date" v-model="bookingForm.checkout" required />
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" @click="showModal = false" class="btn btn-cancel">Annulla</button>
+              <button type="submit" class="btn btn-save">
+                {{ editingBookingId ? 'Salva' : 'Conferma' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -113,6 +159,35 @@ const dragging = ref(null);
 const resizing = ref(null);
 const selectedBooking = ref(null);
 var movingReservation = ref(null);
+
+// modal & form state for hotel bookings
+const showModal = ref(false);
+const editingBookingId = ref(null);
+const bookingForm = ref({
+  roomId: '',
+  guest: '',
+  checkin: '',
+  checkout: ''
+});
+
+const toISODate = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const addDaysISO = (dateStr, daysToAdd) => {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + daysToAdd);
+  return toISODate(d);
+};
+
+const diffDays = (start, end) => {
+  const s = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const e = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  return Math.floor((e - s) / (1000 * 60 * 60 * 24));
+};
 
 const cellWidth = 60;
 const cellHeight = 60;
@@ -154,6 +229,13 @@ const getBookingStyle = (booking) => {
 };
 
 const handleMouseDown = (e, booking, type) => {
+  // if this is a double-click, open edit form and don't start dragging
+  if (e.detail > 1 && type === 'move') {
+    e.stopPropagation();
+    openEditBooking(booking);
+    return;
+  }
+
   e.stopPropagation();
   if (type === 'move') {
     dragging.value = {
@@ -240,17 +322,64 @@ const handleMouseUp = () => {
 };
 
 const addBooking = () => {
-  const maxId = Math.max(...bookings.value.map(b => b.id), 0);
-  const newBooking = {
-    id: maxId + 1,
-    roomId: rooms.value[0].id,
-    startDay: 1,
-    duration: 3,
-    guest: 'Nuovo Cliente',
-    color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
+  // open empty modal for new booking
+  selectedBooking.value = null;
+  editingBookingId.value = null;
+  bookingForm.value = {
+    roomId: rooms.value[0]?.id || '',
+    guest: '',
+    checkin: toISODate(startDate.value),
+    checkout: addDaysISO(toISODate(startDate.value), 1)
   };
-  bookings.value.push(newBooking);
-  selectedBooking.value = newBooking.id;
+  showModal.value = true;
+};
+
+const openEditBooking = (booking) => {
+  console.log('openEditBooking called for', booking);
+  selectedBooking.value = booking.id;
+  editingBookingId.value = booking.id;
+  const start = new Date(startDate.value);
+  const checkinDate = new Date(start.getTime() + (booking.startDay - 1) * 24 * 60 * 60 * 1000);
+  bookingForm.value = {
+    roomId: booking.roomId,
+    guest: booking.guest,
+    checkin: toISODate(checkinDate),
+    checkout: addDaysISO(toISODate(checkinDate), booking.duration)
+  };
+  showModal.value = true;
+};
+
+const submitBooking = () => {
+  const { roomId, guest, checkin, checkout } = bookingForm.value;
+  if (!roomId || !guest || !checkin || !checkout) {
+    alert('Compila tutti i campi');
+    return;
+  }
+  const startDay = Math.floor((new Date(checkin) - startDate.value) / (1000 * 60 * 60 * 24)) + 1;
+  const duration = Math.max(diffDays(new Date(checkin), new Date(checkout)), 1);
+
+  if (editingBookingId.value) {
+    const booking = bookings.value.find(b => b.id === editingBookingId.value);
+    if (booking) {
+      booking.roomId = roomId;
+      booking.guest = guest;
+      booking.startDay = startDay;
+      booking.duration = duration;
+      updateReservation(booking);
+    }
+  } else {
+    const maxId = Math.max(...bookings.value.map(b => b.id), 0);
+    const newBooking = {
+      id: maxId + 1,
+      roomId,
+      startDay,
+      duration,
+      guest,
+      color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
+    };
+    bookings.value.push(newBooking);
+  }
+  showModal.value = false;
 };
 
 const deleteBooking = () => {
@@ -456,6 +585,60 @@ onUnmounted(() => {
 .room-row:hover {
   background: #f9fafb;
 }
+
+/* modal styling */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 400px;
+  max-width: 90%;
+  padding: 20px;
+  position: relative;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+.close-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+.booking-form .form-section {
+  margin-bottom: 12px;
+}
+.booking-form .form-row {
+  display: flex;
+  gap: 10px;
+}
+.booking-form label { display: block; font-size: 0.75rem; margin-bottom: 4px; }
+.booking-form input, .booking-form select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.btn-cancel { background: #9ca3af; color: white; }
+.btn-save { background: #3b82f6; color: white; }
+.btn-save:hover { background: #2563eb; }
 
 .room-cell {
   width: 200px;

@@ -50,7 +50,12 @@ const fetchData = async () => {
 
 const handleUmbrellaClick = (umbrella) => {
   if (umbrella.isOccupied) {
-    alert(`Posto ${umbrella.name} già occupato.`);
+    // if reservation info is available, ask parent to edit
+    if (umbrella.reservation) {
+      emit('edit', umbrella.reservation);
+    } else {
+      alert(`Posto ${umbrella.name} già occupato.`);
+    }
   } else {
     // Emette un evento per il componente padre (BookingPlanner) 
     // per aprire il modale di prenotazione pre-compilato

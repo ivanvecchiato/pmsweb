@@ -17,6 +17,7 @@ const cellHeight = 36;
 
 const selectedBooking = ref(null);
 const showModal = ref(false);
+const editingBooking = ref(null); // store booking being edited when modal open
 const showMap = ref(true);
 const selectedDate = ref(new Date().toISOString().split('T')[0]);
 const isLoading = ref(false);
@@ -254,6 +255,7 @@ const bookingQuote = computed(() => {
 });
 
 const openNewBooking = (place) => {
+  editingBooking.value = null;
   const todayStr = new Date().toISOString().split('T')[0];
   newBookingData.value = {
     placeId: place?.id ? String(place.id) : '',
@@ -261,6 +263,22 @@ const openNewBooking = (place) => {
     guestSurname: '',
     checkin: selectedDate.value || todayStr,
     checkout: addDaysISO(selectedDate.value || todayStr, 1),
+    isManualPrice: false,
+    manualPrice: 0
+  };
+  showModal.value = true;
+};
+
+const openEditBooking = (booking) => {
+  console.log('openEditBooking beach', booking);
+  selectedBooking.value = booking.id;
+  editingBooking.value = booking;
+  newBookingData.value = {
+    placeId: String(booking.placeId),
+    guestName: booking.guestFirst || '',
+    guestSurname: booking.guestLast || '',
+    checkin: toISODate(booking.startDate),
+    checkout: addDaysISO(toISODate(booking.startDate), booking.duration),
     isManualPrice: false,
     manualPrice: 0
   };
@@ -304,6 +322,12 @@ const handleRowMouseMove = (event, place) => {
 };
 
 const handleMouseDown = (event, booking, type) => {
+  // double-click guard for map planner as well
+  if (event.detail > 1 && type === 'move') {
+    event.preventDefault();
+    openEditBooking(booking);
+    return;
+  }
   event.preventDefault();
   selectedBooking.value = booking.id;
   tempBooking.value = {
@@ -396,39 +420,62 @@ const handleMouseUp = async () => {
 };
 
 const submitNewBooking = async () => {
+  // handle both creation and editing
   const { placeId, guestName, guestSurname, checkin, checkout } = newBookingData.value;
   if (!placeId || !guestName || !guestSurname || !checkin || !checkout) {
     alert('Compila tutti i campi obbligatori.');
     return;
   }
 
-  if (hasConflict(placeId, checkin, checkout)) {
+  const conflict = hasConflict(editingBooking.value ? editingBooking.value.id : null, placeId, checkin, checkout);
+  if (conflict) {
     alert('Conflitto: posto già occupato nel periodo selezionato.');
     return;
   }
 
-  const payload = {
-    placeId: Number(placeId),
-    checkin,
-    checkout,
-    datetime: toISODate(new Date()),
-    origin: 1,
-    status: 0,
-    price_per_place: bookingQuote.value?.finalTotal || 0,
-    price_per_day: bookingQuote.value?.days.map(d => d.dayTotal) || [],
-    accountholder: {
-      firstname: guestName,
-      lastname: guestSurname
-    }
-  };
+  if (editingBooking.value) {
+    // update existing booking
+    const b = editingBooking.value;
+    b.placeId = String(placeId);
+    b.guestFirst = guestName;
+    b.guestLast = guestSurname;
+    b.guest = `${guestName} ${guestSurname}`.trim();
+    b.startDate = new Date(checkin);
+    b.duration = diffDays(new Date(checkin), new Date(checkout));
 
-  try {
-    await axios.post('http://localhost:8081/api/pms/beach/new_reservation', payload);
-    showModal.value = false;
-    await fetchBookings();
-  } catch (err) {
-    console.error('Errore creazione prenotazione:', err);
-    alert('Errore durante il salvataggio della prenotazione');
+    try {
+      await updateReservation(b);
+      showModal.value = false;
+      editingBooking.value = null;
+      await fetchBookings();
+    } catch (err) {
+      console.error('Errore aggiornamento prenotazione:', err);
+    }
+  } else {
+    // create new
+    const payload = {
+      placeId: Number(placeId),
+      checkin,
+      checkout,
+      datetime: toISODate(new Date()),
+      origin: 1,
+      status: 0,
+      price_per_place: bookingQuote.value?.finalTotal || 0,
+      price_per_day: bookingQuote.value?.days.map(d => d.dayTotal) || [],
+      accountholder: {
+        firstname: guestName,
+        lastname: guestSurname
+      }
+    };
+
+    try {
+      await axios.post('http://localhost:8081/api/pms/beach/new_reservation', payload);
+      showModal.value = false;
+      await fetchBookings();
+    } catch (err) {
+      console.error('Errore creazione prenotazione:', err);
+      alert('Errore durante il salvataggio della prenotazione');
+    }
   }
 };
 
@@ -504,6 +551,12 @@ const nextPeriod = () => {
 
 const onMapSelect = (place) => {
   openNewBooking(place);
+};
+
+const onMapEdit = (reservation) => {
+  // reservation is raw API object; normalize then open modal
+  const normalized = normalizeBooking(reservation);
+  openEditBooking(normalized);
 };
 
 const reloadAll = async () => {
@@ -617,7 +670,7 @@ watch(selectedBooking, (id) => {
         </button>
       </div>
       <div v-if="showMap" class="map-wrapper">
-        <BeachMap :selectedDate="selectedDate" @select="onMapSelect" />
+        <BeachMap :selectedDate="selectedDate" @select="onMapSelect" @edit="onMapEdit" />
       </div>
     </div>
 
@@ -688,6 +741,7 @@ watch(selectedBooking, (id) => {
               :style="{ height: cellHeight + 'px' }"
               @mousemove="handleRowMouseMove($event, place)"
               @mouseleave="hoveredPlaceId = null"
+              @click="openNewBooking(place)"
             >
               <div
                 v-for="(date, idx) in dates"
@@ -703,7 +757,7 @@ watch(selectedBooking, (id) => {
                 :class="{ 'booking-selected': selectedBooking === booking.id }"
                 :style="getBookingStyle(booking)"
                 @mousedown="handleMouseDown($event, booking, 'move')"
-                @click="selectedBooking = booking.id"
+                @click.prevent.stop="openEditBooking(booking)" @dblclick.prevent.stop="openEditBooking(booking)"
               >
                 <div
                   class="resize-handle resize-left"
@@ -723,7 +777,7 @@ watch(selectedBooking, (id) => {
       </div>
     </div>
 
-    <div v-if="selectedBookingObj" class="footer">
+    <div v-if="selectedBookingObj && !showModal" class="footer">
       <div class="footer-content">
         <div class="input-group">
           <label class="input-label">Nome</label>
@@ -742,7 +796,7 @@ watch(selectedBooking, (id) => {
       <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
         <div class="modal-content">
           <div class="modal-header">
-            <h3>Nuova Prenotazione Spiaggia</h3>
+            <h3>{{ editingBooking ? 'Modifica Prenotazione' : 'Nuova Prenotazione Spiaggia' }}</h3>
             <button @click="showModal = false" class="close-btn">&times;</button>
           </div>
           
@@ -812,7 +866,10 @@ watch(selectedBooking, (id) => {
 
             <div class="modal-footer">
               <button type="button" @click="showModal = false" class="btn btn-cancel">Annulla</button>
-              <button type="submit" class="btn btn-save">Conferma Prenotazione</button>
+              <button v-if="editingBooking" type="button" class="btn btn-danger" @click.prevent="deleteBooking(); showModal=false">
+                Elimina
+              </button>
+              <button type="submit" class="btn btn-save">{{ editingBooking ? 'Salva' : 'Conferma Prenotazione' }}</button>
             </div>
           </form>
         </div>
