@@ -19,6 +19,9 @@
       <button @click="addBooking" class="btn btn-primary">
         + Nuova Prenotazione
       </button>
+      <button @click="createQuote" class="btn btn-secondary">
+        📋 Preventivo
+      </button>
     </div>
     </div>
 
@@ -222,6 +225,14 @@
     </div>
   </div>
 </transition>
+
+<!-- Quote Builder Modal -->
+<QuoteBuilder 
+  v-if="showQuoteBuilder"
+  type="hotel"
+  @close="showQuoteBuilder = false"
+  @created="() => { showQuoteBuilder = false; router.push('/quotes'); }"
+/>
   </div>
 </template>
 
@@ -229,6 +240,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
 import { watch } from 'vue';
+import { useRouter } from 'vue-router'
+import QuoteBuilder from './QuoteBuilder.vue'
 
 const rooms = ref([
   { id: 1, name: 'Camera 101 - Singola' },
@@ -256,6 +269,8 @@ const resizing = ref(null);
 const selectedBooking = ref(null);
 const tempBooking = ref(null);
 var movingReservation = ref(null);
+const showQuoteBuilder = ref(false);
+const router = useRouter();
 
 const cellWidth = 60;
 const cellHeight = 40;
@@ -370,10 +385,17 @@ const addBooking = () => {
     guestSurname: '',
     adults: 1,
     children: 0,
-    checkin: new Date().toISOString().split('T')[0], // Oggi come default
-    checkout: ''
+    checkin: '',
+    checkout: '',
+    board: 'bb',
+    isManualPrice: false,
+    manualPrice: ''
   };
   showModal.value = true;
+};
+
+const createQuote = () => {
+  showQuoteBuilder.value = true;
 };
 
 const openEditBooking = (booking) => {

@@ -63,6 +63,12 @@ const router = createRouter({
       name: 'StatsSales',
       component: () => import('../StatsSales.vue'),
       meta: { requiresAuth: true, permission: 'stats' }
+    },
+    {
+      path: '/quotes',
+      name: 'QuoteManager',
+      component: () => import('../QuoteManager.vue'),
+      meta: { requiresAuth: true, permission: 'home' }
     }
   ]
 })

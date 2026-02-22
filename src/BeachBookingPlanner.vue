@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import axios from 'axios';
 import BeachMap from './BeachMap.vue';
+import { useRouter } from 'vue-router'
+import QuoteBuilder from './QuoteBuilder.vue'
 
 const places = ref([]);
 const bookings = ref([]);
@@ -30,6 +32,8 @@ const dragging = ref(null);
 const tempBooking = ref(null);
 const hoveredPlaceId = ref(null);
 const editGuest = ref({ first: '', last: '' });
+const showQuoteBuilder = ref(false);
+const router = useRouter();
 
 const newBookingData = ref({
   placeId: '',
@@ -603,6 +607,10 @@ const generateDemoPlan = async () => {
   }
 };
 
+const createQuote = () => {
+  showQuoteBuilder.value = true;
+};
+
 onMounted(async () => {
   await reloadAll();
   window.addEventListener('mousemove', handleMouseMove);
@@ -655,6 +663,9 @@ watch(selectedBooking, (id) => {
         </div>
         <button @click="openNewBooking(null)" class="btn btn-primary">
           + Nuova Prenotazione
+        </button>
+        <button @click="createQuote" class="btn btn-secondary">
+          📋 Preventivo
         </button>
       </div>
     </div>
@@ -875,6 +886,14 @@ watch(selectedBooking, (id) => {
         </div>
       </div>
     </transition>
+
+    <!-- Quote Builder Modal -->
+    <QuoteBuilder 
+      v-if="showQuoteBuilder"
+      type="beach"
+      @close="showQuoteBuilder = false"
+      @created="() => { showQuoteBuilder = false; router.push('/quotes'); }"
+    />
   </div>
 </template>
 
