@@ -54,7 +54,7 @@
               <span class="value">{{ formatDate(quote.checkin) }} → {{ formatDate(quote.checkout) }}</span>
             </div>
             <div class="detail-row">
-              <span class="label">Notti:</span>
+              <span class="label">{{ quote.type === 'hotel' ? 'Notti' : 'Giorni' }}:</span>
               <span class="value">{{ quote.duration }}</span>
             </div>
             <div v-if="quote.type === 'hotel'" class="detail-row">
@@ -62,6 +62,10 @@
               <span class="value">{{ quote.adults }} adult{{ quote.adults !== 1 ? 'i' : 'o' }}
                 <span v-if="quote.children > 0">, {{ quote.children }} bambin{{ quote.children !== 1 ? 'i' : 'o' }}</span>
               </span>
+            </div>
+            <div v-if="quote.totalPrice" class="detail-row price-row">
+              <span class="label">Prezzo:</span>
+              <span class="value price-value">€{{ quote.totalPrice.toFixed(2) }}</span>
             </div>
           </div>
 
@@ -177,10 +181,26 @@
             </div>
           </div>
         </section>
+        <!-- Opzioni Spiaggia Disponibili (Beach) -->
+        <section v-if="currentQuote.type === 'beach' && currentQuote.allRoomOptions && currentQuote.allRoomOptions.length > 0" class="detail-section room-options-section">
+          <h3>Opzioni Spiaggia Disponibili</h3>
+          <div class="room-options-grid">
+            <div 
+              v-for="room in currentQuote.allRoomOptions"
+              :key="room.roomType"
+              @click="selectRoomForConversion(room)"
+              :class="['room-option-card', { 'is-selected': selectedRoomForConversion?.roomType === room.roomType }]"
+            >
+              <div class="room-opt-type">{{ room.roomType }}</div>
+              <div class="room-opt-price">€{{ room.totalPrice.toFixed(2) }}</div>
+              <div class="room-opt-per-night">€{{ room.pricePerNight.toFixed(2) }}/giorno</div>
+            </div>
+          </div>
+        </section>
 
-        <!-- Pricing (mostrato solo se camera selezionata) -->
-        <section v-if="selectedRoomForConversion" class="detail-section pricing-section">
-          <h3>Dettagli Prezzo - {{ selectedRoomForConversion.roomType }}</h3>
+        <!-- Pricing: mostra dettagli del prezzo selezionato o, per beach, il prezzo di riferimento salvato -->
+        <section v-if="displayedPriceOption" class="detail-section pricing-section">
+          <h3>Dettagli Prezzo - {{ displayedPriceOption.roomType }}</h3>
           <div class="info-grid">
             <div class="info-item">
               <span class="info-label">Notti:</span>
@@ -188,17 +208,17 @@
             </div>
             <div class="info-item">
               <span class="info-label">Tariffa/notte (per persona):</span>
-              <span class="info-value">€{{ selectedRoomForConversion.pricePerNight.toFixed(2) }}</span>
+              <span class="info-value">€{{ displayedPriceOption.pricePerNight.toFixed(2) }}</span>
             </div>
             <div class="info-item full-width">
               <span class="info-label">TOTALE PREVENTIVO:</span>
-              <span class="info-value price-highlight">€{{ selectedRoomForConversion.totalPrice.toFixed(2) }}</span>
+              <span class="info-value price-highlight">€{{ displayedPriceOption.totalPrice.toFixed(2) }}</span>
             </div>
           </div>
-          <div v-if="selectedRoomForConversion.quote && selectedRoomForConversion.quote.days" class="daily-prices">
+          <div v-if="displayedPriceOption.quote && displayedPriceOption.quote.days" class="daily-prices">
             <p class="section-subtitle">Tariffe giornaliere:</p>
             <div class="prices-table">
-              <div v-for="day in selectedRoomForConversion.quote.days" :key="day.date" class="price-row">
+              <div v-for="day in displayedPriceOption.quote.days" :key="day.date" class="price-row">
                 <span class="date">{{ formatDate(day.date) }}</span>
                 <span class="price">€{{ day.dayTotal.toFixed(2) }}</span>
               </div>
@@ -293,6 +313,23 @@ const selectRoomForConversion = (room) => {
   selectedRoomForConversion.value = room
 }
 
+// Mostra il prezzo da visualizzare: preferisce la selezione della stanza, altrimenti
+// usa il `priceData` salvato (utile per preventivi beach senza selezione)
+const displayedPriceOption = computed(() => {
+  if (selectedRoomForConversion.value) return selectedRoomForConversion.value
+  const q = currentQuote.value
+  if (!q) return null
+  if (q.priceData) {
+    return {
+      roomType: q.priceData.roomType || q.priceData.roomType || (q.allRoomOptions && q.allRoomOptions[0] && q.allRoomOptions[0].roomType) || 'Opzione',
+      pricePerNight: q.pricePerNight ?? q.priceData.pricePerNight ?? (q.priceData.pricePerUnit || 0),
+      totalPrice: q.totalPrice ?? q.priceData.totalCalculated ?? 0,
+      quote: q.priceData
+    }
+  }
+  return null
+})
+
 const createNewQuote = () => {
   selectedQuoteType.value = 'hotel'
   showQuoteBuilder.value = true
@@ -330,14 +367,25 @@ const convertToBooking = async () => {
   try {
     isConverting.value = true
     
-    // Prepara i dati della prenotazione con la camera selezionata
-    const bookingData = {
-      ...currentQuote.value,
-      roomType: currentQuote.value.type === 'hotel' ? selectedRoomForConversion.value.roomType : null,
-      pricePerNight: selectedRoomForConversion.value?.pricePerNight,
-      totalPrice: selectedRoomForConversion.value?.totalPrice,
-      dailyPrices: selectedRoomForConversion.value?.quote?.days,
-      priceData: selectedRoomForConversion.value?.quote
+    // Prepara i dati della prenotazione
+    let bookingData
+    
+    if (currentQuote.value.type === 'hotel') {
+      // Hotel: usa la camera selezionata
+      bookingData = {
+        ...currentQuote.value,
+        roomType: selectedRoomForConversion.value.roomType,
+        pricePerNight: selectedRoomForConversion.value?.pricePerNight,
+        totalPrice: selectedRoomForConversion.value?.totalPrice,
+        dailyPrices: selectedRoomForConversion.value?.quote?.days,
+        priceData: selectedRoomForConversion.value?.quote
+      }
+    } else {
+      // Beach: usa i dati del preventivo (non ha selezione camera)
+      bookingData = {
+        ...currentQuote.value,
+        roomType: null
+      }
     }
     
     await convertQuoteToBooking(selectedQuoteId.value, currentQuote.value.type, bookingData)
@@ -772,5 +820,81 @@ onMounted(async () => {
   font-size: 0.75rem;
   font-weight: 700;
   margin-left: 0.5rem;
+}
+
+/* Pricing Section */
+.pricing-section {
+  background: #f0fdf4;
+  border-left: 4px solid #10b981;
+}
+
+.price-highlight {
+  color: #10b981;
+  font-size: 1.5rem;
+  font-weight: 900;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+  padding-top: 1rem;
+  margin-top: 1rem;
+  border-top: 2px solid #d1fae5;
+}
+
+/* Daily Prices Table */
+.daily-prices {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #d1fae5;
+}
+
+.section-subtitle {
+  margin: 0 0 1rem 0;
+  font-weight: 700;
+  color: #065f46;
+  font-size: 1rem;
+  letter-spacing: 0.025em;
+}
+
+.prices-table {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #d1fae5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid #f0fdf4;
+  transition: background-color 0.15s ease;
+}
+
+.price-row:last-child {
+  border-bottom: none;
+}
+
+.price-row:nth-child(even) {
+  background: #f9fafb;
+}
+
+.price-row:hover {
+  background: #ecfdf5;
+}
+
+.price-row .date {
+  color: #374151;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.price-row .price {
+  color: #10b981;
+  font-weight: 800;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
 }
 </style>

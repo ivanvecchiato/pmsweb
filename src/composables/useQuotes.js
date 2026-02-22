@@ -41,6 +41,18 @@ const deleteQuote = async (quoteId) => {
   }
 }
 
+// Elimina tutti i preventivi
+const deleteAllQuotes = async () => {
+  try {
+    const res = await axios.post('http://localhost:8081/api/pms/quotes/deleteall')
+    await loadQuotes()
+    return res.data
+  } catch (err) {
+    console.error('Errore eliminazione tutti i preventivi:', err)
+    throw err
+  }
+}
+
 // Crea prenotazione da preventivo
 const convertToBooking = async (quoteId, type, bookingDataOverride = null) => {
   try {
@@ -77,5 +89,6 @@ export const useQuotes = () => ({
   loadQuotes,
   saveQuote,
   deleteQuote,
+  deleteAllQuotes,
   convertToBooking
 })

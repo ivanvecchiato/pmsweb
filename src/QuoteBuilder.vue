@@ -82,10 +82,10 @@
           </div>
         </div>
 
-        <!-- Selezione Tipo di Camera Calcolato (Hotel) -->
-        <div v-if="type === 'hotel' && daysCount > 0" class="form-section rooms-section">
-          <label>Seleziona Camera</label>
-          <p class="section-hint">Prezzi calcolati per {{ daysCount }} nott{{ daysCount !== 1 ? 'i' : 'e' }}</p>
+        <!-- Selezione Tipo di Camera/Fila calcolati (Hotel/Beach) -->
+        <div v-if="daysCount > 0 && calculatedRoomPrices.length > 0" class="form-section rooms-section">
+          <label>Seleziona {{ type === 'hotel' ? 'Camera' : 'Fila' }}</label>
+          <p class="section-hint">Prezzi calcolati per {{ daysCount }} {{ type === 'beach' ? (daysCount !== 1 ? 'giorni' : 'giorno') : (daysCount !== 1 ? 'notti' : 'notte') }}</p>
           <div class="rooms-grid">
             <div 
               v-for="room in calculatedRoomPrices" 
@@ -95,7 +95,7 @@
             >
               <div class="room-type">{{ room.roomType }}</div>
               <div class="room-price">€{{ room.totalPrice.toFixed(2) }}</div>
-              <div class="room-per-night">{{ room.pricePerNight.toFixed(2) }}/notte</div>
+              <div class="room-per-night">€{{ room.pricePerNight.toFixed(2) }} / {{ type === 'hotel' ? 'notte' : 'giorno' }}</div>
             </div>
           </div>
         </div>
@@ -103,7 +103,7 @@
         <!-- Messaggio Informativo -->
         <div class="info-box">
           <p>
-            <strong>Periodo:</strong> {{ daysCount }} nott{{ daysCount !== 1 ? 'i' : 'e' }}
+            <strong>Periodo:</strong> {{ daysCount }} {{ type === 'beach' ? 'giorn' : 'nott' }}{{ daysCount !== 1 ? 'i' : (type === 'beach' ? 'o' : 'e') }}
           </p>
           <p v-if="type === 'hotel'">
             <strong>Ospiti:</strong> {{ quoteData.adults }} adult{{ quoteData.adults !== 1 ? 'i' : 'o' }}
@@ -111,14 +111,23 @@
           </p>
           <div v-if="quoteData.roomType" class="price-section">
             <p>
-              <strong>Camera Selezionata:</strong> {{ quoteData.roomType }}
+              <strong>{{ type === 'hotel' ? 'Camera Selezionata' : 'Fila Selezionata' }}:</strong> {{ quoteData.roomType }}
             </p>
             <p class="price-highlight">
               <strong>TOTALE PREVENTIVO:</strong> €{{ priceQuote.finalTotal.toFixed(2) }}
             </p>
           </div>
+          <div v-else-if="calculatedRoomPrices.length > 0" class="price-section">
+            <p>
+              <strong>Prezzi disponibili:</strong>
+            </p>
+            <p class="price-highlight">
+              <strong>Prezzo a partire da:</strong> €{{ minOption?.totalPrice.toFixed(2) || '0.00' }}
+            </p>
+            <p class="section-hint">Clicca una {{ type === 'hotel' ? 'camera' : 'fila' }} per selezionarla</p>
+          </div>
           <p v-else class="price-placeholder">
-            Seleziona date e camera per visualizzare il prezzo
+            Inserisci date valide per calcolare i prezzi
           </p>
         </div>
 
@@ -144,12 +153,11 @@ import { usePricing } from '@/composables/usePricing.js'
 const props = defineProps({
   type: {
     type: String,
-    enum: ['hotel', 'beach'],
     required: true
   }
 })
 
-const emit = defineEmits(['close', 'created'])
+const emit = defineEmits(['created', 'close'])
 
 const { saveQuote } = useQuotes()
 const { loadPricelists, loadTimetable, calculateQuotePrice, getRoomTypes } = usePricing()
@@ -171,6 +179,11 @@ const roomTypes = ref([])
 const calculatedRoomPrices = ref([])
 const isLoading = ref(false)
 
+const minOption = computed(() => {
+  if (!calculatedRoomPrices.value || calculatedRoomPrices.value.length === 0) return null
+  return calculatedRoomPrices.value.reduce((min, r) => (r.totalPrice < min.totalPrice ? r : min), calculatedRoomPrices.value[0])
+})
+
 const daysCount = computed(() => {
   if (!quoteData.value.checkin || !quoteData.value.checkout) return 0
   const start = new Date(quoteData.value.checkin)
@@ -178,7 +191,7 @@ const daysCount = computed(() => {
   return Math.max(0, Math.ceil((end - start) / (1000 * 60 * 60 * 24)))
 })
 
-// Calcola i prezzi per TUTTI i roomType
+// Calcola i prezzi per TUTTI i roomType (hotel) o un prezzo generico (beach)
 const calculateAllRoomPrices = () => {
   if (!quoteData.value.checkin || !quoteData.value.checkout || daysCount.value === 0) {
     calculatedRoomPrices.value = []
@@ -186,23 +199,43 @@ const calculateAllRoomPrices = () => {
     return
   }
   
-  const prices = roomTypes.value.map(room => {
-    const quote = calculateQuotePrice(
-      quoteData.value.checkin,
-      quoteData.value.checkout,
-      room.roomType,
-      props.type,
-      quoteData.value.adults + quoteData.value.children
-    )
-    return {
-      roomType: room.roomType,
-      totalPrice: quote?.finalTotal || 0,
-      pricePerNight: quote?.pricePerNight || 0,
-      quote
-    }
-  })
-  
-  calculatedRoomPrices.value = prices
+  if (props.type === 'hotel') {
+    // Hotel: calcola per ogni tipo di camera
+    const prices = roomTypes.value.map(room => {
+      const quote = calculateQuotePrice(
+        quoteData.value.checkin,
+        quoteData.value.checkout,
+        room.roomType,
+        props.type,
+        quoteData.value.adults + quoteData.value.children
+      )
+      return {
+        roomType: room.roomType,
+        totalPrice: quote?.finalTotal || 0,
+        pricePerNight: quote?.pricePerNight || 0,
+        quote
+      }
+    })
+    calculatedRoomPrices.value = prices
+  } else {
+    // Beach: calcola per ogni tipo di fila
+    const prices = roomTypes.value.map(room => {
+      const quote = calculateQuotePrice(
+        quoteData.value.checkin,
+        quoteData.value.checkout,
+        room.placeType, // Usa placeType per beach (es. "FILA 1")
+        props.type,
+        quoteData.value.adults + quoteData.value.children
+      )
+      return {
+        roomType: room.placeType, // Usa placeType (es. "FILA 1")
+        totalPrice: quote?.finalTotal || 0,
+        pricePerNight: quote?.pricePerNight || 0,
+        quote
+      }
+    })
+    calculatedRoomPrices.value = prices
+  }
 }
 
 // Quando selezioni una camera, calcola il prezzo specifico
@@ -227,7 +260,7 @@ const isFormValid = computed(() => {
          quoteData.value.checkout &&
          daysCount.value > 0 &&
          (props.type !== 'hotel' || quoteData.value.board) &&
-         calculatedRoomPrices.value.length > 0
+         (props.type !== 'hotel' || calculatedRoomPrices.value.length > 0)
 })
 
 const submitQuote = async () => {
@@ -236,22 +269,67 @@ const submitQuote = async () => {
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 7)
     
+    // Per beach, salva almeno un'opzione generica se non calcolato
+    const roomOptions = calculatedRoomPrices.value.length > 0 ? calculatedRoomPrices.value : []
+    
+    // Determina il prezzo da salvare nel preventivo
+    let basePriceData = null
+    let baseTotalPrice = null
+    let basePricePerNight = null
+    let baseDailyPrices = null
+    
+    if (props.type === 'beach' && roomOptions.length > 0) {
+      // Beach: salva il prezzo minimo disponibile (non semplicemente il primo)
+      const minOpt = roomOptions.reduce((min, room) => (room.totalPrice < min.totalPrice ? room : min), roomOptions[0])
+      basePriceData = minOpt.quote
+      baseTotalPrice = minOpt.totalPrice
+      basePricePerNight = minOpt.pricePerNight
+      baseDailyPrices = minOpt.quote?.days
+    } else if (props.type === 'hotel' && roomOptions.length > 0) {
+      // Hotel: salva il prezzo minimo delle camere come riferimento
+      const minOption = roomOptions.reduce((min, room) => 
+        room.totalPrice < min.totalPrice ? room : min
+      )
+      basePriceData = minOption.quote
+      baseTotalPrice = minOption.totalPrice
+      basePricePerNight = minOption.pricePerNight
+      baseDailyPrices = minOption.quote?.days
+    }
+    
     await saveQuote({
       ...quoteData.value,
-      roomType: null, // Non selezionata ancora
+      // Mantieni la camera/fila selezionata (se presente)
       duration: daysCount.value,
-      allRoomOptions: calculatedRoomPrices.value, // Salva TUTTE le opzioni
-      priceData: null, // Sarà scelto dal cliente
-      totalPrice: null, // Sarà scelto dal cliente
-      pricePerNight: null, // Sarà scelto dal cliente
-      dailyPrices: null, // Sarà scelto dal cliente
+      allRoomOptions: roomOptions, // Salva le opzioni calcolate
+      priceData: basePriceData, // Prezzo base per visibilità
+      totalPrice: baseTotalPrice, // Prezzo base per visibilità
+      pricePerNight: basePricePerNight, // Prezzo base per visibilità
+      dailyPrices: baseDailyPrices, // Prezzo base per visibilità
       createdAt: new Date().toISOString(),
       expiresAt: expiresAt.toISOString()
     })
     emit('created')
     close()
   } catch (err) {
-    alert('Errore nella creazione del preventivo: ' + err.message)
+    // Log dettagliato per debug runtime: mostriamo errore e payload
+    try {
+      const payload = {
+        ...quoteData.value,
+        duration: daysCount.value,
+        allRoomOptions: roomOptions,
+        priceData: basePriceData,
+        totalPrice: baseTotalPrice,
+        pricePerNight: basePricePerNight,
+        dailyPrices: baseDailyPrices,
+        createdAt: new Date().toISOString(),
+        expiresAt: expiresAt.toISOString()
+      }
+      console.error('submitQuote error', err)
+      console.log('submitQuote payload', payload)
+    } catch (logErr) {
+      console.error('Error while logging submitQuote payload', logErr)
+    }
+    alert('Errore nella creazione del preventivo: ' + (err && err.message ? err.message : String(err)))
   }
 }
 
@@ -265,10 +343,10 @@ onMounted(async () => {
     await loadPricelists(props.type)
     await loadTimetable(props.type)
     
-    // Carica i tipi di camera disponibili per hotel
-    if (props.type === 'hotel') {
-      roomTypes.value = getRoomTypes(props.type)
-    }
+    // Carica i tipi disponibili (hotel: roomType, beach: place types)
+    roomTypes.value = getRoomTypes(props.type)
+    // Avvia il calcolo dei prezzi non appena i dati sono pronti
+    calculateAllRoomPrices()
   } catch (err) {
     console.error('Errore caricamento dati:', err)
   } finally {

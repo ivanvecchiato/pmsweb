@@ -41,19 +41,48 @@ const toISODate = (date) => {
   return `${y}-${m}-${d}`
 }
 
-// Estrae i tipi di camera disponibili dal listino
+// Estrae i tipi di camera/fila disponibili dal listino
 const getRoomTypes = (type = 'hotel') => {
-  if (type === 'beach') return []
+  // Aggrega i tipi da tutti i listini disponibili (più robusto)
+  if (type === 'hotel') {
+    const typesMap = new Map()
+    pricelists.value.forEach(list => {
+      if (!list || !list.prices) return
+      list.prices.forEach(p => {
+        const rt = p.roomType
+        if (!rt) return
+        if (!typesMap.has(rt)) {
+          typesMap.set(rt, {
+            roomType: rt,
+            tariffa: p.tariffa || 0,
+            description: rt
+          })
+        }
+      })
+    })
+    return Array.from(typesMap.values())
+  }
+
+  if (type === 'beach') {
+    const typesMap = new Map()
+    pricelists.value.forEach(list => {
+      if (!list || !list.prices) return
+      list.prices.forEach(p => {
+        const desc = p.place_type?.description || (p.fila ? `Fila ${p.fila}` : null)
+        if (!desc) return
+        if (!typesMap.has(desc)) {
+          typesMap.set(desc, {
+            placeType: desc,
+            price: p.price_per_place || p.tariffa || 0,
+            description: desc
+          })
+        }
+      })
+    })
+    return Array.from(typesMap.values())
+  }
   
-  // Per hotel: estrai i roomType dal primo listino (stesso per tutti)
-  const firstPricelist = pricelists.value?.[0]
-  if (!firstPricelist || !firstPricelist.prices) return []
-  
-  return firstPricelist.prices.map(p => ({
-    roomType: p.roomType,
-    tariffa: p.tariffa || 0,
-    description: p.roomType
-  }))
+  return []
 }
 
 // Calcola il prezzo di un giorno per una camera/posto
@@ -62,7 +91,14 @@ const calculateDayPrice = (roomType, dateStr, type = 'hotel') => {
   const day = timetable.find(d => d.date === dateStr)
   if (!day || !day.pricelist) return 0
   
-  const list = pricelists.value.find(p => String(p.id) === String(day.pricelist))
+  let list = pricelists.value.find(p => String(p.id) === String(day.pricelist))
+  // Fallback: some timetables store pricelist as 0-based index
+  if (!list && typeof day.pricelist !== 'undefined') {
+    const idx = Number(day.pricelist)
+    if (!Number.isNaN(idx) && pricelists.value[idx]) {
+      list = pricelists.value[idx]
+    }
+  }
   if (!list) return 0
   
   // Per hotel: cerca per roomType
@@ -71,9 +107,10 @@ const calculateDayPrice = (roomType, dateStr, type = 'hotel') => {
     return Number(item?.tariffa || 0)
   }
   
-  // Per beach: era il vecchio sistema con id/price_per_place
-  const item = list.prices?.find(p => String(p.id) === String(roomType))
-  return Number(item?.price_per_room || item?.price_per_place || 0)
+  // Per beach: cerca per place_type.description (roomType sarà "FILA 1", etc.)
+  const item = list.prices?.find(p => p.place_type?.description === roomType)
+  // Alcuni listini possono usare nomi diversi per il prezzo: price_per_place, price, tariffa
+  return Number(item?.price_per_place ?? item?.price ?? item?.tariffa ?? 0)
 }
 
 // Calcola il prezzo totale per un preventivo
