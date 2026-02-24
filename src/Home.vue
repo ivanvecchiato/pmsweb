@@ -2,7 +2,7 @@
   <div class="planner-container">
     <div class="header">
       <h1 class="title">Planning Prenotazioni Hotel</h1>
-      <button @click="addBooking" class="btn btn-primary">
+      <button @click="addBooking()" class="btn btn-primary">
         + Nuova Prenotazione
       </button>
     </div>
@@ -27,7 +27,7 @@
         <div class="grid-body">
           <div v-for="room in rooms" :key="room.id" class="room-row">
             <div class="room-cell">{{ room.name }}</div>
-            <div class="days-container" :style="{ height: cellHeight + 'px' }" @click="addBooking">
+            <div class="days-container" :style="{ height: cellHeight + 'px' }" @click="handleGridClick($event, room.id)">
               <div
                 v-for="(date, idx) in dates"
                 :key="idx"
@@ -159,6 +159,7 @@ const dragging = ref(null);
 const resizing = ref(null);
 const selectedBooking = ref(null);
 var movingReservation = ref(null);
+const suppressGridClickUntil = ref(0);
 
 // modal & form state for hotel bookings
 const showModal = ref(false);
@@ -316,22 +317,53 @@ const updateReservation = (booking) => {
 };
 
 const handleMouseUp = () => {
+  const hadDragOrResize = !!dragging.value || !!resizing.value;
   dragging.value = null;
   resizing.value = null;
+  if (hadDragOrResize) {
+    suppressGridClickUntil.value = Date.now() + 250;
+  }
   updateReservation(movingReservation);
 };
 
 const addBooking = () => {
-  // open empty modal for new booking
+  if (Date.now() < suppressGridClickUntil.value) return;
+  // open modal for new booking with default values
+  const checkin = toISODate(startDate.value);
   selectedBooking.value = null;
   editingBookingId.value = null;
   bookingForm.value = {
     roomId: rooms.value[0]?.id || '',
     guest: '',
-    checkin: toISODate(startDate.value),
-    checkout: addDaysISO(toISODate(startDate.value), 1)
+    checkin,
+    checkout: addDaysISO(checkin, 1)
   };
   showModal.value = true;
+};
+
+const addBookingFromCell = (roomId, date) => {
+  if (Date.now() < suppressGridClickUntil.value) return;
+  // open modal for new booking prefilled from clicked cell
+  const checkin = toISODate(date);
+  selectedBooking.value = null;
+  editingBookingId.value = null;
+  bookingForm.value = {
+    roomId: roomId || rooms.value[0]?.id || '',
+    guest: '',
+    checkin,
+    checkout: addDaysISO(checkin, 1)
+  };
+  showModal.value = true;
+};
+
+const handleGridClick = (event, roomId) => {
+  if (event.target.closest('.booking')) return;
+  const containerRect = event.currentTarget.getBoundingClientRect();
+  const relativeX = Math.max(0, event.clientX - containerRect.left);
+  const dayIndex = Math.min(days.value - 1, Math.floor(relativeX / cellWidth));
+  const checkinDate = new Date(startDate.value);
+  checkinDate.setDate(checkinDate.getDate() + dayIndex);
+  addBookingFromCell(roomId, checkinDate);
 };
 
 const openEditBooking = (booking) => {
