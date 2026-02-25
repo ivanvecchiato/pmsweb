@@ -16,7 +16,7 @@
             </svg>
           </button>
         </div>
-      <button @click="addBooking" class="btn btn-primary">
+      <button @click="addBooking()" class="btn btn-primary">
         + Nuova Prenotazione
       </button>
       <button @click="createQuote" class="btn btn-secondary">
@@ -56,7 +56,7 @@
               @mousemove="handleMouseMoveGrid($event, room)"
               @mouseenter="hoveredRoomId = room.id" 
               @mouseleave="hoveredRoomId = null"
-              @click="addBooking"
+              @click="addBooking(room, $event)"
             >
               <div v-if="hoveredRoomId === room.id" :style="mouseLineStyle">
                 <div class="mouse-tooltip">
@@ -375,18 +375,34 @@ watch(() => newBookingData.value.checkin, (newIn) => {
   }
 });
 
-const addBooking = () => {
+const addBooking = (room = null, event = null) => {
   selectedBooking.value = null;
   editingBooking.value = null;
-  // Inizializza con la prima camera disponibile e date vuote
+
+  let checkin = '';
+  if (room && event?.currentTarget) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const relativeX = Math.max(0, event.clientX - rect.left);
+    const dayIndex = Math.min(days.value - 1, Math.floor(relativeX / cellWidth));
+    const clickedDate = new Date(startDate.value);
+    clickedDate.setDate(clickedDate.getDate() + dayIndex);
+    checkin = toISODate(clickedDate);
+  }
+
+  if (!checkin) {
+    checkin = toISODate(startDate.value);
+  }
+
+  const checkout = addDaysISO(checkin, 1);
+
   newBookingData.value = {
-    roomId: rooms.value[0]?.id || '',
+    roomId: room?.id ?? rooms.value[0]?.id ?? '',
     guestName: '',
     guestSurname: '',
     adults: 1,
     children: 0,
-    checkin: '',
-    checkout: '',
+    checkin,
+    checkout,
     board: 'bb',
     isManualPrice: false,
     manualPrice: ''
@@ -997,6 +1013,12 @@ const toISODate = (date) => {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+};
+
+const addDaysISO = (dateStr, daysToAdd) => {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() + daysToAdd);
+  return toISODate(date);
 };
 
 // Correzione Navigazione (Reset ore a mezzanotte)
