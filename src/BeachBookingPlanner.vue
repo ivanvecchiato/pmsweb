@@ -10,7 +10,10 @@ const bookings = ref([]);
 const pricelists = ref([]);
 const timetable = ref([]);
 
-const startDate = ref(new Date());
+const initialPlannerStartDate = new Date();
+initialPlannerStartDate.setHours(0, 0, 0, 0);
+initialPlannerStartDate.setDate(initialPlannerStartDate.getDate() - 10);
+const startDate = ref(initialPlannerStartDate);
 const days = ref(31);
 const daysToShift = 7;
 

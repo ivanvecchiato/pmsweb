@@ -251,7 +251,10 @@ const rooms = ref([
   { id: 5, name: 'Camera 202 - Singola' }
 ]);
 
-const startDate = ref(new Date(2026, 0, 1));
+const initialPlannerStartDate = new Date();
+initialPlannerStartDate.setHours(0, 0, 0, 0);
+initialPlannerStartDate.setDate(initialPlannerStartDate.getDate() - 10);
+const startDate = ref(initialPlannerStartDate);
 const days = ref(61);
 const daysToShift = 7;
 
