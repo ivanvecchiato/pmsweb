@@ -432,6 +432,24 @@ const normalizeDeposits = (deposits) => {
     .filter(dep => Number.isFinite(dep.amount) && dep.amount > 0 && dep.paymentDate);
 };
 
+const getReservationDeposits = (reservation) => {
+  if (Array.isArray(reservation?.deposits)) return reservation.deposits;
+  if (Array.isArray(reservation?.deposit)) return reservation.deposit;
+  if (Array.isArray(reservation?.caparra)) return reservation.caparra;
+
+  const rawJson = reservation?.deposits_json || reservation?.deposit_json || reservation?.caparra_json;
+  if (typeof rawJson === 'string' && rawJson.trim()) {
+    try {
+      const parsed = JSON.parse(rawJson);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+};
+
 const resetDepositDraft = (defaultDate = '') => {
   depositDraft.value = {
     amount: null,
@@ -477,7 +495,7 @@ watch(() => newBookingData.value.checkin, (newIn) => {
   if (!newBookingData.value.checkout || dateOut <= dateIn) {
     const nextDay = new Date(dateIn);
     nextDay.setDate(nextDay.getDate() + 1);
-    newBookingData.value.checkout = nextDay.toISOString().split('T')[0];
+    newBookingData.value.checkout = toISODate(nextDay);
   }
 
   if (!depositDraft.value.paymentDate) {
@@ -614,18 +632,41 @@ const openEditBooking = (booking) => {
     guestSurname: booking.guestSurname || '',
     adults: booking.adults || 1,
     children: booking.children || 0,
-    checkin: start.toISOString().split('T')[0],
-    checkout: end.toISOString().split('T')[0],
+    checkin: toISODate(start),
+    checkout: toISODate(end),
     board: booking.board || 'bb',
     isManualPrice: booking.fixedPrice != null,
     manualPrice: booking.fixedPrice || 0,
     deposits: normalizeDeposits(booking.deposits)
   };
-  resetDepositDraft(start.toISOString().split('T')[0]);
+  resetDepositDraft(toISODate(start));
   showModal.value = true;
 };
 
-const submitNewBooking = () => {
+const shouldTryNextEndpoint = (error) => {
+  const status = error?.response?.status;
+  if (!status) return true;
+  return status === 404 || status === 405;
+};
+
+const postToFirstAvailableEndpoint = async (endpoints, payload) => {
+  let lastError = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      return await axios.post(endpoint, payload);
+    } catch (error) {
+      lastError = error;
+      if (!shouldTryNextEndpoint(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+};
+
+const submitNewBooking = async () => {
   const start = new Date(newBookingData.value.checkin);
   const end = new Date(newBookingData.value.checkout);
   
@@ -638,10 +679,23 @@ const submitNewBooking = () => {
     return;
   }
 
+  const normalizedDeposits = normalizeDeposits(newBookingData.value.deposits || []);
+  const backendDeposits = normalizedDeposits.map(dep => ({
+    amount: dep.amount,
+    payment_mode: dep.paymentMode || '',
+    payment_date: dep.paymentDate,
+    paymentMode: dep.paymentMode || '',
+    paymentDate: dep.paymentDate
+  }));
+
   const payload = {
     roomId: newBookingData.value.roomId,
     firstname: newBookingData.value.guestName,
     lastname: newBookingData.value.guestSurname,
+    accountholder: {
+      firstname: newBookingData.value.guestName,
+      lastname: newBookingData.value.guestSurname
+    },
     adults: parseInt(newBookingData.value.adults),
     children: parseInt(newBookingData.value.children),
     kids: parseInt(newBookingData.value.children),
@@ -649,36 +703,43 @@ const submitNewBooking = () => {
     duration: duration,
     board: newBookingData.value.board,
     fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null,
-    deposits: (newBookingData.value.deposits || []).map(dep => ({
-      amount: Number(dep.amount || 0),
-      payment_mode: dep.paymentMode || '',
-      payment_date: dep.paymentDate
-    }))
+    deposits: backendDeposits,
+    deposit: backendDeposits,
+    deposits_json: JSON.stringify(backendDeposits.map(dep => ({
+      amount: dep.amount,
+      payment_mode: dep.payment_mode,
+      payment_date: dep.payment_date
+    })))
   };
 
-  if (editingBooking.value) {
-    // update existing booking
-    payload.id = editingBooking.value.id;
-    axios.post('http://localhost:8081/api/pms/hotel/update_reservation', payload)
-      .then(() => {
-        showModal.value = false;
-        editingBooking.value = null;
-        getReservations();
-      })
-      .catch(err => {
-        console.error("Errore aggiornamento:", err);
-        alert("Errore durante l'aggiornamento della prenotazione");
-      });
-  } else {
-    axios.post('http://localhost:8081/api/pms/hotel/new_reservation', payload)
-      .then(() => {
-        showModal.value = false;
-        getReservations(); // Ricarica i dati per mostrare la nuova barra
-      })
-      .catch(err => {
-        console.error("Errore creazione:", err);
-        alert("Errore durante il salvataggio della prenotazione");
-      });
+  try {
+    if (editingBooking.value) {
+      payload.id = editingBooking.value.id;
+      await postToFirstAvailableEndpoint([
+        'http://localhost:8081/api/pms/hotel/update_reservation',
+        'http://localhost:8081/api/pms/hotel/updatereservation',
+        'http://localhost:8081/api/pms/updatereservation'
+      ], payload);
+
+      showModal.value = false;
+      editingBooking.value = null;
+      getReservations();
+      return;
+    }
+
+    await postToFirstAvailableEndpoint([
+      'http://localhost:8081/api/pms/hotel/new_reservation',
+      'http://localhost:8081/api/pms/hotel/newreservation',
+      'http://localhost:8081/api/pms/newreservation'
+    ], payload);
+
+    showModal.value = false;
+    getReservations();
+  } catch (err) {
+    const status = err?.response?.status;
+    const data = err?.response?.data;
+    console.error('Errore salvataggio prenotazione:', status, data || err);
+    alert("Errore durante il salvataggio della prenotazione");
   }
 };
 
@@ -1185,7 +1246,7 @@ const convertReservations = (apiReservations) => {
     const [year, month, day] = res.checkin.split('-').map(Number);
     const startDateObj = new Date(year, month - 1, day, 0, 0, 0);
 
-    const deposits = Array.isArray(res.deposits) ? res.deposits : [];
+    const deposits = normalizeDeposits(getReservationDeposits(res));
     const hasDeposit = deposits.some(dep => Number(dep?.amount || 0) > 0) || deposits.length > 0;
 
     return {
