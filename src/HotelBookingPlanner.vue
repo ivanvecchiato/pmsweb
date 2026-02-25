@@ -77,12 +77,11 @@
                 :key="booking.id"
                 class="booking"
                 :class="{ 
-                  'booking-selected': selectedBooking === booking.id,
                   'booking-conflict': hasConflict(booking)
                 }"
                 :style="getBookingStyle(booking)"
                 @mousedown="handleMouseDown($event, booking, 'move')"
-                @click.prevent.stop="openEditBooking(booking)" @dblclick.prevent.stop="openEditBooking(booking)"
+                @click.prevent.stop="openBookingActions($event, booking)"
               >
                 <div
                   class="resize-handle resize-left"
@@ -101,23 +100,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <div v-if="selectedBooking && !showModal" class="footer">
-      <div class="footer-content">
-        <div class="input-group">
-          <label class="input-label">Nome Cliente</label>
-          <input
-            type="text"
-            :value="getSelectedGuest()"
-            @input="updateGuest($event.target.value)"
-            class="input-field"
-          />
-        </div>
-        <button @click="deleteBooking" class="btn btn-danger">
-          Elimina
-        </button>
       </div>
     </div>
 
@@ -225,6 +207,20 @@
     </div>
   </div>
 </transition>
+
+<div
+  v-if="showBookingActionMenu"
+  class="booking-action-menu"
+  :style="bookingActionMenuStyle"
+  @click.stop
+>
+  <button type="button" class="booking-action-item" @click="openEditFromMenu">
+    Modifica
+  </button>
+  <button type="button" class="booking-action-item" @click="runBookingStatusAction">
+    {{ bookingStatusActionLabel }}
+  </button>
+</div>
 
 <!-- Quote Builder Modal -->
 <QuoteBuilder 
@@ -352,6 +348,9 @@ const mouseLineStyle = computed(() => {
 
 const showModal = ref(false);
 const editingBooking = ref(null);
+const showBookingActionMenu = ref(false);
+const actionMenuBooking = ref(null);
+const actionMenuPosition = ref({ x: 0, y: 0 });
 const newBookingData = ref({
   roomId: '',
   guestName: '',
@@ -378,7 +377,80 @@ watch(() => newBookingData.value.checkin, (newIn) => {
   }
 });
 
+const getBookingStatus = (booking) => {
+  const numeric = Number(booking?.status);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const bookingStatusActionLabel = computed(() => {
+  if (!actionMenuBooking.value) return 'Check-in';
+  return getBookingStatus(actionMenuBooking.value) === 1 ? 'Check-out' : 'Check-in';
+});
+
+const bookingActionMenuStyle = computed(() => ({
+  left: `${actionMenuPosition.value.x}px`,
+  top: `${actionMenuPosition.value.y}px`
+}));
+
+const closeBookingActions = () => {
+  showBookingActionMenu.value = false;
+  actionMenuBooking.value = null;
+};
+
+const openBookingActions = (event, booking) => {
+  selectedBooking.value = booking.id;
+  actionMenuBooking.value = booking;
+
+  const menuWidth = 180;
+  const menuHeight = 92;
+  const viewportPadding = 8;
+  const x = Math.min(event.clientX, window.innerWidth - menuWidth - viewportPadding);
+  const y = Math.min(event.clientY + 8, window.innerHeight - menuHeight - viewportPadding);
+
+  actionMenuPosition.value = {
+    x: Math.max(viewportPadding, x),
+    y: Math.max(viewportPadding, y)
+  };
+
+  showBookingActionMenu.value = true;
+};
+
+const openEditFromMenu = () => {
+  if (!actionMenuBooking.value) return;
+  const booking = actionMenuBooking.value;
+  closeBookingActions();
+  openEditBooking(booking);
+};
+
+const runBookingStatusAction = async () => {
+  if (!actionMenuBooking.value) return;
+
+  const booking = actionMenuBooking.value;
+  const endpoint = getBookingStatus(booking) === 1 ? 'checkout' : 'checkin';
+
+  try {
+    await axios.get(`http://localhost:8081/api/pms/${endpoint}`, {
+      params: {
+        reservation: booking.id,
+        operator: 0
+      }
+    });
+    closeBookingActions();
+    getReservations();
+  } catch (error) {
+    console.error(`Errore ${endpoint}:`, error);
+    alert(`Errore durante ${endpoint === 'checkin' ? 'il check-in' : 'il check-out'}`);
+  }
+};
+
+const handleGlobalClick = () => {
+  if (showBookingActionMenu.value) {
+    closeBookingActions();
+  }
+};
+
 const addBooking = (room = null, event = null) => {
+  closeBookingActions();
   selectedBooking.value = null;
   editingBooking.value = null;
 
@@ -418,6 +490,7 @@ const createQuote = () => {
 };
 
 const openEditBooking = (booking) => {
+  closeBookingActions();
   console.log('editing hotel booking', booking);
   selectedBooking.value = booking.id;
   editingBooking.value = booking;
@@ -762,6 +835,25 @@ const getBookingStyle = (booking) => {
   // Se la prenotazione inizia prima, la attacchiamo al bordo sinistro (slot 1)
   const displayStart = relativeStart < 1 ? 1 : relativeStart;
   const visibleDur = getVisibleDuration(booking);
+  const status = getBookingStatus(booking);
+
+  let backgroundColor = '#ef4444';
+  let borderColor = '#dc2626';
+  let textColor = '#ffffff';
+
+  if (status === 2) {
+    backgroundColor = '#9ca3af';
+    borderColor = '#6b7280';
+    textColor = '#111827';
+  } else if (status === 1) {
+    backgroundColor = '#38bdf8';
+    borderColor = '#0ea5e9';
+    textColor = '#ffffff';
+  } else if (booking.hasDeposit) {
+    backgroundColor = '#86efac';
+    borderColor = '#4ade80';
+    textColor = '#111827';
+  }
   
   const left = (displayStart - 1) * cellWidth + 4;
   const width = (visibleDur * cellWidth) - 8;
@@ -771,8 +863,9 @@ const getBookingStyle = (booking) => {
     width: `${width}px`,
     top: '4px',
     bottom: '4px',
-    backgroundColor: booking.color,
-    borderColor: booking.color,
+    backgroundColor,
+    borderColor,
+    color: textColor,
     position: 'absolute',
     // Arrotonda gli angoli solo se la prenotazione è interamente visibile
     borderRadius: `${relativeStart < 1 ? '0' : '0.5rem'} 0.5rem 0.5rem ${relativeStart < 1 ? '0' : '0.5rem'}`
@@ -780,6 +873,7 @@ const getBookingStyle = (booking) => {
 };
 
 const handleMouseDown = (e, booking, type) => {
+  closeBookingActions();
   if (e.detail > 1 && type === 'move') {
     e.stopPropagation();
     openEditBooking(booking);
@@ -932,18 +1026,6 @@ const deleteBooking = () => {
   }
 };
 
-const updateGuest = (value) => {
-  const booking = bookings.value.find(b => b.id === selectedBooking.value);
-  if (booking) {
-    booking.guest = value;
-  }
-};
-
-const getSelectedGuest = () => {
-  const booking = bookings.value.find(b => b.id === selectedBooking.value);
-  return booking ? booking.guest : '';
-};
-
 const getReservations = () => {
   // Chiediamo al server dati a partire da 30 giorni prima della data visibile
   // per includere le prenotazioni che finiscono dentro la finestra attuale
@@ -985,11 +1067,16 @@ const convertReservations = (apiReservations) => {
     const [year, month, day] = res.checkin.split('-').map(Number);
     const startDateObj = new Date(year, month - 1, day, 0, 0, 0);
 
+    const deposits = Array.isArray(res.deposits) ? res.deposits : [];
+    const hasDeposit = deposits.some(dep => Number(dep?.amount || 0) > 0) || deposits.length > 0;
+
     return {
       id: res.id,
       roomId: String(res.roomId), // Forza a stringa per il confronto
       startDate: startDateObj,
       duration: res.duration,
+      status: Number(res.status ?? 0),
+      hasDeposit,
       guest: res.accountholder.firstname + ' ' + res.accountholder.lastname,
       color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
     };
@@ -1068,6 +1155,7 @@ const loadPricingData = async () => {
 onMounted(() => {
   window.addEventListener('mousemove', handleMouseMove);
   window.addEventListener('mouseup', handleMouseUp);
+  window.addEventListener('click', handleGlobalClick);
   getRooms();
   loadPricingData();
 });
@@ -1075,6 +1163,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('mousemove', handleMouseMove);
   window.removeEventListener('mouseup', handleMouseUp);
+  window.removeEventListener('click', handleGlobalClick);
 });
 </script>
 
@@ -1284,10 +1373,6 @@ onUnmounted(() => {
   bottom: 3px !important; /* Margine inferiore minimo */
 }
 
-.booking-selected {
-  box-shadow: 0 0 0 3px #3b82f6;
-}
-
 .booking-conflict {
   border-color: #ef4444 !important;
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
@@ -1297,7 +1382,7 @@ onUnmounted(() => {
 /* Padding ridotto per la prenotazione */
 .booking-content {
   padding: 2px 8px; /* Padding minimo per far stare il nome al centro */
-  color: white;
+  color: inherit;
   font-weight: 500;
   font-size: 0.8rem; /* Font leggermente ridotto */
   height: 100%;
@@ -1337,47 +1422,6 @@ onUnmounted(() => {
 .resize-right {
   right: 0;
   border-radius: 0 0.5rem 0.5rem 0;
-}
-
-.footer {
-  background: white;
-  border-top: 1px solid #e5e7eb;
-  padding: 1rem;
-  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.footer-content {
-  max-width: 60rem;
-  margin: 0 auto;
-  display: flex;
-  gap: 1rem;
-  align-items: flex-end;
-}
-
-.input-group {
-  flex: 1;
-}
-
-.input-label {
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 0.25rem;
-}
-
-.input-field {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-}
-
-.input-field:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 @media (max-width: 768px) {
@@ -1479,6 +1523,36 @@ onUnmounted(() => {
   z-index: 2000;
 }
 
+.booking-action-menu {
+  position: fixed;
+  z-index: 2200;
+  min-width: 180px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.booking-action-item {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: left;
+  color: #111827;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.booking-action-item:hover {
+  background: #f3f4f6;
+}
+
 .modal-content {
   background: white;
   width: 90%;
@@ -1486,6 +1560,8 @@ onUnmounted(() => {
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .modal-header {
@@ -1528,8 +1604,16 @@ onUnmounted(() => {
 .modal-footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+}
+
+.modal-footer .btn {
+  margin-top: 0;
 }
 
 .btn-save { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; }
