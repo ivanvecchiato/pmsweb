@@ -112,88 +112,139 @@
       </div>
       
       <form @submit.prevent="submitNewBooking" class="booking-form">
-        <div class="form-section">
-          <label>Camera</label>
-          <select v-model="newBookingData.roomId" required>
-            <option v-for="room in rooms" :key="room.id" :value="room.id">
-              {{ room.name }}
-            </option>
-          </select>
-        </div>
-
-        <div class="form-row">
-          <div class="form-section">
-            <label>Nome</label>
-            <input type="text" v-model="newBookingData.guestName" required placeholder="es. Mario" />
-          </div>
-          <div class="form-section">
-            <label>Cognome</label>
-            <input type="text" v-model="newBookingData.guestSurname" required placeholder="es. Rossi" />
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-section">
-            <label>Adulti</label>
-            <input type="number" v-model="newBookingData.adults" min="1" />
-          </div>
-          <div class="form-section">
-            <label>Bambini</label>
-            <input type="number" v-model="newBookingData.children" min="0" />
-          </div>
-        </div>
-
-        <div class="form-section">
-          <label>Trattamento</label>
-          <div class="board-radio-group">
-            <label v-for="mode in ['bb', 'hb', 'fb']" :key="mode" 
-                  class="board-radio-card" :class="{ 'is-selected': newBookingData.board === mode }">
-              <input type="radio" v-model="newBookingData.board" :value="mode" class="hidden-radio">
-              <span class="board-name">{{ mode.toUpperCase() }}</span>
-            </label>
-          </div>
-        </div>
-        
-        <div class="form-row">
-          <div class="form-section">
-            <label>Check-in</label>
-            <input type="date" v-model="newBookingData.checkin" required />
-          </div>
-          <div class="form-section">
-            <label>Check-out</label>
-            <input type="date" v-model="newBookingData.checkout" required />
-          </div>
-        </div>
-
-        <div class="form-row price-management-row">
-          <div class="form-section">
-            <label class="checkbox-label">
-              <input type="checkbox" v-model="newBookingData.isManualPrice">
-              <span>Applica Prezzo Manuale</span>
-            </label>
-          </div>
-          
-          <div class="form-section" v-if="newBookingData.isManualPrice">
-            <label>Totale Concordato (€)</label>
-            <input type="number" v-model.number="newBookingData.manualPrice" class="input-manual-highlight">
-          </div>
-        </div>
-
-        <div v-if="bookingQuote" class="quote-box" :class="{ 'manual-active': newBookingData.isManualPrice }">
-          <div class="quote-details">
-            <div v-for="day in bookingQuote.days" :key="day.date" class="quote-line">
-              <span>{{ day.date }}</span>
-              <span>€{{ day.dayTotal }}</span>
+        <div class="dialog-layout">
+          <section class="dialog-section">
+            <h4 class="section-title">Prenotazione</h4>
+            <div class="form-section">
+              <label>Camera</label>
+              <select v-model="newBookingData.roomId" required>
+                <option v-for="room in rooms" :key="room.id" :value="room.id">
+                  {{ room.name }}
+                </option>
+              </select>
             </div>
-          </div>
-          <div class="quote-summary-footer">
-            <div v-if="newBookingData.isManualPrice" class="price-strikethrough">
-              Calcolato: €{{ bookingQuote.totalCalculated }}
+
+            <div class="form-row">
+              <div class="form-section">
+                <label>Check-in</label>
+                <input type="date" v-model="newBookingData.checkin" required />
+              </div>
+              <div class="form-section">
+                <label>Check-out</label>
+                <input type="date" v-model="newBookingData.checkout" required />
+              </div>
             </div>
-            <div class="final-price-display">
-              TOTALE: €{{ bookingQuote.finalTotal }}
+
+            <div class="form-section">
+              <label>Trattamento</label>
+              <div class="board-radio-group">
+                <label v-for="mode in ['bb', 'hb', 'fb']" :key="mode"
+                      class="board-radio-card" :class="{ 'is-selected': newBookingData.board === mode }">
+                  <input type="radio" v-model="newBookingData.board" :value="mode" class="hidden-radio">
+                  <span class="board-name">{{ mode.toUpperCase() }}</span>
+                </label>
+              </div>
             </div>
-          </div>
+          </section>
+
+          <section class="dialog-section">
+            <h4 class="section-title">Ospite</h4>
+            <div class="form-row">
+              <div class="form-section">
+                <label>Nome</label>
+                <input type="text" v-model="newBookingData.guestName" required placeholder="es. Mario" />
+              </div>
+              <div class="form-section">
+                <label>Cognome</label>
+                <input type="text" v-model="newBookingData.guestSurname" required placeholder="es. Rossi" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-section">
+                <label>Adulti</label>
+                <input type="number" v-model="newBookingData.adults" min="1" />
+              </div>
+              <div class="form-section">
+                <label>Bambini</label>
+                <input type="number" v-model="newBookingData.children" min="0" />
+              </div>
+            </div>
+          </section>
+
+          <section class="dialog-section dialog-section-full">
+            <h4 class="section-title">Prezzi</h4>
+            <div class="form-row price-management-row">
+              <div class="form-section">
+                <label class="checkbox-label">
+                  <input type="checkbox" v-model="newBookingData.isManualPrice">
+                  <span>Applica Prezzo Manuale</span>
+                </label>
+              </div>
+
+              <div class="form-section" v-if="newBookingData.isManualPrice">
+                <label>Totale Concordato (€)</label>
+                <input type="number" v-model.number="newBookingData.manualPrice" class="input-manual-highlight">
+              </div>
+            </div>
+
+            <div v-if="bookingQuote" class="quote-box" :class="{ 'manual-active': newBookingData.isManualPrice }">
+              <div class="quote-details">
+                <div v-for="day in bookingQuote.days" :key="day.date" class="quote-line">
+                  <span>{{ day.date }}</span>
+                  <span>€{{ day.dayTotal }}</span>
+                </div>
+              </div>
+              <div class="quote-summary-footer">
+                <div v-if="newBookingData.isManualPrice" class="price-strikethrough">
+                  Calcolato: €{{ bookingQuote.totalCalculated }}
+                </div>
+                <div class="final-price-display">
+                  TOTALE: €{{ bookingQuote.finalTotal }}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="dialog-section dialog-section-full">
+            <h4 class="section-title">Deposit</h4>
+
+            <div class="deposit-entry-grid">
+              <div class="form-section">
+                <label>Importo (€)</label>
+                <input type="number" min="0" step="0.01" v-model.number="depositDraft.amount" placeholder="es. 100" />
+              </div>
+              <div class="form-section">
+                <label>Data pagamento</label>
+                <input type="date" v-model="depositDraft.paymentDate" />
+              </div>
+              <div class="form-section">
+                <label>Metodo</label>
+                <input type="text" v-model="depositDraft.paymentMode" placeholder="es. Bonifico" />
+              </div>
+              <div class="form-section deposit-add-wrap">
+                <button type="button" class="btn btn-secondary" @click="addDeposit">+ Aggiungi Deposit</button>
+              </div>
+            </div>
+
+            <div class="deposit-summary">
+              Totale deposit inseriti: <strong>€{{ totalDeposits.toFixed(2) }}</strong>
+            </div>
+
+            <div v-if="!newBookingData.deposits.length" class="deposit-empty">
+              Nessun deposit inserito
+            </div>
+            <div v-else class="deposit-list">
+              <div v-for="(dep, index) in newBookingData.deposits" :key="`${dep.paymentDate}-${index}`" class="deposit-item">
+                <div class="deposit-meta">
+                  <strong>€{{ Number(dep.amount).toFixed(2) }}</strong>
+                  <span>{{ dep.paymentDate }}</span>
+                  <span>{{ dep.paymentMode || 'N/D' }}</span>
+                </div>
+                <button type="button" class="deposit-remove" @click="removeDeposit(index)">Rimuovi</button>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div class="modal-footer">
@@ -351,6 +402,11 @@ const editingBooking = ref(null);
 const showBookingActionMenu = ref(false);
 const actionMenuBooking = ref(null);
 const actionMenuPosition = ref({ x: 0, y: 0 });
+const depositDraft = ref({
+  amount: null,
+  paymentDate: '',
+  paymentMode: 'Bonifico'
+});
 const newBookingData = ref({
   roomId: '',
   guestName: '',
@@ -361,8 +417,56 @@ const newBookingData = ref({
   checkout: '',
   board: 'bb',
   isManualPrice: false,
-  manualPrice: 0
+  manualPrice: 0,
+  deposits: []
 });
+
+const normalizeDeposits = (deposits) => {
+  if (!Array.isArray(deposits)) return [];
+  return deposits
+    .map(dep => ({
+      amount: Number(dep?.amount ?? 0),
+      paymentMode: dep?.payment_mode || dep?.paymentMode || '',
+      paymentDate: dep?.payment_date || dep?.paymentDate || ''
+    }))
+    .filter(dep => Number.isFinite(dep.amount) && dep.amount > 0 && dep.paymentDate);
+};
+
+const resetDepositDraft = (defaultDate = '') => {
+  depositDraft.value = {
+    amount: null,
+    paymentDate: defaultDate || '',
+    paymentMode: 'Bonifico'
+  };
+};
+
+const totalDeposits = computed(() => {
+  return (newBookingData.value.deposits || []).reduce((sum, dep) => sum + Number(dep.amount || 0), 0);
+});
+
+const addDeposit = () => {
+  const amount = Number(depositDraft.value.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert('Inserisci un importo deposito valido');
+    return;
+  }
+  if (!depositDraft.value.paymentDate) {
+    alert('Inserisci la data del deposito');
+    return;
+  }
+
+  newBookingData.value.deposits.push({
+    amount,
+    paymentMode: (depositDraft.value.paymentMode || '').trim(),
+    paymentDate: depositDraft.value.paymentDate
+  });
+
+  resetDepositDraft(newBookingData.value.checkin || '');
+};
+
+const removeDeposit = (index) => {
+  newBookingData.value.deposits.splice(index, 1);
+};
 
 // 1. AUTOMAZIONE DATE: Il checkout segue il checkin
 watch(() => newBookingData.value.checkin, (newIn) => {
@@ -374,6 +478,10 @@ watch(() => newBookingData.value.checkin, (newIn) => {
     const nextDay = new Date(dateIn);
     nextDay.setDate(nextDay.getDate() + 1);
     newBookingData.value.checkout = nextDay.toISOString().split('T')[0];
+  }
+
+  if (!depositDraft.value.paymentDate) {
+    depositDraft.value.paymentDate = newIn;
   }
 });
 
@@ -480,8 +588,10 @@ const addBooking = (room = null, event = null) => {
     checkout,
     board: 'bb',
     isManualPrice: false,
-    manualPrice: ''
+    manualPrice: '',
+    deposits: []
   };
+  resetDepositDraft(checkin);
   showModal.value = true;
 };
 
@@ -508,8 +618,10 @@ const openEditBooking = (booking) => {
     checkout: end.toISOString().split('T')[0],
     board: booking.board || 'bb',
     isManualPrice: booking.fixedPrice != null,
-    manualPrice: booking.fixedPrice || 0
+    manualPrice: booking.fixedPrice || 0,
+    deposits: normalizeDeposits(booking.deposits)
   };
+  resetDepositDraft(start.toISOString().split('T')[0]);
   showModal.value = true;
 };
 
@@ -532,10 +644,16 @@ const submitNewBooking = () => {
     lastname: newBookingData.value.guestSurname,
     adults: parseInt(newBookingData.value.adults),
     children: parseInt(newBookingData.value.children),
+    kids: parseInt(newBookingData.value.children),
     checkin: newBookingData.value.checkin,
     duration: duration,
     board: newBookingData.value.board,
-    fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null
+    fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null,
+    deposits: (newBookingData.value.deposits || []).map(dep => ({
+      amount: Number(dep.amount || 0),
+      payment_mode: dep.paymentMode || '',
+      payment_date: dep.paymentDate
+    }))
   };
 
   if (editingBooking.value) {
@@ -1077,6 +1195,13 @@ const convertReservations = (apiReservations) => {
       duration: res.duration,
       status: Number(res.status ?? 0),
       hasDeposit,
+      deposits,
+      guestName: res.accountholder?.firstname || '',
+      guestSurname: res.accountholder?.lastname || '',
+      adults: res.adults ?? res.pax ?? 1,
+      children: res.kids ?? 0,
+      board: (res.board || 'BB').toLowerCase(),
+      fixedPrice: res.fixedPrice ?? null,
       guest: res.accountholder.firstname + ' ' + res.accountholder.lastname,
       color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
     };
@@ -1556,12 +1681,36 @@ onUnmounted(() => {
 .modal-content {
   background: white;
   width: 90%;
-  max-width: 550px;
+  max-width: 980px;
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
   max-height: 90vh;
   overflow-y: auto;
+}
+
+.dialog-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dialog-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px;
+  background: #fafafa;
+}
+
+.dialog-section-full {
+  grid-column: 1 / -1;
+}
+
+.section-title {
+  margin: 0 0 10px 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111827;
 }
 
 .modal-header {
@@ -1583,7 +1732,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .form-section label {
@@ -1599,6 +1748,90 @@ onUnmounted(() => {
   border: 1px solid #d1d5db;
   border-radius: 6px;
   font-size: 14px;
+}
+
+.deposit-entry-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.deposit-add-wrap {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.deposit-summary {
+  margin-top: 8px;
+  margin-bottom: 8px;
+  color: #374151;
+  font-size: 0.92rem;
+}
+
+.deposit-empty {
+  padding: 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.deposit-list {
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.deposit-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.deposit-item:last-child {
+  border-bottom: none;
+}
+
+.deposit-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: #334155;
+  font-size: 0.88rem;
+}
+
+.deposit-remove {
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  background: #fff5f5;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.deposit-remove:hover {
+  background: #fee2e2;
+}
+
+@media (max-width: 980px) {
+  .dialog-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .deposit-entry-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .deposit-add-wrap {
+    justify-content: flex-start;
+  }
 }
 
 .modal-footer {
