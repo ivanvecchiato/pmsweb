@@ -8,14 +8,6 @@
       <div class="header">
         <h1>Gestione Preventivi</h1>
         <div class="filters">
-          <button 
-            v-for="f in filters" 
-            :key="f"
-            @click="activeFilter = f"
-            :class="['filter-btn', { active: activeFilter === f }]"
-          >
-            {{ f === 'all' ? 'Tutti' : f === 'hotel' ? 'Hotel' : 'Spiaggia' }}
-          </button>
           <button @click="createNewQuote" class="btn btn-primary">
             + Nuovo Preventivo
           </button>
@@ -271,11 +263,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import QuoteBuilder from './QuoteBuilder.vue'
 import { useQuotes } from '@/composables/useQuotes.js'
+import { useAuth } from '@/composables/useAuth.js'
 
 const router = useRouter()
 const { quotes, loadQuotes, deleteQuote, convertToBooking: convertQuoteToBooking } = useQuotes()
+const { pmsType, loadPmsType } = useAuth()
 
-const activeFilter = ref('all')
 const selectedQuoteId = ref(null)
 const selectedRoomForConversion = ref(null)
 const isLoading = ref(true)
@@ -283,11 +276,10 @@ const isDeleting = ref(false)
 const isConverting = ref(false)
 const showQuoteBuilder = ref(false)
 const selectedQuoteType = ref('hotel')
-const filters = ['all', 'hotel', 'beach']
+const currentPmsType = computed(() => pmsType.value || 'hotel')
 
 const filteredQuotes = computed(() => {
-  if (activeFilter.value === 'all') return quotes.value
-  return quotes.value.filter(q => q.type === activeFilter.value)
+  return quotes.value.filter(q => q.type === currentPmsType.value)
 })
 
 const currentQuote = computed(() => {
@@ -331,7 +323,7 @@ const displayedPriceOption = computed(() => {
 })
 
 const createNewQuote = () => {
-  selectedQuoteType.value = 'hotel'
+  selectedQuoteType.value = currentPmsType.value
   showQuoteBuilder.value = true
 }
 
@@ -401,6 +393,7 @@ const convertToBooking = async () => {
 
 onMounted(async () => {
   try {
+    await loadPmsType()
     await loadQuotes()
   } catch (err) {
     alert('Errore nel caricamento dei preventivi: ' + err.message)
