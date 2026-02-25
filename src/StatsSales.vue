@@ -62,13 +62,20 @@ const salesData = ref([])
 const aggregatedSalesData = ref([])
 let chart = null
 
+const toISODate = (date) => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 // Inizializza date di default (ultimi 30 giorni)
 onMounted(() => {
   const today = new Date()
   const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
   
-  toDate.value = today.toISOString().split('T')[0]
-  fromDate.value = thirtyDaysAgo.toISOString().split('T')[0]
+  toDate.value = toISODate(today)
+  fromDate.value = toISODate(thirtyDaysAgo)
   
   fetchSales()
 })
@@ -99,11 +106,11 @@ const aggregateData = () => {
     salesData.value.forEach(item => {
       const date = new Date(item.date)
       const week = getWeekStart(date)
-      const key = week.toISOString().split('T')[0]
+      const key = toISODate(week)
       weekly[key] = (weekly[key] || 0) + item.sales
     })
     return Object.entries(weekly).map(([date, sales]) => ({
-      date: `${date} - ${getWeekEnd(new Date(date)).toISOString().split('T')[0]}`,
+      date: `${date} - ${toISODate(getWeekEnd(new Date(date)))}`,
       sales
     }))
   }

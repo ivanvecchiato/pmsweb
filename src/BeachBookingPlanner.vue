@@ -24,7 +24,7 @@ const selectedBooking = ref(null);
 const showModal = ref(false);
 const editingBooking = ref(null); // store booking being edited when modal open
 const showMap = ref(true);
-const selectedDate = ref(new Date().toISOString().split('T')[0]);
+const selectedDate = ref(toISODate(new Date()));
 const isLoading = ref(false);
 const loadError = ref('');
 const selectedSector = ref('all');
@@ -113,8 +113,8 @@ const isTodayVisible = computed(() => {
 
 const todayLineStyle = computed(() => {
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
-  const diffDaysIndex = dates.value.findIndex(d => d.toISOString().split('T')[0] === todayStr);
+  const todayStr = toISODate(now);
+  const diffDaysIndex = dates.value.findIndex(d => toISODate(d) === todayStr);
   if (diffDaysIndex !== -1) {
     return {
       position: 'absolute',
@@ -263,7 +263,7 @@ const bookingQuote = computed(() => {
 
 const openNewBooking = (place) => {
   editingBooking.value = null;
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = toISODate(new Date());
   newBookingData.value = {
     placeId: place?.id ? String(place.id) : '',
     guestName: '',

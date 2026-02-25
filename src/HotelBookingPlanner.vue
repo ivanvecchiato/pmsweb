@@ -769,16 +769,15 @@ const isTodayVisible = computed(() => {
 const todayLineStyle = computed(() => {
   // 1. Data di oggi in formato YYYY-MM-DD
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = toISODate(now);
 
   // 2. Data di inizio planning in formato YYYY-MM-DD
   // Ci assicuriamo che startDate sia un oggetto Date valido
   const start = new Date(startDate.value);
-  const startStr = start.toISOString().split('T')[0];
 
   // 3. Troviamo l'indice del giorno cercando la data di oggi nell'array 'dates'
   // L'array 'dates' è quello che usi per generare l'header della griglia
-  const diffDays = dates.value.findIndex(d => d.toISOString().split('T')[0] === todayStr);
+  const diffDays = dates.value.findIndex(d => toISODate(d) === todayStr);
 
   // 4. Se trovata (indice >= 0), calcoliamo la posizione
   if (diffDays !== -1) {
@@ -818,7 +817,7 @@ const bookingQuote = computed(() => {
   let current = new Date(start);
 
   while (current < end) {
-    const dateStr = current.toISOString().split('T')[0];
+    const dateStr = toISODate(current);
     const dayData = timetable.value.find(t => t.date === dateStr);
     
     // Cerchiamo il listino (usando String() per evitare errori di tipo id 1 vs "1")
@@ -1212,10 +1211,10 @@ const getReservations = () => {
   const fetchStart = new Date(startDate.value);
   fetchStart.setDate(fetchStart.getDate() - safetyMargin);
   
-  const fromDate = fetchStart.toISOString().split('T')[0];
+  const fromDate = toISODate(fetchStart);
   const toDateObj = new Date(startDate.value);
   toDateObj.setDate(toDateObj.getDate() + days.value - 1);
-  const toDate = toDateObj.toISOString().split('T')[0];
+  const toDate = toISODate(toDateObj);
 
   var url = `http://localhost:8081/api/pms/getbookingsbyrange?from=${fromDate}&to=${toDate}`;
   

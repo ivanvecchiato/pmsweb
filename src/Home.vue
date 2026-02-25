@@ -302,7 +302,7 @@ const updateReservation = (booking) => {
   const obj = {
     id: booking.id,
     roomId: booking.roomId,
-    checkin: new Date(startDate.value.getTime() + (booking.startDay) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    checkin: toISODate(new Date(startDate.value.getTime() + (booking.startDay) * 24 * 60 * 60 * 1000)),
     duration: booking.duration
   }
   axios.post('http://localhost:8081/api/pms/updatereservation', obj)
@@ -432,10 +432,10 @@ const getSelectedGuest = () => {
 };
 
 const getReservations = () =>{
-  const fromDate = startDate.value.toISOString().split('T')[0];
+  const fromDate = toISODate(startDate.value);
   const toDateObj = new Date(startDate.value);
   toDateObj.setDate(toDateObj.getDate() + days.value - 1);
-  const toDate = toDateObj.toISOString().split('T')[0];
+  const toDate = toISODate(toDateObj);
 
   var url = 'http://localhost:8081/api/pms/getbookingsbyrange';
   url += `?from=${fromDate}&to=${toDate}`;
