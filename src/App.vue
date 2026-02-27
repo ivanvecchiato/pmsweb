@@ -49,6 +49,19 @@
               </span>
               <span class="label">Prenotazioni Spiaggia</span>
             </router-link>
+
+            <router-link
+              to="/quotes"
+              :class="['menu-item', { active: route.path === '/quotes' }]"
+              aria-label="Preventivi"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 12h6m-6 4h6M9 8h6m9-2h-2V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-2h2a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Preventivi</span>
+            </router-link>
           </div>
 
           <!-- AREA BAR -->
@@ -94,7 +107,7 @@
           </div>
 
           <!-- AREA CONFIGURAZIONE -->
-          <div v-if="hasPermission('listino') || hasPermission('listino_beach')" class="menu-section">
+          <div v-if="hasPermission('listino') || hasPermission('listino_beach') || hasPermission('onda_push_products')" class="menu-section">
             <div class="section-label">CONFIGURAZIONE</div>
             
             <router-link
@@ -126,17 +139,19 @@
             </router-link>
 
             <router-link
-              to="/quotes"
-              :class="['menu-item', { active: route.path === '/quotes' }]"
-              aria-label="Preventivi"
+              v-if="hasPermission('onda_push_products')"
+              to="/onda-push-products"
+              :class="['menu-item', { active: route.path === '/onda-push-products' }]"
+              aria-label="Prodotti in evidenza Onda"
             >
               <span class="icon" aria-hidden>
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 12h6m-6 4h6M9 8h6m9-2h-2V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-2h2a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M4 8h16M7 4h10M9 12h6M6 16h12M8 20h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </span>
-              <span class="label">Preventivi</span>
+              <span class="label">Promo Onda</span>
             </router-link>
+
           </div>
 
           <!-- Logout button -->

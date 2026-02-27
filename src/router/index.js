@@ -35,6 +35,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'listino_beach' }
     },
     {
+      path: '/onda-push-products',
+      name: 'OndaPushProductsConfig',
+      component: () => import('../OndaPushProductsConfig.vue'),
+      meta: { requiresAuth: true, permission: 'onda_push_products' }
+    },
+    {
       path: '/beach-bookings',
       name: 'BeachBookingPlanner',
       component: () => import('../BeachBookingPlanner.vue'),

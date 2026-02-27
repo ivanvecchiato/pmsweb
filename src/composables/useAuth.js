@@ -1,8 +1,8 @@
 import { ref, computed } from 'vue'
 
 const rolePermissions = {
-  admin: ['home', 'customers', 'beach-bookings', 'inventory', 'stats', 'listino', 'listino_beach'],
-  staff: ['home', 'customers', 'beach-bookings', 'listino', 'listino_beach']
+  admin: ['home', 'customers', 'beach-bookings', 'inventory', 'stats', 'listino', 'listino_beach', 'onda_push_products'],
+  staff: ['home', 'customers', 'beach-bookings', 'listino', 'listino_beach', 'onda_push_products']
 }
 
 const currentUser = ref(null)
