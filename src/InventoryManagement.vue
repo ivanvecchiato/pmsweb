@@ -445,6 +445,11 @@ onMounted(() => {
   flex-direction: column;
 }
 
+.modal-card.bulk-card {
+  width: min(920px, 95vw);
+  max-width: min(920px, 95vw);
+}
+
 .scrollable-body {
   padding: 25px;
   overflow-y: auto;
@@ -464,10 +469,14 @@ onMounted(() => {
 /* Griglia Righe Bolla */
 .bulk-row {
   display: grid;
-  grid-template-columns: 1fr 100px 140px 40px; /* Definisce le proporzioni delle colonne */
+  grid-template-columns: minmax(240px, 1.7fr) 96px 160px 40px;
   gap: 12px;
   align-items: center;
   margin-bottom: 8px;
+}
+
+.bulk-rows-container {
+  overflow-x: auto;
 }
 
 .header-row {
@@ -483,6 +492,15 @@ onMounted(() => {
 
 .entry-row {
   padding: 0 5px;
+}
+
+.col-prod {
+  min-width: 0;
+}
+
+.entry-row .col-prod .input-main {
+  min-height: 46px;
+  font-size: 1.06rem;
 }
 
 /* Prezzo con prefisso € interno */
@@ -608,8 +626,25 @@ onMounted(() => {
 /* Modal */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; }
 .modal-card { background: white; width: 500px; border-radius: 20px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
-.modal-header { padding: 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
+.modal-header { padding: 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: flex-start; }
 .m-title h3 { margin: 0; }
+.btn-close {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 1.35rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
 .causal-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 20px; }
 .causal-item { padding: 12px; border: 2px solid #f1f5f9; border-radius: 12px; cursor: pointer; text-align: center; }
 .causal-item.active { background: #1e293b; color: white; border-color: #1e293b; }

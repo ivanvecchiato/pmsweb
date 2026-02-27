@@ -77,12 +77,11 @@
                 :key="booking.id"
                 class="booking"
                 :class="{ 
-                  'booking-selected': selectedBooking === booking.id,
                   'booking-conflict': hasConflict(booking)
                 }"
                 :style="getBookingStyle(booking)"
                 @mousedown="handleMouseDown($event, booking, 'move')"
-                @click.prevent.stop="openEditBooking(booking)" @dblclick.prevent.stop="openEditBooking(booking)"
+                @click.prevent.stop="openBookingActions($event, booking)"
               >
                 <div
                   class="resize-handle resize-left"
@@ -104,23 +103,6 @@
       </div>
     </div>
 
-    <div v-if="selectedBooking && !showModal" class="footer">
-      <div class="footer-content">
-        <div class="input-group">
-          <label class="input-label">Nome Cliente</label>
-          <input
-            type="text"
-            :value="getSelectedGuest()"
-            @input="updateGuest($event.target.value)"
-            class="input-field"
-          />
-        </div>
-        <button @click="deleteBooking" class="btn btn-danger">
-          Elimina
-        </button>
-      </div>
-    </div>
-
 <transition name="fade">
   <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
     <div class="modal-content">
@@ -130,88 +112,139 @@
       </div>
       
       <form @submit.prevent="submitNewBooking" class="booking-form">
-        <div class="form-section">
-          <label>Camera</label>
-          <select v-model="newBookingData.roomId" required>
-            <option v-for="room in rooms" :key="room.id" :value="room.id">
-              {{ room.name }}
-            </option>
-          </select>
-        </div>
-
-        <div class="form-row">
-          <div class="form-section">
-            <label>Nome</label>
-            <input type="text" v-model="newBookingData.guestName" required placeholder="es. Mario" />
-          </div>
-          <div class="form-section">
-            <label>Cognome</label>
-            <input type="text" v-model="newBookingData.guestSurname" required placeholder="es. Rossi" />
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-section">
-            <label>Adulti</label>
-            <input type="number" v-model="newBookingData.adults" min="1" />
-          </div>
-          <div class="form-section">
-            <label>Bambini</label>
-            <input type="number" v-model="newBookingData.children" min="0" />
-          </div>
-        </div>
-
-        <div class="form-section">
-          <label>Trattamento</label>
-          <div class="board-radio-group">
-            <label v-for="mode in ['bb', 'hb', 'fb']" :key="mode" 
-                  class="board-radio-card" :class="{ 'is-selected': newBookingData.board === mode }">
-              <input type="radio" v-model="newBookingData.board" :value="mode" class="hidden-radio">
-              <span class="board-name">{{ mode.toUpperCase() }}</span>
-            </label>
-          </div>
-        </div>
-        
-        <div class="form-row">
-          <div class="form-section">
-            <label>Check-in</label>
-            <input type="date" v-model="newBookingData.checkin" required />
-          </div>
-          <div class="form-section">
-            <label>Check-out</label>
-            <input type="date" v-model="newBookingData.checkout" required />
-          </div>
-        </div>
-
-        <div class="form-row price-management-row">
-          <div class="form-section">
-            <label class="checkbox-label">
-              <input type="checkbox" v-model="newBookingData.isManualPrice">
-              <span>Applica Prezzo Manuale</span>
-            </label>
-          </div>
-          
-          <div class="form-section" v-if="newBookingData.isManualPrice">
-            <label>Totale Concordato (€)</label>
-            <input type="number" v-model.number="newBookingData.manualPrice" class="input-manual-highlight">
-          </div>
-        </div>
-
-        <div v-if="bookingQuote" class="quote-box" :class="{ 'manual-active': newBookingData.isManualPrice }">
-          <div class="quote-details">
-            <div v-for="day in bookingQuote.days" :key="day.date" class="quote-line">
-              <span>{{ day.date }}</span>
-              <span>€{{ day.dayTotal }}</span>
+        <div class="dialog-layout">
+          <section class="dialog-section">
+            <h4 class="section-title">Prenotazione</h4>
+            <div class="form-section">
+              <label>Camera</label>
+              <select v-model="newBookingData.roomId" required>
+                <option v-for="room in rooms" :key="room.id" :value="room.id">
+                  {{ room.name }}
+                </option>
+              </select>
             </div>
-          </div>
-          <div class="quote-summary-footer">
-            <div v-if="newBookingData.isManualPrice" class="price-strikethrough">
-              Calcolato: €{{ bookingQuote.totalCalculated }}
+
+            <div class="form-row">
+              <div class="form-section">
+                <label>Check-in</label>
+                <input type="date" v-model="newBookingData.checkin" required />
+              </div>
+              <div class="form-section">
+                <label>Check-out</label>
+                <input type="date" v-model="newBookingData.checkout" required />
+              </div>
             </div>
-            <div class="final-price-display">
-              TOTALE: €{{ bookingQuote.finalTotal }}
+
+            <div class="form-section">
+              <label>Trattamento</label>
+              <div class="board-radio-group">
+                <label v-for="mode in ['bb', 'hb', 'fb']" :key="mode"
+                      class="board-radio-card" :class="{ 'is-selected': newBookingData.board === mode }">
+                  <input type="radio" v-model="newBookingData.board" :value="mode" class="hidden-radio">
+                  <span class="board-name">{{ mode.toUpperCase() }}</span>
+                </label>
+              </div>
             </div>
-          </div>
+          </section>
+
+          <section class="dialog-section">
+            <h4 class="section-title">Ospite</h4>
+            <div class="form-row">
+              <div class="form-section">
+                <label>Nome</label>
+                <input type="text" v-model="newBookingData.guestName" required placeholder="es. Mario" />
+              </div>
+              <div class="form-section">
+                <label>Cognome</label>
+                <input type="text" v-model="newBookingData.guestSurname" required placeholder="es. Rossi" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-section">
+                <label>Adulti</label>
+                <input type="number" v-model="newBookingData.adults" min="1" />
+              </div>
+              <div class="form-section">
+                <label>Bambini</label>
+                <input type="number" v-model="newBookingData.children" min="0" />
+              </div>
+            </div>
+          </section>
+
+          <section class="dialog-section dialog-section-full">
+            <h4 class="section-title">Prezzi</h4>
+            <div class="form-row price-management-row">
+              <div class="form-section">
+                <label class="checkbox-label">
+                  <input type="checkbox" v-model="newBookingData.isManualPrice">
+                  <span>Applica Prezzo Manuale</span>
+                </label>
+              </div>
+
+              <div class="form-section" v-if="newBookingData.isManualPrice">
+                <label>Totale Concordato (€)</label>
+                <input type="number" v-model.number="newBookingData.manualPrice" class="input-manual-highlight">
+              </div>
+            </div>
+
+            <div v-if="bookingQuote" class="quote-box" :class="{ 'manual-active': newBookingData.isManualPrice }">
+              <div class="quote-details">
+                <div v-for="day in bookingQuote.days" :key="day.date" class="quote-line">
+                  <span>{{ day.date }}</span>
+                  <span>€{{ day.dayTotal }}</span>
+                </div>
+              </div>
+              <div class="quote-summary-footer">
+                <div v-if="newBookingData.isManualPrice" class="price-strikethrough">
+                  Calcolato: €{{ bookingQuote.totalCalculated }}
+                </div>
+                <div class="final-price-display">
+                  TOTALE: €{{ bookingQuote.finalTotal }}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="dialog-section dialog-section-full">
+            <h4 class="section-title">Deposit</h4>
+
+            <div class="deposit-entry-grid">
+              <div class="form-section">
+                <label>Importo (€)</label>
+                <input type="number" min="0" step="0.01" v-model.number="depositDraft.amount" placeholder="es. 100" />
+              </div>
+              <div class="form-section">
+                <label>Data pagamento</label>
+                <input type="date" v-model="depositDraft.paymentDate" />
+              </div>
+              <div class="form-section">
+                <label>Metodo</label>
+                <input type="text" v-model="depositDraft.paymentMode" placeholder="es. Bonifico" />
+              </div>
+              <div class="form-section deposit-add-wrap">
+                <button type="button" class="btn btn-secondary" @click="addDeposit">+ Aggiungi Deposit</button>
+              </div>
+            </div>
+
+            <div class="deposit-summary">
+              Totale deposit inseriti: <strong>€{{ totalDeposits.toFixed(2) }}</strong>
+            </div>
+
+            <div v-if="!newBookingData.deposits.length" class="deposit-empty">
+              Nessun deposit inserito
+            </div>
+            <div v-else class="deposit-list">
+              <div v-for="(dep, index) in newBookingData.deposits" :key="`${dep.paymentDate}-${index}`" class="deposit-item">
+                <div class="deposit-meta">
+                  <strong>€{{ Number(dep.amount).toFixed(2) }}</strong>
+                  <span>{{ dep.paymentDate }}</span>
+                  <span>{{ dep.paymentMode || 'N/D' }}</span>
+                </div>
+                <button type="button" class="deposit-remove" @click="removeDeposit(index)">Rimuovi</button>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div class="modal-footer">
@@ -225,6 +258,20 @@
     </div>
   </div>
 </transition>
+
+<div
+  v-if="showBookingActionMenu"
+  class="booking-action-menu"
+  :style="bookingActionMenuStyle"
+  @click.stop
+>
+  <button type="button" class="booking-action-item" @click="openEditFromMenu">
+    Modifica
+  </button>
+  <button type="button" class="booking-action-item" @click="runBookingStatusAction">
+    {{ bookingStatusActionLabel }}
+  </button>
+</div>
 
 <!-- Quote Builder Modal -->
 <QuoteBuilder 
@@ -251,7 +298,10 @@ const rooms = ref([
   { id: 5, name: 'Camera 202 - Singola' }
 ]);
 
-const startDate = ref(new Date(2026, 0, 1));
+const initialPlannerStartDate = new Date();
+initialPlannerStartDate.setHours(0, 0, 0, 0);
+initialPlannerStartDate.setDate(initialPlannerStartDate.getDate() - 10);
+const startDate = ref(initialPlannerStartDate);
 const days = ref(61);
 const daysToShift = 7;
 
@@ -349,6 +399,14 @@ const mouseLineStyle = computed(() => {
 
 const showModal = ref(false);
 const editingBooking = ref(null);
+const showBookingActionMenu = ref(false);
+const actionMenuBooking = ref(null);
+const actionMenuPosition = ref({ x: 0, y: 0 });
+const depositDraft = ref({
+  amount: null,
+  paymentDate: '',
+  paymentMode: 'Bonifico'
+});
 const newBookingData = ref({
   roomId: '',
   guestName: '',
@@ -359,8 +417,74 @@ const newBookingData = ref({
   checkout: '',
   board: 'bb',
   isManualPrice: false,
-  manualPrice: 0
+  manualPrice: 0,
+  deposits: []
 });
+
+const normalizeDeposits = (deposits) => {
+  if (!Array.isArray(deposits)) return [];
+  return deposits
+    .map(dep => ({
+      amount: Number(dep?.amount ?? 0),
+      paymentMode: dep?.payment_mode || dep?.paymentMode || '',
+      paymentDate: dep?.payment_date || dep?.paymentDate || ''
+    }))
+    .filter(dep => Number.isFinite(dep.amount) && dep.amount > 0 && dep.paymentDate);
+};
+
+const getReservationDeposits = (reservation) => {
+  if (Array.isArray(reservation?.deposits)) return reservation.deposits;
+  if (Array.isArray(reservation?.deposit)) return reservation.deposit;
+  if (Array.isArray(reservation?.caparra)) return reservation.caparra;
+
+  const rawJson = reservation?.deposits_json || reservation?.deposit_json || reservation?.caparra_json;
+  if (typeof rawJson === 'string' && rawJson.trim()) {
+    try {
+      const parsed = JSON.parse(rawJson);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+};
+
+const resetDepositDraft = (defaultDate = '') => {
+  depositDraft.value = {
+    amount: null,
+    paymentDate: defaultDate || '',
+    paymentMode: 'Bonifico'
+  };
+};
+
+const totalDeposits = computed(() => {
+  return (newBookingData.value.deposits || []).reduce((sum, dep) => sum + Number(dep.amount || 0), 0);
+});
+
+const addDeposit = () => {
+  const amount = Number(depositDraft.value.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert('Inserisci un importo deposito valido');
+    return;
+  }
+  if (!depositDraft.value.paymentDate) {
+    alert('Inserisci la data del deposito');
+    return;
+  }
+
+  newBookingData.value.deposits.push({
+    amount,
+    paymentMode: (depositDraft.value.paymentMode || '').trim(),
+    paymentDate: depositDraft.value.paymentDate
+  });
+
+  resetDepositDraft(newBookingData.value.checkin || '');
+};
+
+const removeDeposit = (index) => {
+  newBookingData.value.deposits.splice(index, 1);
+};
 
 // 1. AUTOMAZIONE DATE: Il checkout segue il checkin
 watch(() => newBookingData.value.checkin, (newIn) => {
@@ -371,11 +495,88 @@ watch(() => newBookingData.value.checkin, (newIn) => {
   if (!newBookingData.value.checkout || dateOut <= dateIn) {
     const nextDay = new Date(dateIn);
     nextDay.setDate(nextDay.getDate() + 1);
-    newBookingData.value.checkout = nextDay.toISOString().split('T')[0];
+    newBookingData.value.checkout = toISODate(nextDay);
+  }
+
+  if (!depositDraft.value.paymentDate) {
+    depositDraft.value.paymentDate = newIn;
   }
 });
 
+const getBookingStatus = (booking) => {
+  const numeric = Number(booking?.status);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const bookingStatusActionLabel = computed(() => {
+  if (!actionMenuBooking.value) return 'Check-in';
+  return getBookingStatus(actionMenuBooking.value) === 1 ? 'Check-out' : 'Check-in';
+});
+
+const bookingActionMenuStyle = computed(() => ({
+  left: `${actionMenuPosition.value.x}px`,
+  top: `${actionMenuPosition.value.y}px`
+}));
+
+const closeBookingActions = () => {
+  showBookingActionMenu.value = false;
+  actionMenuBooking.value = null;
+};
+
+const openBookingActions = (event, booking) => {
+  selectedBooking.value = booking.id;
+  actionMenuBooking.value = booking;
+
+  const menuWidth = 180;
+  const menuHeight = 92;
+  const viewportPadding = 8;
+  const x = Math.min(event.clientX, window.innerWidth - menuWidth - viewportPadding);
+  const y = Math.min(event.clientY + 8, window.innerHeight - menuHeight - viewportPadding);
+
+  actionMenuPosition.value = {
+    x: Math.max(viewportPadding, x),
+    y: Math.max(viewportPadding, y)
+  };
+
+  showBookingActionMenu.value = true;
+};
+
+const openEditFromMenu = () => {
+  if (!actionMenuBooking.value) return;
+  const booking = actionMenuBooking.value;
+  closeBookingActions();
+  openEditBooking(booking);
+};
+
+const runBookingStatusAction = async () => {
+  if (!actionMenuBooking.value) return;
+
+  const booking = actionMenuBooking.value;
+  const endpoint = getBookingStatus(booking) === 1 ? 'checkout' : 'checkin';
+
+  try {
+    await axios.get(`http://localhost:8081/api/pms/${endpoint}`, {
+      params: {
+        reservation: booking.id,
+        operator: 0
+      }
+    });
+    closeBookingActions();
+    getReservations();
+  } catch (error) {
+    console.error(`Errore ${endpoint}:`, error);
+    alert(`Errore durante ${endpoint === 'checkin' ? 'il check-in' : 'il check-out'}`);
+  }
+};
+
+const handleGlobalClick = () => {
+  if (showBookingActionMenu.value) {
+    closeBookingActions();
+  }
+};
+
 const addBooking = (room = null, event = null) => {
+  closeBookingActions();
   selectedBooking.value = null;
   editingBooking.value = null;
 
@@ -405,8 +606,10 @@ const addBooking = (room = null, event = null) => {
     checkout,
     board: 'bb',
     isManualPrice: false,
-    manualPrice: ''
+    manualPrice: '',
+    deposits: []
   };
+  resetDepositDraft(checkin);
   showModal.value = true;
 };
 
@@ -415,6 +618,7 @@ const createQuote = () => {
 };
 
 const openEditBooking = (booking) => {
+  closeBookingActions();
   console.log('editing hotel booking', booking);
   selectedBooking.value = booking.id;
   editingBooking.value = booking;
@@ -428,16 +632,41 @@ const openEditBooking = (booking) => {
     guestSurname: booking.guestSurname || '',
     adults: booking.adults || 1,
     children: booking.children || 0,
-    checkin: start.toISOString().split('T')[0],
-    checkout: end.toISOString().split('T')[0],
+    checkin: toISODate(start),
+    checkout: toISODate(end),
     board: booking.board || 'bb',
     isManualPrice: booking.fixedPrice != null,
-    manualPrice: booking.fixedPrice || 0
+    manualPrice: booking.fixedPrice || 0,
+    deposits: normalizeDeposits(booking.deposits)
   };
+  resetDepositDraft(toISODate(start));
   showModal.value = true;
 };
 
-const submitNewBooking = () => {
+const shouldTryNextEndpoint = (error) => {
+  const status = error?.response?.status;
+  if (!status) return true;
+  return status === 404 || status === 405;
+};
+
+const postToFirstAvailableEndpoint = async (endpoints, payload) => {
+  let lastError = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      return await axios.post(endpoint, payload);
+    } catch (error) {
+      lastError = error;
+      if (!shouldTryNextEndpoint(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+};
+
+const submitNewBooking = async () => {
   const start = new Date(newBookingData.value.checkin);
   const end = new Date(newBookingData.value.checkout);
   
@@ -450,41 +679,67 @@ const submitNewBooking = () => {
     return;
   }
 
+  const normalizedDeposits = normalizeDeposits(newBookingData.value.deposits || []);
+  const backendDeposits = normalizedDeposits.map(dep => ({
+    amount: dep.amount,
+    payment_mode: dep.paymentMode || '',
+    payment_date: dep.paymentDate,
+    paymentMode: dep.paymentMode || '',
+    paymentDate: dep.paymentDate
+  }));
+
   const payload = {
     roomId: newBookingData.value.roomId,
     firstname: newBookingData.value.guestName,
     lastname: newBookingData.value.guestSurname,
+    accountholder: {
+      firstname: newBookingData.value.guestName,
+      lastname: newBookingData.value.guestSurname
+    },
     adults: parseInt(newBookingData.value.adults),
     children: parseInt(newBookingData.value.children),
+    kids: parseInt(newBookingData.value.children),
     checkin: newBookingData.value.checkin,
     duration: duration,
     board: newBookingData.value.board,
-    fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null
+    fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null,
+    deposits: backendDeposits,
+    deposit: backendDeposits,
+    deposits_json: JSON.stringify(backendDeposits.map(dep => ({
+      amount: dep.amount,
+      payment_mode: dep.payment_mode,
+      payment_date: dep.payment_date
+    })))
   };
 
-  if (editingBooking.value) {
-    // update existing booking
-    payload.id = editingBooking.value.id;
-    axios.post('http://localhost:8081/api/pms/hotel/update_reservation', payload)
-      .then(() => {
-        showModal.value = false;
-        editingBooking.value = null;
-        getReservations();
-      })
-      .catch(err => {
-        console.error("Errore aggiornamento:", err);
-        alert("Errore durante l'aggiornamento della prenotazione");
-      });
-  } else {
-    axios.post('http://localhost:8081/api/pms/hotel/new_reservation', payload)
-      .then(() => {
-        showModal.value = false;
-        getReservations(); // Ricarica i dati per mostrare la nuova barra
-      })
-      .catch(err => {
-        console.error("Errore creazione:", err);
-        alert("Errore durante il salvataggio della prenotazione");
-      });
+  try {
+    if (editingBooking.value) {
+      payload.id = editingBooking.value.id;
+      await postToFirstAvailableEndpoint([
+        'http://localhost:8081/api/pms/hotel/update_reservation',
+        'http://localhost:8081/api/pms/hotel/updatereservation',
+        'http://localhost:8081/api/pms/updatereservation'
+      ], payload);
+
+      showModal.value = false;
+      editingBooking.value = null;
+      getReservations();
+      return;
+    }
+
+    await postToFirstAvailableEndpoint([
+      'http://localhost:8081/api/pms/hotel/new_reservation',
+      'http://localhost:8081/api/pms/hotel/newreservation',
+      'http://localhost:8081/api/pms/newreservation'
+    ], payload);
+
+    showModal.value = false;
+    getReservations();
+  } catch (err) {
+    const status = err?.response?.status;
+    const data = err?.response?.data;
+    console.error('Errore salvataggio prenotazione:', status, data || err);
+    alert("Errore durante il salvataggio della prenotazione");
   }
 };
 
@@ -514,16 +769,15 @@ const isTodayVisible = computed(() => {
 const todayLineStyle = computed(() => {
   // 1. Data di oggi in formato YYYY-MM-DD
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = toISODate(now);
 
   // 2. Data di inizio planning in formato YYYY-MM-DD
   // Ci assicuriamo che startDate sia un oggetto Date valido
   const start = new Date(startDate.value);
-  const startStr = start.toISOString().split('T')[0];
 
   // 3. Troviamo l'indice del giorno cercando la data di oggi nell'array 'dates'
   // L'array 'dates' è quello che usi per generare l'header della griglia
-  const diffDays = dates.value.findIndex(d => d.toISOString().split('T')[0] === todayStr);
+  const diffDays = dates.value.findIndex(d => toISODate(d) === todayStr);
 
   // 4. Se trovata (indice >= 0), calcoliamo la posizione
   if (diffDays !== -1) {
@@ -563,7 +817,7 @@ const bookingQuote = computed(() => {
   let current = new Date(start);
 
   while (current < end) {
-    const dateStr = current.toISOString().split('T')[0];
+    const dateStr = toISODate(current);
     const dayData = timetable.value.find(t => t.date === dateStr);
     
     // Cerchiamo il listino (usando String() per evitare errori di tipo id 1 vs "1")
@@ -759,6 +1013,25 @@ const getBookingStyle = (booking) => {
   // Se la prenotazione inizia prima, la attacchiamo al bordo sinistro (slot 1)
   const displayStart = relativeStart < 1 ? 1 : relativeStart;
   const visibleDur = getVisibleDuration(booking);
+  const status = getBookingStatus(booking);
+
+  let backgroundColor = '#ef4444';
+  let borderColor = '#dc2626';
+  let textColor = '#ffffff';
+
+  if (status === 2) {
+    backgroundColor = '#9ca3af';
+    borderColor = '#6b7280';
+    textColor = '#111827';
+  } else if (status === 1) {
+    backgroundColor = '#38bdf8';
+    borderColor = '#0ea5e9';
+    textColor = '#ffffff';
+  } else if (booking.hasDeposit) {
+    backgroundColor = '#86efac';
+    borderColor = '#4ade80';
+    textColor = '#111827';
+  }
   
   const left = (displayStart - 1) * cellWidth + 4;
   const width = (visibleDur * cellWidth) - 8;
@@ -768,8 +1041,9 @@ const getBookingStyle = (booking) => {
     width: `${width}px`,
     top: '4px',
     bottom: '4px',
-    backgroundColor: booking.color,
-    borderColor: booking.color,
+    backgroundColor,
+    borderColor,
+    color: textColor,
     position: 'absolute',
     // Arrotonda gli angoli solo se la prenotazione è interamente visibile
     borderRadius: `${relativeStart < 1 ? '0' : '0.5rem'} 0.5rem 0.5rem ${relativeStart < 1 ? '0' : '0.5rem'}`
@@ -777,6 +1051,7 @@ const getBookingStyle = (booking) => {
 };
 
 const handleMouseDown = (e, booking, type) => {
+  closeBookingActions();
   if (e.detail > 1 && type === 'move') {
     e.stopPropagation();
     openEditBooking(booking);
@@ -929,18 +1204,6 @@ const deleteBooking = () => {
   }
 };
 
-const updateGuest = (value) => {
-  const booking = bookings.value.find(b => b.id === selectedBooking.value);
-  if (booking) {
-    booking.guest = value;
-  }
-};
-
-const getSelectedGuest = () => {
-  const booking = bookings.value.find(b => b.id === selectedBooking.value);
-  return booking ? booking.guest : '';
-};
-
 const getReservations = () => {
   // Chiediamo al server dati a partire da 30 giorni prima della data visibile
   // per includere le prenotazioni che finiscono dentro la finestra attuale
@@ -948,10 +1211,10 @@ const getReservations = () => {
   const fetchStart = new Date(startDate.value);
   fetchStart.setDate(fetchStart.getDate() - safetyMargin);
   
-  const fromDate = fetchStart.toISOString().split('T')[0];
+  const fromDate = toISODate(fetchStart);
   const toDateObj = new Date(startDate.value);
   toDateObj.setDate(toDateObj.getDate() + days.value - 1);
-  const toDate = toDateObj.toISOString().split('T')[0];
+  const toDate = toISODate(toDateObj);
 
   var url = `http://localhost:8081/api/pms/getbookingsbyrange?from=${fromDate}&to=${toDate}`;
   
@@ -982,11 +1245,23 @@ const convertReservations = (apiReservations) => {
     const [year, month, day] = res.checkin.split('-').map(Number);
     const startDateObj = new Date(year, month - 1, day, 0, 0, 0);
 
+    const deposits = normalizeDeposits(getReservationDeposits(res));
+    const hasDeposit = deposits.some(dep => Number(dep?.amount || 0) > 0) || deposits.length > 0;
+
     return {
       id: res.id,
       roomId: String(res.roomId), // Forza a stringa per il confronto
       startDate: startDateObj,
       duration: res.duration,
+      status: Number(res.status ?? 0),
+      hasDeposit,
+      deposits,
+      guestName: res.accountholder?.firstname || '',
+      guestSurname: res.accountholder?.lastname || '',
+      adults: res.adults ?? res.pax ?? 1,
+      children: res.kids ?? 0,
+      board: (res.board || 'BB').toLowerCase(),
+      fixedPrice: res.fixedPrice ?? null,
       guest: res.accountholder.firstname + ' ' + res.accountholder.lastname,
       color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
     };
@@ -1065,6 +1340,7 @@ const loadPricingData = async () => {
 onMounted(() => {
   window.addEventListener('mousemove', handleMouseMove);
   window.addEventListener('mouseup', handleMouseUp);
+  window.addEventListener('click', handleGlobalClick);
   getRooms();
   loadPricingData();
 });
@@ -1072,6 +1348,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('mousemove', handleMouseMove);
   window.removeEventListener('mouseup', handleMouseUp);
+  window.removeEventListener('click', handleGlobalClick);
 });
 </script>
 
@@ -1281,10 +1558,6 @@ onUnmounted(() => {
   bottom: 3px !important; /* Margine inferiore minimo */
 }
 
-.booking-selected {
-  box-shadow: 0 0 0 3px #3b82f6;
-}
-
 .booking-conflict {
   border-color: #ef4444 !important;
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
@@ -1294,7 +1567,7 @@ onUnmounted(() => {
 /* Padding ridotto per la prenotazione */
 .booking-content {
   padding: 2px 8px; /* Padding minimo per far stare il nome al centro */
-  color: white;
+  color: inherit;
   font-weight: 500;
   font-size: 0.8rem; /* Font leggermente ridotto */
   height: 100%;
@@ -1334,47 +1607,6 @@ onUnmounted(() => {
 .resize-right {
   right: 0;
   border-radius: 0 0.5rem 0.5rem 0;
-}
-
-.footer {
-  background: white;
-  border-top: 1px solid #e5e7eb;
-  padding: 1rem;
-  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.footer-content {
-  max-width: 60rem;
-  margin: 0 auto;
-  display: flex;
-  gap: 1rem;
-  align-items: flex-end;
-}
-
-.input-group {
-  flex: 1;
-}
-
-.input-label {
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 0.25rem;
-}
-
-.input-field {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-}
-
-.input-field:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 @media (max-width: 768px) {
@@ -1476,13 +1708,69 @@ onUnmounted(() => {
   z-index: 2000;
 }
 
+.booking-action-menu {
+  position: fixed;
+  z-index: 2200;
+  min-width: 180px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.booking-action-item {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: left;
+  color: #111827;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.booking-action-item:hover {
+  background: #f3f4f6;
+}
+
 .modal-content {
   background: white;
   width: 90%;
-  max-width: 550px;
+  max-width: 980px;
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.dialog-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dialog-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px;
+  background: #fafafa;
+}
+
+.dialog-section-full {
+  grid-column: 1 / -1;
+}
+
+.section-title {
+  margin: 0 0 10px 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111827;
 }
 
 .modal-header {
@@ -1504,7 +1792,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .form-section label {
@@ -1522,11 +1810,103 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
+.deposit-entry-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.deposit-add-wrap {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.deposit-summary {
+  margin-top: 8px;
+  margin-bottom: 8px;
+  color: #374151;
+  font-size: 0.92rem;
+}
+
+.deposit-empty {
+  padding: 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.deposit-list {
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.deposit-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.deposit-item:last-child {
+  border-bottom: none;
+}
+
+.deposit-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: #334155;
+  font-size: 0.88rem;
+}
+
+.deposit-remove {
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  background: #fff5f5;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.deposit-remove:hover {
+  background: #fee2e2;
+}
+
+@media (max-width: 980px) {
+  .dialog-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .deposit-entry-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .deposit-add-wrap {
+    justify-content: flex-start;
+  }
+}
+
 .modal-footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+}
+
+.modal-footer .btn {
+  margin-top: 0;
 }
 
 .btn-save { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; }

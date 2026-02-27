@@ -14,7 +14,7 @@ const router = createRouter({
       path: '/',
       name: 'Planner',
       component: () => import('../HotelBookingPlanner.vue'),
-      meta: { requiresAuth: true, permission: 'home' }
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'] }
     },
     {
       path: '/customers',
@@ -26,13 +26,13 @@ const router = createRouter({
       path: '/listino',
       name: 'PriceManagement',
       component: () => import('../PriceManagement.vue'),
-      meta: { requiresAuth: true, permission: 'listino' }
+      meta: { requiresAuth: true, permission: 'listino', pmsTypes: ['hotel'] }
     },
     {
       path: '/listino_beach',
       name: 'BeachManagementDashboard',
       component: () => import('../BeachManagementDashboard.vue'),
-      meta: { requiresAuth: true, permission: 'listino_beach' }
+      meta: { requiresAuth: true, permission: 'listino_beach', pmsTypes: ['beach'] }
     },
     {
       path: '/onda-push-products',
@@ -44,7 +44,7 @@ const router = createRouter({
       path: '/beach-bookings',
       name: 'BeachBookingPlanner',
       component: () => import('../BeachBookingPlanner.vue'),
-      meta: { requiresAuth: true, permission: 'beach-bookings' }
+      meta: { requiresAuth: true, permission: 'beach-bookings', pmsTypes: ['beach'] }
     },
     {
       path: '/inventory',
@@ -80,8 +80,12 @@ const router = createRouter({
 })
 
 // Navigation guard per proteggere le rotte
-router.beforeEach((to, from, next) => {
-  const { isAuthenticated, hasPermission } = useAuth()
+router.beforeEach(async (to, from, next) => {
+  const { isAuthenticated, hasPermission, isPmsTypeAllowed, loadPmsType, pmsType } = useAuth()
+
+  if (isAuthenticated.value) {
+    await loadPmsType()
+  }
 
   if (to.meta.isPublic) {
     // Le pagine pubbliche sono sempre accessibili
@@ -93,6 +97,9 @@ router.beforeEach((to, from, next) => {
     } else if (to.meta.permission && !hasPermission(to.meta.permission)) {
       // Autenticato ma senza permessi, redirect a home
       next('/')
+    } else if (to.meta.pmsTypes && !isPmsTypeAllowed(to.meta.pmsTypes)) {
+      const fallbackRoute = pmsType.value === 'beach' ? '/beach-bookings' : '/'
+      next(fallbackRoute)
     } else {
       // Autenticato e con permessi
       next()

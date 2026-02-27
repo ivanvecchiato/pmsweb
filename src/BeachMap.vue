@@ -3,7 +3,16 @@ import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
 
 const props = defineProps({
-  selectedDate: { type: String, default: () => new Date().toISOString().split('T')[0] }
+  selectedDate: {
+    type: String,
+    default: () => {
+      const date = new Date();
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+  }
 });
 
 const resources = ref([]);
