@@ -24,7 +24,8 @@ const selectedBooking = ref(null);
 const showModal = ref(false);
 const editingBooking = ref(null); // store booking being edited when modal open
 const showMap = ref(true);
-const selectedDate = ref(toISODate(new Date()));
+const now = new Date();
+const selectedDate = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
 const isLoading = ref(false);
 const loadError = ref('');
 const selectedSector = ref('all');
@@ -220,12 +221,12 @@ const getBookingStyle = (booking) => {
   };
 };
 
-const toISODate = (date) => {
+function toISODate(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
-};
+}
 
 const calculateDayPrice = (placeId, dateStr) => {
   const day = timetable.value.find(d => d.date === dateStr);
