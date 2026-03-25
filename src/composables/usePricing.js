@@ -73,6 +73,7 @@ const getRoomTypes = (type = 'hotel') => {
         if (!typesMap.has(desc)) {
           typesMap.set(desc, {
             placeType: desc,
+            placeTypeId: p.place_type?.id ?? null,
             price: p.price_per_place || p.tariffa || 0,
             description: desc
           })

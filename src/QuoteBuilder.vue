@@ -229,6 +229,7 @@ const calculateAllRoomPrices = () => {
       )
       return {
         roomType: room.placeType, // Usa placeType (es. "FILA 1")
+        placeTypeId: room.placeTypeId,
         totalPrice: quote?.finalTotal || 0,
         pricePerNight: quote?.pricePerNight || 0,
         quote
@@ -296,18 +297,37 @@ const submitQuote = async () => {
       baseDailyPrices = minOption.quote?.days
     }
     
-    await saveQuote({
-      ...quoteData.value,
-      // Mantieni la camera/fila selezionata (se presente)
-      duration: daysCount.value,
-      allRoomOptions: roomOptions, // Salva le opzioni calcolate
-      priceData: basePriceData, // Prezzo base per visibilità
-      totalPrice: baseTotalPrice, // Prezzo base per visibilità
-      pricePerNight: basePricePerNight, // Prezzo base per visibilità
-      dailyPrices: baseDailyPrices, // Prezzo base per visibilità
-      createdAt: new Date().toISOString(),
-      expiresAt: expiresAt.toISOString()
-    })
+    if (props.type === 'beach') {
+      const selectedOption = roomOptions.find((r) => r.roomType === quoteData.value.roomType) || minOption.value
+      const placeTypeId = selectedOption?.placeTypeId
+      if (!placeTypeId) {
+        throw new Error('Seleziona una fila valida per il preventivo beach.')
+      }
+
+      await saveQuote({
+        type: 'beach',
+        checkin: quoteData.value.checkin,
+        checkout: quoteData.value.checkout,
+        place_type_id: placeTypeId,
+        customer: quoteData.value.guestName,
+        name: quoteData.value.name,
+        createdAt: new Date().toISOString(),
+        expiresAt: expiresAt.toISOString()
+      })
+    } else {
+      await saveQuote({
+        ...quoteData.value,
+        // Mantieni la camera/fila selezionata (se presente)
+        duration: daysCount.value,
+        allRoomOptions: roomOptions, // Salva le opzioni calcolate
+        priceData: basePriceData, // Prezzo base per visibilità
+        totalPrice: baseTotalPrice, // Prezzo base per visibilità
+        pricePerNight: basePricePerNight, // Prezzo base per visibilità
+        dailyPrices: baseDailyPrices, // Prezzo base per visibilità
+        createdAt: new Date().toISOString(),
+        expiresAt: expiresAt.toISOString()
+      })
+    }
     emit('created')
     close()
   } catch (err) {

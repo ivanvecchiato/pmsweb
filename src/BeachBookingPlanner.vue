@@ -237,6 +237,41 @@ const calculateDayPrice = (placeId, dateStr) => {
   return Number(item?.price_per_place || 0);
 };
 
+const getDayPricingDetails = (placeId, dateStr) => {
+  const day = timetable.value.find((d) => d.date === dateStr);
+  const pricelistId = day?.pricelist ?? 0;
+  if (!pricelistId) {
+    return {
+      day: new Date(dateStr).getDate(),
+      date: dateStr,
+      pricelist: 0,
+      price_per_place: 0,
+      source: 'none'
+    };
+  }
+
+  const list = pricelists.value.find((p) => String(p.id) === String(pricelistId));
+  if (!list) {
+    return {
+      day: new Date(dateStr).getDate(),
+      date: dateStr,
+      pricelist: pricelistId,
+      price_per_place: 0,
+      source: 'none'
+    };
+  }
+
+  const item = list.prices?.find((p) => String(p.id) === String(placeId));
+  const amount = Number(item?.price_per_place || 0);
+  return {
+    day: new Date(dateStr).getDate(),
+    date: dateStr,
+    pricelist: pricelistId,
+    price_per_place: amount,
+    source: item ? 'place' : 'none'
+  };
+};
+
 const bookingQuote = computed(() => {
   const { checkin, checkout, placeId } = newBookingData.value;
   if (!checkin || !checkout || !placeId) return null;
@@ -249,8 +284,9 @@ const bookingQuote = computed(() => {
   let current = new Date(start);
   while (current < end) {
     const dateStr = toISODate(current);
-    const dayTotal = calculateDayPrice(placeId, dateStr);
-    daysList.push({ date: dateStr, dayTotal });
+    const dayPricing = getDayPricingDetails(placeId, dateStr);
+    const dayTotal = Number(dayPricing.price_per_place || 0);
+    daysList.push({ ...dayPricing, dayTotal });
     totalCalculated += dayTotal;
     current.setDate(current.getDate() + 1);
   }
@@ -468,8 +504,6 @@ const submitNewBooking = async () => {
       datetime: toISODate(new Date()),
       origin: 1,
       status: 0,
-      price_per_place: bookingQuote.value?.finalTotal || 0,
-      price_per_day: bookingQuote.value?.days.map(d => d.dayTotal) || [],
       accountholder: {
         firstname: guestName,
         lastname: guestSurname
@@ -865,7 +899,8 @@ watch(selectedBooking, (id) => {
             <div v-if="bookingQuote" class="quote-box" :class="{ 'manual-active': newBookingData.isManualPrice }">
               <div class="quote-details">
                 <div v-for="day in bookingQuote.days" :key="day.date" class="quote-line">
-                  <span>{{ day.date }}</span>
+                  <span class="quote-day-main">{{ day.date }}</span>
+                  <span class="quote-day-meta">L{{ day.pricelist }} · {{ day.source }}</span>
                   <span>€{{ day.dayTotal }}</span>
                 </div>
               </div>
@@ -1325,6 +1360,8 @@ watch(selectedBooking, (id) => {
 .quote-details { max-height: 150px; overflow-y: auto; padding: 12px; background: white; margin: 10px; border-radius: 6px; border: 1px solid #edf2f7; }
 .quote-line { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.85rem; color: #475569; }
 .quote-line:last-child { border-bottom: none; }
+.quote-day-main { font-weight: 600; min-width: 110px; }
+.quote-day-meta { color: #64748b; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.3px; }
 .quote-summary-footer { padding: 15px; background: #f1f5f9; border-top: 1px solid #e2e8f0; display: flex; flex-direction: column; align-items: flex-end; }
 .quote-box.manual-active .quote-summary-footer { background: #fee2e2; }
 .price-strikethrough { text-decoration: line-through; color: #94a3b8; font-size: 0.8rem; margin-bottom: 2px; }

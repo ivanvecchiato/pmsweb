@@ -6,6 +6,8 @@ import axios from 'axios';
 const resources = ref([]); // Lista ombrelloni (id, name, row, column)
 const pricelists = ref([]); // Listini base normalizzati per UI
 const selectedPricelist = ref(null);
+const timetable = ref([]);
+const selectedPeriod = ref('all');
 
 // Stato per l'assegnazione massiva
 const selectionStart = ref(null);
@@ -123,17 +125,77 @@ const resourcesByRow = computed(() => {
   return rows;
 });
 
+const derivedPeriods = computed(() => {
+  const rows = [...timetable.value]
+    .filter((d) => d?.date)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+  if (rows.length === 0) return [];
+
+  const periods = [];
+  let current = null;
+
+  rows.forEach((row) => {
+    const pricelist = String(row.pricelist ?? 0);
+    if (!current || current.pricelist !== pricelist) {
+      if (current) periods.push(current);
+      current = {
+        key: `${row.date}:${pricelist}`,
+        startDate: row.date,
+        endDate: row.date,
+        pricelist,
+        days: 1
+      };
+      return;
+    }
+
+    current.endDate = row.date;
+    current.days += 1;
+  });
+
+  if (current) periods.push(current);
+
+  return periods;
+});
+
+const visiblePricelists = computed(() => {
+  if (selectedPeriod.value === 'all') return pricelists.value;
+  const period = derivedPeriods.value.find((p) => p.key === selectedPeriod.value);
+  if (!period) return pricelists.value;
+  return pricelists.value.filter((list) => String(list.id) === String(period.pricelist));
+});
+
+const selectedPeriodLabel = computed(() => {
+  if (selectedPeriod.value === 'all') return 'Tutti i periodi';
+  const period = derivedPeriods.value.find((p) => p.key === selectedPeriod.value);
+  if (!period) return 'Periodo non trovato';
+  return `${period.startDate} - ${period.endDate} (${period.days} gg)`;
+});
+
+const onPeriodChange = () => {
+  if (visiblePricelists.value.length === 0) {
+    selectedPricelist.value = null;
+    return;
+  }
+
+  const stillVisible = visiblePricelists.value.some((list) => list.id === selectedPricelist.value?.id);
+  if (!stillVisible) selectedPricelist.value = visiblePricelists.value[0];
+};
+
 // Caricamento dati
 const fetchData = async () => {
   try {
-    const [resProd, resPrice] = await Promise.all([
+    const [resProd, resPrice, resTime] = await Promise.all([
       axios.get('http://localhost:8081/api/pms/beach/getplan?mode=flat'),
-      axios.get('http://localhost:8081/api/pms/getrates?type=beach')
+      axios.get('http://localhost:8081/api/pms/getrates?type=beach'),
+      axios.get('http://localhost:8081/api/pms/gettimetable?type=beach')
     ]);
     const normalizedResources = resProd.data.map(normalizeResource);
     resources.value = normalizedResources;
     pricelists.value = (resPrice.data || []).map((list) => buildUiPricelist(list, normalizedResources));
+    timetable.value = resTime.data || [];
     if (pricelists.value.length > 0) selectedPricelist.value = pricelists.value[0];
+    onPeriodChange();
   } catch (err) {
     console.error("Errore caricamento:", err);
   }
@@ -170,7 +232,18 @@ onMounted(fetchData);
   <div class="config-container">
     <div class="sidebar">
       <h2>Listini Spiaggia</h2>
-      <div v-for="price in pricelists" :key="price.id" 
+
+      <div class="period-filter" v-if="derivedPeriods.length">
+        <label>Periodo</label>
+        <select v-model="selectedPeriod" @change="onPeriodChange">
+          <option value="all">Tutti i periodi</option>
+          <option v-for="period in derivedPeriods" :key="period.key" :value="period.key">
+            {{ period.startDate }} - {{ period.endDate }} ({{ period.days }} gg)
+          </option>
+        </select>
+      </div>
+
+      <div v-for="price in visiblePricelists" :key="price.id"
            class="price-card" 
            :class="{ active: selectedPricelist?.id === price.id }"
            @click="selectedPricelist = price">
@@ -185,6 +258,7 @@ onMounted(fetchData);
       <section v-if="selectedPricelist" class="editor-section">
         <div class="editor-header">
           <h3>Configurazione Prezzi: {{ selectedPricelist.description }}</h3>
+          <small class="period-caption">Periodo attivo: {{ selectedPeriodLabel }}</small>
           <button class="btn-save" @click="saveBeachPrices(selectedPricelist)">Salva Configurazione</button>
         </div>
 
@@ -222,6 +296,26 @@ onMounted(fetchData);
 .config-container { display: flex; height: 100vh; background: #f1f5f9; }
 .sidebar { width: 300px; background: white; border-right: 1px solid #e2e8f0; padding: 20px; }
 
+.period-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 16px;
+}
+
+.period-filter label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.period-filter select {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px;
+}
+
 .price-card { 
   padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 10px; cursor: pointer;
   border-left: 5px solid #cbd5e1;
@@ -229,6 +323,18 @@ onMounted(fetchData);
 .price-card.active { border-color: #3b82f6; background: #eff6ff; }
 
 .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.period-caption {
+  color: #64748b;
+}
 
 /* Griglia Spiaggia */
 .beach-grid-editor { display: flex; flex-direction: column; gap: 30px; }

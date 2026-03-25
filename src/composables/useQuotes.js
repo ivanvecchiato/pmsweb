@@ -63,10 +63,9 @@ const convertToBooking = async (quoteId, type, bookingDataOverride = null) => {
       ? 'http://localhost:8081/api/pms/hotel/new_reservation'
       : 'http://localhost:8081/api/pms/beach/new_reservation'
     
-    // Usa i dati forniti (con camera selezionata) o i dati del preventivo
+    // Usa i dati forniti dalla UI; aggiunge solo metadata di tracciamento conversione.
     const bookingData = {
       ...(bookingDataOverride || quote),
-      status: 'confirmed',
       createdFrom: `quote_${quoteId}`,
       quoteId: quoteId
     }
