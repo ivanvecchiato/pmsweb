@@ -354,8 +354,7 @@ const bookingQuote = computed(() => {
 const openNewBooking = (place, preferredDate = null) => {
   editingBooking.value = null;
   const todayStr = toISODate(new Date());
-  const baseDate = preferredDate || selectedDate.value || todayStr;
-  const defaultCheckin = findFirstPricedDate(baseDate);
+  const defaultCheckin = preferredDate || selectedDate.value || todayStr;
   selectedDate.value = defaultCheckin;
   newBookingData.value = {
     placeId: place?.id ? String(place.id) : '',
