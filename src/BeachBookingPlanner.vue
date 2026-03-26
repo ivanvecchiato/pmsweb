@@ -96,6 +96,8 @@ const normalizeBooking = (b) => {
   const placeId = b.placeId ?? b.place_id ?? b.resourceId ?? b.resource_id ?? b.idPlace;
   const checkin = b.checkin ?? b.check_in ?? b.from;
   const checkout = b.checkout ?? b.check_out ?? b.to;
+  const fixedPriceRaw = b.fixedPrice ?? b.fixed_price;
+  const fixedPrice = Number.isFinite(Number(fixedPriceRaw)) ? Number(fixedPriceRaw) : null;
   const startDateObj = parseISODateLocal(checkin);
   const endDateObj = parseISODateLocal(checkout);
   const duration = diffDays(startDateObj, endDateObj);
@@ -108,6 +110,7 @@ const normalizeBooking = (b) => {
     placeId: String(placeId ?? ''),
     startDate: startDateObj,
     duration: Math.max(duration, 1),
+    fixedPrice,
     guestFirst,
     guestLast,
     guest,
@@ -372,14 +375,15 @@ const openEditBooking = (booking) => {
   console.log('openEditBooking beach', booking);
   selectedBooking.value = booking.id;
   editingBooking.value = booking;
+  const hasFixedPrice = Number.isFinite(Number(booking.fixedPrice));
   newBookingData.value = {
     placeId: String(booking.placeId),
     guestName: booking.guestFirst || '',
     guestSurname: booking.guestLast || '',
     checkin: toISODate(booking.startDate),
     checkout: addDaysISO(toISODate(booking.startDate), booking.duration),
-    isManualPrice: false,
-    manualPrice: 0
+    isManualPrice: hasFixedPrice,
+    manualPrice: hasFixedPrice ? Number(booking.fixedPrice) : 0
   };
   showModal.value = true;
 };
@@ -472,14 +476,23 @@ const handleMouseMove = (event) => {
   }
 };
 
-const updateReservation = async (booking) => {
+const updateReservation = async (booking, options = {}) => {
   const checkin = toISODate(booking.startDate);
   const checkout = addDaysISO(checkin, booking.duration);
+  const hasFixedPriceInOptions = Object.prototype.hasOwnProperty.call(options, 'fixedPrice');
+  const effectiveFixedPrice = hasFixedPriceInOptions
+    ? options.fixedPrice
+    : (Number.isFinite(Number(booking.fixedPrice)) ? Number(booking.fixedPrice) : null);
   const payload = {
     id: booking.id,
     placeId: Number(booking.placeId),
     checkin,
-    checkout
+    checkout,
+    fixedPrice: effectiveFixedPrice,
+    fixed_price: effectiveFixedPrice,
+    fixedprice: effectiveFixedPrice,
+    manualPrice: effectiveFixedPrice,
+    isManualPrice: effectiveFixedPrice !== null
   };
   await axios.post('http://localhost:8081/api/pms/beach/updatereservation', payload);
 };
@@ -533,6 +546,10 @@ const submitNewBooking = async () => {
     return;
   }
 
+  const fixedPrice = newBookingData.value.isManualPrice
+    ? Number(newBookingData.value.manualPrice || 0)
+    : null;
+
   if (editingBooking.value) {
     // update existing booking
     const b = editingBooking.value;
@@ -542,9 +559,10 @@ const submitNewBooking = async () => {
     b.guest = `${guestName} ${guestSurname}`.trim();
     b.startDate = new Date(checkin);
     b.duration = diffDays(new Date(checkin), new Date(checkout));
+    b.fixedPrice = fixedPrice;
 
     try {
-      await updateReservation(b);
+      await updateReservation(b, { fixedPrice });
       showModal.value = false;
       editingBooking.value = null;
       await fetchBookings();
@@ -560,6 +578,8 @@ const submitNewBooking = async () => {
       datetime: toISODate(new Date()),
       origin: 1,
       status: 0,
+      fixedPrice,
+      fixed_price: fixedPrice,
       accountholder: {
         firstname: guestName,
         lastname: guestSurname
