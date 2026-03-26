@@ -162,11 +162,18 @@ const filteredProducts = computed(() => {
   return products.value.filter(p => 
     p.name.toLowerCase().includes(query) || 
     (p.inventory.suppliers?.[0]?.supplier?.toLowerCase() || '').includes(query)
-  ).map(p => ({
-    ...p,
-    margin: p.price - p.purchase_price,
-    marginPercent: p.price > 0 ? ((p.price - p.purchase_price) / p.price) * 100 : 0
-  }));
+  ).map(p => {
+    const price = Number(p.price || 0);
+    const purchasePrice = Number(p.purchase_price || 0);
+
+    return {
+      ...p,
+      price,
+      purchase_price: purchasePrice,
+      margin: price - purchasePrice,
+      marginPercent: price > 0 ? ((price - purchasePrice) / price) * 100 : 0
+    };
+  });
 });
 
 const openMovementModal = (product, type = 'purchase') => {
@@ -208,7 +215,12 @@ onMounted(() => {
         <div class="search-container">
           <input v-model="searchQuery" placeholder="Filtra tabella..." class="search-input" />
         </div>
-        <button @click="fetchInventory" class="btn-refresh">🔄</button>
+        <button @click="fetchInventory" class="btn-refresh" aria-label="Aggiorna magazzino" title="Aggiorna magazzino">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+            <path d="M20 4v6h-6" />
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -256,12 +268,12 @@ onMounted(() => {
                 {{ p.inventory.stock }}
               </span>
             </td>
-            <td class="font-mono">€ {{ p.price.toFixed(2) }}</td>
-            <td class="font-mono text-muted">€ {{ p.purchase_price.toFixed(2) }}</td>
+            <td class="font-mono">€ {{ Number(p.price || 0).toFixed(2) }}</td>
+            <td class="font-mono text-muted">€ {{ Number(p.purchase_price || 0).toFixed(2) }}</td>
             <td>
               <div class="margin-info">
-                <span class="m-val">€ {{ p.margin.toFixed(2) }}</span>
-                <span class="m-perc" :class="p.marginPercent < 20 ? 'text-red' : ''">{{ p.marginPercent.toFixed(1) }}%</span>
+                <span class="m-val">€ {{ Number(p.margin || 0).toFixed(2) }}</span>
+                <span class="m-perc" :class="p.marginPercent < 20 ? 'text-red' : ''">{{ Number(p.marginPercent || 0).toFixed(1) }}%</span>
               </div>
             </td>
             <td class="text-right">
@@ -587,8 +599,48 @@ onMounted(() => {
 .title-group h1 { font-size: 1.8rem; font-weight: 800; margin: 0; }
 .subtitle { color: #64748b; font-size: 0.9rem; margin: 5px 0 0 0; }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .search-container { background: white; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; padding: 0 15px; }
 .search-input { border: none; padding: 12px; outline: none; width: 250px; }
+
+.btn-refresh {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-refresh svg {
+  width: 20px;
+  height: 20px;
+  stroke: #334155;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.btn-refresh:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.btn-refresh:active {
+  transform: scale(0.97);
+}
 
 .stats-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
 .stat-card { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; border-left: 5px solid #cbd5e1; }
