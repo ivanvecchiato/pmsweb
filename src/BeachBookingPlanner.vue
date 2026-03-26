@@ -54,6 +54,15 @@ const toNumber = (value) => {
   return Number.isFinite(num) ? num : null;
 };
 
+const parseISODateLocal = (value) => {
+  const str = String(value || '');
+  const [y, m, d] = str.split('-').map(Number);
+  if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)) {
+    return new Date(y, m - 1, d, 0, 0, 0, 0);
+  }
+  return new Date(value);
+};
+
 const normalizeResource = (res) => {
   const row = toNumber(res.row) ?? toNumber(res.riga) ?? toNumber(res.fila) ?? 0;
   const column = toNumber(res.column) ?? toNumber(res.fila) ?? toNumber(res.riga) ?? 0;
@@ -62,18 +71,42 @@ const normalizeResource = (res) => {
   return { ...res, row, column, sector, name };
 };
 
+const findBeachPriceEntry = (list, place) => {
+  if (!list || !Array.isArray(list.prices) || !place) return null;
+
+  const fila = toNumber(place.fila) ?? toNumber(place.column);
+  const riga = toNumber(place.riga) ?? toNumber(place.row);
+  if (fila != null && riga != null) {
+    const specific = list.prices.find((item) => {
+      return toNumber(item?.fila) === fila && toNumber(item?.riga) === riga;
+    });
+    if (specific) return { entry: specific, source: 'place' };
+  }
+
+  const placeTypeId = toNumber(place?.place_type?.id);
+  if (placeTypeId != null) {
+    const typeFallback = list.prices.find((item) => toNumber(item?.place_type?.id) === placeTypeId);
+    if (typeFallback) return { entry: typeFallback, source: 'type' };
+  }
+
+  return null;
+};
+
 const normalizeBooking = (b) => {
-  const checkin = b.checkin;
-  const checkout = b.checkout;
-  const duration = diffDays(new Date(checkin), new Date(checkout));
+  const placeId = b.placeId ?? b.place_id ?? b.resourceId ?? b.resource_id ?? b.idPlace;
+  const checkin = b.checkin ?? b.check_in ?? b.from;
+  const checkout = b.checkout ?? b.check_out ?? b.to;
+  const startDateObj = parseISODateLocal(checkin);
+  const endDateObj = parseISODateLocal(checkout);
+  const duration = diffDays(startDateObj, endDateObj);
   const acc = b.accountholder || {};
   const guestFirst = acc.firstname || '';
   const guestLast = acc.lastname || '';
   const guest = `${guestFirst} ${guestLast}`.trim() || 'Senza Nome';
   return {
     id: b.id,
-    placeId: String(b.placeId),
-    startDate: new Date(checkin),
+    placeId: String(placeId ?? ''),
+    startDate: startDateObj,
     duration: Math.max(duration, 1),
     guestFirst,
     guestLast,
@@ -228,13 +261,32 @@ function toISODate(date) {
   return `${y}-${m}-${d}`;
 }
 
+const findFirstPricedDate = (fromDateStr) => {
+  const fallback = fromDateStr || toISODate(new Date());
+  const pricedDays = (timetable.value || [])
+    .filter((d) => d?.date && Number(d?.pricelist) > 0)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+  const nextPricedDay = pricedDays.find((d) => d.date >= fallback);
+  return nextPricedDay?.date || pricedDays[0]?.date || fallback;
+};
+
+const ensureSelectedDateHasPricing = () => {
+  const current = selectedDate.value || toISODate(new Date());
+  const hasPricing = (timetable.value || []).some((d) => d?.date === current && Number(d?.pricelist) > 0);
+  if (!hasPricing) {
+    selectedDate.value = findFirstPricedDate(current);
+  }
+};
+
 const calculateDayPrice = (placeId, dateStr) => {
   const day = timetable.value.find(d => d.date === dateStr);
   if (!day || !day.pricelist) return 0;
   const list = pricelists.value.find(p => String(p.id) === String(day.pricelist));
   if (!list) return 0;
-  const item = list.prices?.find(p => String(p.id) === String(placeId));
-  return Number(item?.price_per_place || 0);
+  const place = places.value.find((p) => String(p.id) === String(placeId));
+  const result = findBeachPriceEntry(list, place);
+  return Number(result?.entry?.price_per_place || 0);
 };
 
 const getDayPricingDetails = (placeId, dateStr) => {
@@ -261,14 +313,15 @@ const getDayPricingDetails = (placeId, dateStr) => {
     };
   }
 
-  const item = list.prices?.find((p) => String(p.id) === String(placeId));
-  const amount = Number(item?.price_per_place || 0);
+  const place = places.value.find((p) => String(p.id) === String(placeId));
+  const result = findBeachPriceEntry(list, place);
+  const amount = Number(result?.entry?.price_per_place || 0);
   return {
     day: new Date(dateStr).getDate(),
     date: dateStr,
     pricelist: pricelistId,
     price_per_place: amount,
-    source: item ? 'place' : 'none'
+    source: result?.source || 'none'
   };
 };
 
@@ -298,15 +351,18 @@ const bookingQuote = computed(() => {
   return { totalCalculated, finalTotal, days: daysList };
 });
 
-const openNewBooking = (place) => {
+const openNewBooking = (place, preferredDate = null) => {
   editingBooking.value = null;
   const todayStr = toISODate(new Date());
+  const baseDate = preferredDate || selectedDate.value || todayStr;
+  const defaultCheckin = findFirstPricedDate(baseDate);
+  selectedDate.value = defaultCheckin;
   newBookingData.value = {
     placeId: place?.id ? String(place.id) : '',
     guestName: '',
     guestSurname: '',
-    checkin: selectedDate.value || todayStr,
-    checkout: addDaysISO(selectedDate.value || todayStr, 1),
+    checkin: defaultCheckin,
+    checkout: addDaysISO(defaultCheckin, 1),
     isManualPrice: false,
     manualPrice: 0
   };
@@ -357,8 +413,8 @@ const wouldConflict = (bookingId, placeId, checkin, checkout) => {
   });
 };
 
-const hasConflict = (placeId, checkin, checkout) => {
-  return wouldConflict(null, placeId, checkin, checkout);
+const hasConflict = (bookingId, placeId, checkin, checkout) => {
+  return wouldConflict(bookingId, placeId, checkin, checkout);
 };
 
 const handleRowMouseMove = (event, place) => {
@@ -471,7 +527,8 @@ const submitNewBooking = async () => {
     return;
   }
 
-  const conflict = hasConflict(editingBooking.value ? editingBooking.value.id : null, placeId, checkin, checkout);
+  const bookingId = editingBooking.value ? editingBooking.value.id : null;
+  const conflict = hasConflict(bookingId, placeId, checkin, checkout);
   if (conflict) {
     alert('Conflitto: posto già occupato nel periodo selezionato.');
     return;
@@ -563,7 +620,8 @@ const fetchBookings = async () => {
   toDate.setDate(toDate.getDate() + days.value - 1);
   const to = toISODate(toDate);
   const res = await axios.get(`http://localhost:8081/api/pms/beach/getbookingsbyrange?from=${from}&to=${to}`);
-  bookings.value = (res.data.bookings || []).map(normalizeBooking);
+  const raw = res.data?.bookings || res.data || [];
+  bookings.value = (Array.isArray(raw) ? raw : []).map(normalizeBooking);
 };
 
 const loadPricingData = async () => {
@@ -573,6 +631,7 @@ const loadPricingData = async () => {
   ]);
   pricelists.value = resRates.data || [];
   timetable.value = resTime.data || [];
+  ensureSelectedDateHasPricing();
 };
 
 const previousPeriod = () => {
@@ -592,7 +651,7 @@ const nextPeriod = () => {
 };
 
 const onMapSelect = (place) => {
-  openNewBooking(place);
+  openNewBooking(place, selectedDate.value);
 };
 
 const onMapEdit = (reservation) => {
@@ -790,13 +849,13 @@ watch(selectedBooking, (id) => {
               :style="{ height: cellHeight + 'px' }"
               @mousemove="handleRowMouseMove($event, place)"
               @mouseleave="hoveredPlaceId = null"
-              @click="openNewBooking(place)"
             >
               <div
                 v-for="(date, idx) in dates"
                 :key="idx"
                 class="day-slot"
                 :style="{ width: cellWidth + 'px' }"
+                @click.stop="openNewBooking(place, toISODate(date))"
               />
               
               <div
