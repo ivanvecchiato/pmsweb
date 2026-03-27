@@ -47,20 +47,6 @@
         </div>
       </section>
 
-      <section v-if="categories.length" class="section-container">
-        <h3>Vendite per categoria</h3>
-        <div class="cards-list">
-          <article v-for="(c, idx) in categories" :key="`${c.name}-${idx}`" class="result-card">
-            <div class="card-main">
-              <span class="name-pill" :style="c.pillStyle">{{ c.name }}</span>
-            </div>
-            <div class="card-metrics">
-              <span class="metric-qty">{{ formatQuantity(c.quantity) }}</span>
-              <span class="metric-euro">{{ formatEuro(c.sales) }}</span>
-            </div>
-          </article>
-        </div>
-      </section>
     </div>
   </div>
 </template>
@@ -132,16 +118,8 @@ const formatEuro = (value) => {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(toNumber(value));
 };
 
-const formatQuantity = (value) => {
-  return `${toNumber(value)} pz`;
-};
-
 const extractSales = (item) => {
   return toNumber(item?.sales ?? item?.totalSales ?? item?.amount ?? item?.incasso ?? 0);
-};
-
-const extractQuantity = (item) => {
-  return toNumber(item?.quantity ?? item?.qty ?? item?.pieces ?? item?.items ?? 0);
 };
 
 const topOperators = computed(() => {
@@ -154,21 +132,6 @@ const topOperators = computed(() => {
       sales: extractSales(o),
       color: resolveColor(o, name, idx),
       pillStyle: getPillStyle(resolveColor(o, name, idx))
-    };
-  });
-});
-
-const categories = computed(() => {
-  const list = Array.isArray(stats.value?.byCategory) ? stats.value.byCategory : [];
-  return list.map((c, idx) => {
-    const name = c?.category || c?.name || `Categoria ${idx + 1}`;
-    return {
-      ...c,
-      name,
-      sales: extractSales(c),
-      quantity: extractQuantity(c),
-      color: resolveColor(c, name, idx),
-      pillStyle: getPillStyle(resolveColor(c, name, idx))
     };
   });
 });
@@ -377,16 +340,6 @@ h3 {
   padding: 5px 10px;
   font-weight: 800;
   font-size: 0.86rem;
-}
-
-.metric-qty {
-  background: #dbeafe;
-  color: #1d4ed8;
-  border: 1px solid #93c5fd;
-  border-radius: 999px;
-  padding: 5px 10px;
-  font-weight: 700;
-  font-size: 0.82rem;
 }
 
 @media (max-width: 680px) {

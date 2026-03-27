@@ -1,7 +1,7 @@
 <template>
   <div class="stats-sales-container">
     <div class="header">
-      <h1>📊 Vendite</h1>
+      <h1>📊 Ordinato</h1>
     </div>
 
     <!-- Filtri -->
@@ -36,7 +36,7 @@
         <thead>
           <tr>
             <th>Data</th>
-            <th>Totale Incassato</th>
+            <th>Totale Ordinato</th>
           </tr>
         </thead>
         <tbody>
@@ -46,6 +46,23 @@
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Ordinato per tavolo/camera -->
+    <div v-if="tableData.length" class="table-stats-section">
+      <h2 class="section-title">Ordinato per tavolo / camera</h2>
+      <div class="table-stats-grid">
+        <div v-for="(row, idx) in tableData" :key="idx" class="table-stat-card">
+          <div>
+            <div class="table-stat-name">{{ row.table }}</div>
+            <div v-if="row.guestName" class="table-stat-guest">{{ row.guestName }}</div>
+          </div>
+          <div class="table-stat-meta">
+            <span class="badge-orders">{{ row.orders }} {{ row.orders === 1 ? 'ordine' : 'ordini' }}</span>
+            <span class="badge-sales">{{ formatCurrency(row.totalSales) }}</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -60,6 +77,7 @@ const toDate = ref('')
 const viewMode = ref('daily')
 const salesData = ref([])
 const aggregatedSalesData = ref([])
+const tableData = ref([])
 let chart = null
 
 const toISODate = (date) => {
@@ -82,14 +100,16 @@ onMounted(() => {
 
 const fetchSales = async () => {
   try {
-    const res = await axios.get('http://localhost:8088/api/mbar/sales_by_day', {
-      params: {
-        from: fromDate.value,
-        to: toDate.value
-      }
-    })
-    
-    salesData.value = res.data.sales || []
+    const [salesRes, tableRes] = await Promise.all([
+      axios.get('http://localhost:8088/api/mbar/sales_by_day', {
+        params: { from: fromDate.value, to: toDate.value }
+      }),
+      axios.get('http://localhost:8088/api/mbar/sales_by_table', {
+        params: { from: fromDate.value, to: toDate.value }
+      })
+    ])
+    salesData.value = salesRes.data.sales || []
+    tableData.value = tableRes.data.tables || []
     aggregateAndRenderChart()
   } catch (error) {
     console.error('Errore nel caricamento delle vendite:', error)
@@ -159,7 +179,7 @@ const aggregateAndRenderChart = async () => {
     labels: aggregated.map(item => item.date),
     datasets: [
       {
-        label: 'Totale Incassato (€)',
+        label: 'Totale Ordinato (€)',
         data: aggregated.map(item => item.sales),
         borderColor: '#3b82f6',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -375,5 +395,76 @@ const formatCurrency = (value) => {
 .sales-table td.amount {
   font-weight: 600;
   color: #059669;
+}
+
+.table-stats-section {
+  margin-top: 32px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 16px;
+}
+
+.table-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.table-stat-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.table-stat-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-stat-guest {
+  margin-top: 4px;
+  font-size: 0.83rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.table-stat-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge-orders {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge-sales {
+  background: #f0fdf4;
+  color: #047857;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 </style>
