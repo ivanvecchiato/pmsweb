@@ -22,7 +22,7 @@
         <h3>Vendite operatore selezionato</h3>
         <article class="result-card">
           <div class="card-main">
-            <span class="name-pill" :style="{ backgroundColor: selectedOperator.color }">
+            <span class="name-pill" :style="selectedOperator.pillStyle">
               {{ selectedOperator.name }}
             </span>
           </div>
@@ -38,7 +38,7 @@
           <article v-for="(o, idx) in topOperators" :key="o.id || `${o.name}-${idx}`" class="result-card">
             <div class="card-main">
               <span class="rank-pill">#{{ idx + 1 }}</span>
-              <span class="name-pill" :style="{ backgroundColor: o.color }">{{ o.name }}</span>
+              <span class="name-pill" :style="o.pillStyle">{{ o.name }}</span>
             </div>
             <div class="card-metrics">
               <span class="metric-euro">{{ formatEuro(o.sales) }}</span>
@@ -52,7 +52,7 @@
         <div class="cards-list">
           <article v-for="(c, idx) in categories" :key="`${c.name}-${idx}`" class="result-card">
             <div class="card-main">
-              <span class="name-pill" :style="{ backgroundColor: c.color }">{{ c.name }}</span>
+              <span class="name-pill" :style="c.pillStyle">{{ c.name }}</span>
             </div>
             <div class="card-metrics">
               <span class="metric-qty">{{ formatQuantity(c.quantity) }}</span>
@@ -94,6 +94,40 @@ const resolveColor = (item, fallbackSeed, idx = 0) => {
   return item?.color || item?.hex || item?.operatorColor || item?.categoryColor || hashColor(fallbackSeed, idx);
 };
 
+const hexToRgb = (hex) => {
+  const normalized = String(hex || '').trim().replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return null;
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16)
+  };
+};
+
+const rgbToHex = ({ r, g, b }) => {
+  const clamp = (n) => Math.max(0, Math.min(255, Math.round(n)));
+  const toHex = (n) => clamp(n).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
+const mixWithWhite = (hex, factor) => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  return rgbToHex({
+    r: rgb.r + (255 - rgb.r) * factor,
+    g: rgb.g + (255 - rgb.g) * factor,
+    b: rgb.b + (255 - rgb.b) * factor
+  });
+};
+
+const getPillStyle = (baseColor) => {
+  return {
+    backgroundColor: mixWithWhite(baseColor, 0.78),
+    borderColor: mixWithWhite(baseColor, 0.58),
+    color: mixWithWhite(baseColor, 0.12)
+  };
+};
+
 const formatEuro = (value) => {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(toNumber(value));
 };
@@ -118,7 +152,8 @@ const topOperators = computed(() => {
       ...o,
       name,
       sales: extractSales(o),
-      color: resolveColor(o, name, idx)
+      color: resolveColor(o, name, idx),
+      pillStyle: getPillStyle(resolveColor(o, name, idx))
     };
   });
 });
@@ -132,7 +167,8 @@ const categories = computed(() => {
       name,
       sales: extractSales(c),
       quantity: extractQuantity(c),
-      color: resolveColor(c, name, idx)
+      color: resolveColor(c, name, idx),
+      pillStyle: getPillStyle(resolveColor(c, name, idx))
     };
   });
 });
@@ -146,7 +182,8 @@ const selectedOperator = computed(() => {
     return {
       name: fallbackName,
       sales: source,
-      color: hashColor(fallbackName)
+      color: hashColor(fallbackName),
+      pillStyle: getPillStyle(hashColor(fallbackName))
     };
   }
 
@@ -155,7 +192,8 @@ const selectedOperator = computed(() => {
     return {
       name,
       sales: extractSales(source),
-      color: resolveColor(source, name)
+      color: resolveColor(source, name),
+      pillStyle: getPillStyle(resolveColor(source, name))
     };
   }
 
@@ -163,7 +201,8 @@ const selectedOperator = computed(() => {
   return {
     name: fallbackName,
     sales: toNumber(source),
-    color: hashColor(fallbackName)
+    color: hashColor(fallbackName),
+    pillStyle: getPillStyle(hashColor(fallbackName))
   };
 });
 
@@ -312,7 +351,8 @@ h3 {
 }
 
 .name-pill {
-  color: white;
+  color: #334155;
+  border: 1px solid transparent;
   font-size: 0.82rem;
   font-weight: 700;
   padding: 6px 10px;
