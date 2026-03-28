@@ -450,8 +450,8 @@ onMounted(async () => {
   background: white;
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  width: 90%;
-  max-width: 500px;
+  width: min(96vw, 1100px);
+  max-width: 1100px;
   max-height: 90vh;
   overflow-y: auto;
   animation: slideUp 0.3s ease;
@@ -505,9 +505,20 @@ onMounted(async () => {
 
 .quote-form {
   padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 1rem;
+}
+
+.quote-form > .form-section,
+.quote-form > .form-row {
+  grid-column: span 6;
+}
+
+.quote-form > .rooms-section,
+.quote-form > .info-box,
+.quote-form > .button-row {
+  grid-column: 1 / -1;
 }
 
 .form-section {
@@ -684,9 +695,13 @@ onMounted(async () => {
 
 .rooms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(150px, 170px);
   gap: 0.75rem;
   margin-top: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scroll-snap-type: x proximity;
 }
 
 .room-card {
@@ -701,6 +716,8 @@ onMounted(async () => {
   transition: all 0.2s ease;
   background: white;
   text-align: center;
+  min-height: 140px;
+  scroll-snap-align: start;
 }
 
 .room-card:hover {
@@ -734,5 +751,21 @@ onMounted(async () => {
   font-size: 0.75rem;
   color: #6b7280;
   font-weight: 500;
+}
+
+@media (max-width: 960px) {
+  .quote-builder-modal {
+    width: 92%;
+    max-width: 620px;
+  }
+
+  .quote-form {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .rooms-grid {
+    grid-auto-columns: minmax(140px, 1fr);
+  }
 }
 </style>
