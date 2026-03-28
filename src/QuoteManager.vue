@@ -55,6 +55,10 @@
                 <span v-if="quote.children > 0">, {{ quote.children }} bambin{{ quote.children !== 1 ? 'i' : 'o' }}</span>
               </span>
             </div>
+            <div v-if="quote.type === 'hotel' && getQuoteKidsAgesLabel(quote)" class="detail-row">
+              <span class="label">Età bambini:</span>
+              <span class="value">{{ getQuoteKidsAgesLabel(quote) }}</span>
+            </div>
             <div v-if="getQuoteTotal(quote) !== null" class="detail-row price-row">
               <span class="label">Prezzo:</span>
               <span class="value price-value">{{ formatCurrency(getQuoteTotal(quote)) }}</span>
@@ -139,6 +143,10 @@
             <div class="info-item">
               <span class="info-label">Trattamento:</span>
               <span class="info-value">{{ currentQuote.board.toUpperCase() }}</span>
+            </div>
+            <div class="info-item" v-if="getQuoteKidsAgesLabel(currentQuote)">
+              <span class="info-label">Età bambini:</span>
+              <span class="info-value">{{ getQuoteKidsAgesLabel(currentQuote) }}</span>
             </div>
           </div>
         </section>
@@ -365,6 +373,20 @@ const getQuoteTotal = (quote) => {
     if (Number.isFinite(n)) return n
   }
   return null
+}
+
+const getQuoteKidsAgesLabel = (quote) => {
+  if (!quote) return ''
+  const raw = quote.kidsAges ?? quote.childrenAges ?? quote.kids_ages ?? quote.children_ages ?? []
+  if (!Array.isArray(raw) || raw.length === 0) return ''
+
+  const normalized = raw
+    .map((v) => Number(v))
+    .filter((v) => Number.isFinite(v) && v >= 0)
+    .map((v) => Math.floor(v))
+
+  if (!normalized.length) return ''
+  return normalized.join(', ')
 }
 
 const addDaysISO = (dateStr, daysToAdd) => {

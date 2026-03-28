@@ -4,6 +4,14 @@ import axios from 'axios'
 const quotes = ref([])
 const selectedQuote = ref(null)
 
+const normalizeBoardForBackend = (payload) => {
+  if (!payload || payload.board == null) return payload
+  return {
+    ...payload,
+    board: String(payload.board).toUpperCase()
+  }
+}
+
 // Carica preventivi dal backend
 const loadQuotes = async (type = 'all') => {
   try {
@@ -21,7 +29,8 @@ const loadQuotes = async (type = 'all') => {
 // Salva un nuovo preventivo
 const saveQuote = async (quoteData) => {
   try {
-    const res = await axios.post('http://localhost:8081/api/pms/quotes/save', quoteData)
+    const normalizedQuoteData = normalizeBoardForBackend(quoteData)
+    const res = await axios.post('http://localhost:8081/api/pms/quotes/save', normalizedQuoteData)
     await loadQuotes()
     return res.data
   } catch (err) {
@@ -69,8 +78,9 @@ const convertToBooking = async (quoteId, type, bookingDataOverride = null) => {
       createdFrom: `quote_${quoteId}`,
       quoteId: quoteId
     }
+    const normalizedBookingData = normalizeBoardForBackend(bookingData)
     
-    const res = await axios.post(endpoint, bookingData)
+    const res = await axios.post(endpoint, normalizedBookingData)
     await deleteQuote(quoteId)
     return res.data
   } catch (err) {

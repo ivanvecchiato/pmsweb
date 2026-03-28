@@ -170,6 +170,26 @@
                 <input type="number" v-model="newBookingData.children" min="0" />
               </div>
             </div>
+
+            <div v-if="Number(newBookingData.children) > 0" class="form-section">
+              <label>Età bambini</label>
+              <div class="kids-ages-grid">
+                <div
+                  v-for="(_, idx) in normalizedChildrenCount"
+                  :key="`kid-age-${idx}`"
+                  class="kid-age-item"
+                >
+                  <span>Bambino {{ idx + 1 }}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="17"
+                    v-model.number="newBookingData.kidsAges[idx]"
+                    placeholder="Età"
+                  />
+                </div>
+              </div>
+            </div>
           </section>
 
           <section class="dialog-section dialog-section-full">
@@ -289,6 +309,9 @@ import axios from 'axios';
 import { watch } from 'vue';
 import { useRouter } from 'vue-router'
 import QuoteBuilder from './QuoteBuilder.vue'
+import { usePricing } from './composables/usePricing'
+
+const { calculateQuotePrice, loadHotelPricingPolicy } = usePricing();
 
 const rooms = ref([
   { id: 1, name: 'Camera 101 - Singola' },
@@ -413,6 +436,7 @@ const newBookingData = ref({
   guestSurname: '',
   adults: 1,
   children: 0,
+  kidsAges: [],
   checkin: '',
   checkout: '',
   board: 'bb',
@@ -462,6 +486,23 @@ const totalDeposits = computed(() => {
   return (newBookingData.value.deposits || []).reduce((sum, dep) => sum + Number(dep.amount || 0), 0);
 });
 
+const normalizedChildrenCount = computed(() => {
+  const count = Number(newBookingData.value.children);
+  if (!Number.isFinite(count) || count <= 0) return 0;
+  return Math.floor(count);
+});
+
+const normalizeKidsAges = (ages, expectedCount) => {
+  const source = Array.isArray(ages) ? ages : [];
+  const count = Math.max(0, Number(expectedCount) || 0);
+  const normalized = [];
+  for (let i = 0; i < count; i++) {
+    const value = Number(source[i]);
+    normalized.push(Number.isFinite(value) && value >= 0 ? Math.floor(value) : null);
+  }
+  return normalized;
+};
+
 const addDeposit = () => {
   const amount = Number(depositDraft.value.amount);
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -501,6 +542,11 @@ watch(() => newBookingData.value.checkin, (newIn) => {
   if (!depositDraft.value.paymentDate) {
     depositDraft.value.paymentDate = newIn;
   }
+});
+
+watch(() => newBookingData.value.children, (newValue) => {
+  const count = Math.max(0, Number(newValue) || 0);
+  newBookingData.value.kidsAges = normalizeKidsAges(newBookingData.value.kidsAges, count);
 });
 
 const getBookingStatus = (booking) => {
@@ -602,6 +648,7 @@ const addBooking = (room = null, event = null) => {
     guestSurname: '',
     adults: 1,
     children: 0,
+    kidsAges: [],
     checkin,
     checkout,
     board: 'bb',
@@ -632,6 +679,7 @@ const openEditBooking = (booking) => {
     guestSurname: booking.guestSurname || '',
     adults: booking.adults || 1,
     children: booking.children || 0,
+    kidsAges: normalizeKidsAges(booking.kidsAges, booking.children || 0),
     checkin: toISODate(start),
     checkout: toISODate(end),
     board: booking.board || 'bb',
@@ -664,6 +712,11 @@ const postToFirstAvailableEndpoint = async (endpoints, payload) => {
   }
 
   throw lastError;
+};
+
+const normalizeBoardForBackend = (boardValue) => {
+  if (boardValue == null) return boardValue;
+  return String(boardValue).toUpperCase();
 };
 
 const submitNewBooking = async () => {
@@ -699,10 +752,13 @@ const submitNewBooking = async () => {
     adults: parseInt(newBookingData.value.adults),
     children: parseInt(newBookingData.value.children),
     kids: parseInt(newBookingData.value.children),
+    kidsAges: normalizeKidsAges(newBookingData.value.kidsAges, newBookingData.value.children),
+    childrenAges: normalizeKidsAges(newBookingData.value.kidsAges, newBookingData.value.children),
     checkin: newBookingData.value.checkin,
     duration: duration,
-    board: newBookingData.value.board,
+    board: normalizeBoardForBackend(newBookingData.value.board),
     fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null,
+    pricingModeSnapshot: bookingQuote.value?.pricingMode || null,
     deposits: backendDeposits,
     deposit: backendDeposits,
     deposits_json: JSON.stringify(backendDeposits.map(dep => ({
@@ -804,55 +860,36 @@ const bookingQuote = computed(() => {
   const start = new Date(checkin);
   const end = new Date(checkout);
   const room = rooms.value.find(r => r.id === roomId);
-  
-  // Calcolo occupanti totali
   const numAdults = parseInt(adults) || 0;
   const numChildren = parseInt(children) || 0;
-  const totalPeople = numAdults + numChildren;
 
-  if (!room || start >= end || totalPeople === 0) return null;
+  if (!room || start >= end || numAdults + numChildren === 0) return null;
 
-  let totalCalculated = 0;
-  const days = [];
-  let current = new Date(start);
-
-  while (current < end) {
-    const dateStr = toISODate(current);
-    const dayData = timetable.value.find(t => t.date === dateStr);
-    
-    // Cerchiamo il listino (usando String() per evitare errori di tipo id 1 vs "1")
-    const pricelist = pricelists.value.find(p => String(p.id) === String(dayData?.pricelist));
-    
-    // 1. Quota Camera PER PERSONA
-    const ratePerPerson = pricelist?.prices.find(p => p.roomType === room.type)?.tariffa || 0;
-    const totalRoomRateDay = ratePerPerson * totalPeople;
-
-    // 2. Supplemento Trattamento PER PERSONA
-    let surchargePerPerson = 0;
-    if (board === 'hb') surchargePerPerson = pricelist?.surcharges?.hb || 0;
-    if (board === 'fb') surchargePerPerson = pricelist?.surcharges?.fb || 0;
-    const totalSurchargeDay = surchargePerPerson * totalPeople;
-
-    const dayTotal = totalRoomRateDay + totalSurchargeDay;
-
-    days.push({
-      date: dateStr,
-      ratePerPerson,
-      surchargePerPerson,
-      totalPeople,
-      dayTotal,
-      listino: pricelist?.description || 'N/A'
-    });
-
-    totalCalculated += dayTotal;
-    current.setDate(current.getDate() + 1);
-  }
+  const quote = calculateQuotePrice(
+    checkin,
+    checkout,
+    room.type,
+    'hotel',
+    numAdults + numChildren,
+    {
+      board,
+      adults: numAdults,
+      children: numChildren,
+      kidAges: newBookingData.value.kidsAges || []
+    }
+  );
+  if (!quote) return null;
 
   const finalTotal = newBookingData.value.isManualPrice 
     ? newBookingData.value.manualPrice 
-    : totalCalculated;
+    : quote.totalCalculated;
 
-  return { totalCalculated, finalTotal, days };
+  return {
+    totalCalculated: quote.totalCalculated,
+    finalTotal,
+    days: quote.days,
+    pricingMode: quote.pricingMode
+  };
 });
 
 const formatDate = (date) => {
@@ -1260,6 +1297,7 @@ const convertReservations = (apiReservations) => {
       guestSurname: res.accountholder?.lastname || '',
       adults: res.adults ?? res.pax ?? 1,
       children: res.kids ?? 0,
+      kidsAges: normalizeKidsAges(res.kidsAges ?? res.childrenAges ?? res.kids_ages ?? res.children_ages, res.kids ?? 0),
       board: (res.board || 'BB').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
       guest: res.accountholder.firstname + ' ' + res.accountholder.lastname,
@@ -1342,6 +1380,7 @@ onMounted(() => {
   window.addEventListener('mouseup', handleMouseUp);
   window.addEventListener('click', handleGlobalClick);
   getRooms();
+  loadHotelPricingPolicy();
   loadPricingData();
 });
 
@@ -1445,6 +1484,23 @@ onUnmounted(() => {
 
 .btn-primary:hover {
   background: #2563eb;
+}
+
+.kids-ages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+
+.kid-age-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.kid-age-item span {
+  font-size: 0.8rem;
+  color: #4b5563;
 }
 
 .btn-danger {

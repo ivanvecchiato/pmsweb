@@ -29,6 +29,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'listino', pmsTypes: ['hotel'] }
     },
     {
+      path: '/settings/hotel-pricing',
+      name: 'HotelPricingPolicySettings',
+      component: () => import('../HotelPricingPolicySettings.vue'),
+      meta: { requiresAuth: true, permission: 'listino', pmsTypes: ['hotel'] }
+    },
+    {
       path: '/listino_beach',
       name: 'BeachManagementDashboard',
       component: () => import('../BeachManagementDashboard.vue'),

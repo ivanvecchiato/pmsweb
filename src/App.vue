@@ -125,6 +125,20 @@
             </router-link>
 
             <router-link
+              v-if="hasPermission('listino') && isPmsTypeAllowed(['hotel'])"
+              to="/settings/hotel-pricing"
+              :class="['menu-item', { active: route.path === '/settings/hotel-pricing' }]"
+              aria-label="Policy Prezzi Hotel"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 7h18M6 12h12M8 17h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Policy Prezzi</span>
+            </router-link>
+
+            <router-link
               v-if="hasPermission('listino_beach') && isPmsTypeAllowed(['beach'])"
               to="/listino_beach"
               :class="['menu-item', { active: route.path === '/listino_beach' }]"
