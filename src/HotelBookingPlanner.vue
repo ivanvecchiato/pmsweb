@@ -80,6 +80,7 @@
                   'booking-conflict': hasConflict(booking)
                 }"
                 :style="getBookingStyle(booking)"
+                :title="booking.notes || ''"
                 @mousedown="handleMouseDown($event, booking, 'move')"
                 @click.prevent.stop="openBookingActions($event, booking)"
               >
@@ -158,6 +159,16 @@
                 <label>Cognome</label>
                 <input type="text" v-model="newBookingData.guestSurname" required placeholder="es. Rossi" />
               </div>
+            </div>
+
+            <div class="form-section">
+              <label>Note prenotazione</label>
+              <textarea
+                v-model="newBookingData.notes"
+                rows="3"
+                maxlength="1000"
+                placeholder="Aggiungi note interne per il PMS"
+              />
             </div>
 
             <div class="form-row">
@@ -434,6 +445,7 @@ const newBookingData = ref({
   roomId: '',
   guestName: '',
   guestSurname: '',
+  notes: '',
   adults: 1,
   children: 0,
   kidsAges: [],
@@ -472,6 +484,23 @@ const getReservationDeposits = (reservation) => {
   }
 
   return [];
+};
+
+const getReservationNotes = (reservation) => {
+  if (!reservation) return '';
+
+  const rawNotes = reservation.notes
+    ?? reservation.note
+    ?? reservation.booking_notes
+    ?? reservation.booking_note
+    ?? reservation.note_booking
+    ?? reservation.internal_notes
+    ?? reservation.internal_note
+    ?? reservation.accountholder?.notes
+    ?? reservation.accountholder?.note
+    ?? '';
+
+  return String(rawNotes).trim();
 };
 
 const resetDepositDraft = (defaultDate = '') => {
@@ -646,6 +675,7 @@ const addBooking = (room = null, event = null) => {
     roomId: room?.id ?? rooms.value[0]?.id ?? '',
     guestName: '',
     guestSurname: '',
+    notes: '',
     adults: 1,
     children: 0,
     kidsAges: [],
@@ -677,6 +707,7 @@ const openEditBooking = (booking) => {
     roomId: booking.roomId,
     guestName: booking.guestName || booking.guest || '',
     guestSurname: booking.guestSurname || '',
+    notes: getReservationNotes(booking),
     adults: booking.adults || 1,
     children: booking.children || 0,
     kidsAges: normalizeKidsAges(booking.kidsAges, booking.children || 0),
@@ -758,6 +789,7 @@ const submitNewBooking = async () => {
   }));
   const overnightTax = buildOvernightTaxSnapshot();
   const taxesSnapshot = { overnight: overnightTax };
+  const bookingNotes = String(newBookingData.value.notes || '').trim();
 
   const payload = {
     roomId: newBookingData.value.roomId,
@@ -777,6 +809,10 @@ const submitNewBooking = async () => {
     board: normalizeBoardForBackend(newBookingData.value.board),
     fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null,
     pricingModeSnapshot: bookingQuote.value?.pricingMode || null,
+    note: bookingNotes,
+    notes: bookingNotes,
+    booking_note: bookingNotes,
+    booking_notes: bookingNotes,
     overnight_tax: overnightTax,
     overnightTax,
     taxes: taxesSnapshot,
@@ -1322,6 +1358,7 @@ const convertReservations = (apiReservations) => {
       kidsAges: normalizeKidsAges(res.kidsAges ?? res.childrenAges ?? res.kids_ages ?? res.children_ages, res.kids ?? 0),
       board: (res.board || 'BB').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
+      notes: getReservationNotes(res),
       guest: res.accountholder.firstname + ' ' + res.accountholder.lastname,
       color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
     };
@@ -1881,11 +1918,16 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
-.form-section input, .form-section select {
+.form-section input, .form-section select, .form-section textarea {
   padding: 10px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   font-size: 14px;
+}
+
+.form-section textarea {
+  resize: vertical;
+  min-height: 84px;
 }
 
 .deposit-entry-grid {
