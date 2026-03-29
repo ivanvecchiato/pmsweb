@@ -81,6 +81,12 @@ const router = createRouter({
       name: 'QuoteManager',
       component: () => import('../QuoteManager.vue'),
       meta: { requiresAuth: true, permission: 'home' }
+    },
+    {
+      path: '/accounts',
+      name: 'GuestAccount',
+      component: () => import('../GuestAccount.vue'),
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'] }
     }
   ]
 })

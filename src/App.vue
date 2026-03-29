@@ -62,6 +62,20 @@
               </span>
               <span class="label">Preventivi</span>
             </router-link>
+
+            <router-link
+              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
+              to="/accounts"
+              :class="['menu-item', { active: route.path === '/accounts' }]"
+              aria-label="Conti Hotel"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 6h16v12H4zM4 10h16M8 14h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Conti</span>
+            </router-link>
           </div>
 
           <!-- AREA BAR -->

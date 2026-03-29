@@ -311,7 +311,7 @@ import { useRouter } from 'vue-router'
 import QuoteBuilder from './QuoteBuilder.vue'
 import { usePricing } from './composables/usePricing'
 
-const { calculateQuotePrice, loadHotelPricingPolicy } = usePricing();
+const { calculateQuotePrice, calculateOvernightTax, loadHotelPricingPolicy } = usePricing();
 
 const rooms = ref([
   { id: 1, name: 'Camera 101 - Singola' },
@@ -719,6 +719,22 @@ const normalizeBoardForBackend = (boardValue) => {
   return String(boardValue).toUpperCase();
 };
 
+const buildOvernightTaxSnapshot = () => {
+  const tax = calculateOvernightTax({
+    checkin: newBookingData.value.checkin,
+    checkout: newBookingData.value.checkout,
+    adults: Number(newBookingData.value.adults || 0),
+    children: Number(newBookingData.value.children || 0),
+    kidsAges: normalizeKidsAges(newBookingData.value.kidsAges, newBookingData.value.children)
+  });
+
+  return {
+    type: 'overnight_tax',
+    vatMode: 'exempt',
+    ...tax
+  };
+};
+
 const submitNewBooking = async () => {
   const start = new Date(newBookingData.value.checkin);
   const end = new Date(newBookingData.value.checkout);
@@ -740,6 +756,8 @@ const submitNewBooking = async () => {
     paymentMode: dep.paymentMode || '',
     paymentDate: dep.paymentDate
   }));
+  const overnightTax = buildOvernightTaxSnapshot();
+  const taxesSnapshot = { overnight: overnightTax };
 
   const payload = {
     roomId: newBookingData.value.roomId,
@@ -759,6 +777,10 @@ const submitNewBooking = async () => {
     board: normalizeBoardForBackend(newBookingData.value.board),
     fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null,
     pricingModeSnapshot: bookingQuote.value?.pricingMode || null,
+    overnight_tax: overnightTax,
+    overnightTax,
+    taxes: taxesSnapshot,
+    taxes_json: JSON.stringify(taxesSnapshot),
     deposits: backendDeposits,
     deposit: backendDeposits,
     deposits_json: JSON.stringify(backendDeposits.map(dep => ({

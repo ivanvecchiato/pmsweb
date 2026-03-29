@@ -512,19 +512,25 @@ onMounted(async () => {
 
 .quote-form > .form-section,
 .quote-form > .form-row {
-  grid-column: span 6;
+  grid-column: 1 / span 8;
 }
 
-.quote-form > .rooms-section,
-.quote-form > .info-box,
+.quote-form > .rooms-section {
+  grid-column: 1 / span 8;
+}
+
+.quote-form > .info-box {
+  grid-column: 9 / -1;
+  grid-row: 1 / span 8;
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+  max-height: calc(90vh - 4rem);
+  overflow-y: auto;
+}
+
 .quote-form > .button-row {
   grid-column: 1 / -1;
-}
-
-.form-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
 }
 
 .form-section label {
@@ -766,6 +772,12 @@ onMounted(async () => {
 
   .rooms-grid {
     grid-auto-columns: minmax(140px, 1fr);
+  }
+
+  .quote-form > .info-box {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 </style>

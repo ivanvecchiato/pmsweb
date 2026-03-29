@@ -84,6 +84,75 @@
       </div>
     </section>
 
+    <section class="card">
+      <h2>Tassa di Soggiorno</h2>
+      <div class="params-grid">
+        <label class="checkbox-stack">
+          <span>Abilita tassa</span>
+          <input v-model="form.overnightTax.enabled" type="checkbox" />
+        </label>
+
+        <label class="checkbox-stack">
+          <span>Applicazione tutto l'anno</span>
+          <input v-model="form.overnightTax.allYear" type="checkbox" :disabled="!form.overnightTax.enabled" />
+        </label>
+
+        <label>
+          Importo per persona/notte (€)
+          <input
+            v-model.number="form.overnightTax.amountPerPerson"
+            type="number"
+            min="0"
+            step="0.01"
+            :disabled="!form.overnightTax.enabled"
+          />
+        </label>
+
+        <label>
+          Esenzione bambini sotto età
+          <input
+            v-model.number="form.overnightTax.childExemptUnderAge"
+            type="number"
+            min="0"
+            step="1"
+            :disabled="!form.overnightTax.enabled"
+          />
+        </label>
+
+        <label>
+          Giorni massimi tassabili
+          <input
+            v-model.number="form.overnightTax.maxDays"
+            type="number"
+            min="1"
+            step="1"
+            :disabled="!form.overnightTax.enabled"
+          />
+        </label>
+
+        <label>
+          Inizio applicazione
+          <input
+            v-model="form.overnightTax.startDate"
+            type="date"
+            :disabled="!form.overnightTax.enabled || form.overnightTax.allYear"
+          />
+        </label>
+
+        <label>
+          Fine applicazione
+          <input
+            v-model="form.overnightTax.endDate"
+            type="date"
+            :disabled="!form.overnightTax.enabled || form.overnightTax.allYear"
+          />
+        </label>
+      </div>
+      <p class="hint tax-hint">
+        La tassa viene salvata in policy ma non compare nei preventivi. Sara mostrata solo nel conto dedicato.
+      </p>
+    </section>
+
     <section class="card beach-note">
       <h2>Nota modalità Beach</h2>
       <p>
@@ -111,6 +180,15 @@ const form = ref({
   boardChargeMode: 'per_person',
   fallbackKidDiscountPct: 0,
   extraBedDiscountPct: 0,
+  overnightTax: {
+    enabled: false,
+    allYear: true,
+    startDate: '',
+    endDate: '',
+    amountPerPerson: 0,
+    childExemptUnderAge: 3,
+    maxDays: 10
+  },
   ageBands: []
 })
 
@@ -142,11 +220,32 @@ const normalizeForm = (value) => {
         .sort((a, b) => a.minAge - b.minAge)
     : []
 
+  const rawTax = value?.overnightTax || value?.overnight_tax || {}
+  let amountPerPerson = Number(rawTax?.amountPerPerson)
+  if (!Number.isFinite(amountPerPerson)) amountPerPerson = 0
+
+  let childExemptUnderAge = Number(rawTax?.childExemptUnderAge)
+  if (!Number.isFinite(childExemptUnderAge)) childExemptUnderAge = 0
+
+  let maxDays = Number(rawTax?.maxDays)
+  if (!Number.isFinite(maxDays) || maxDays <= 0) maxDays = 10
+
+  const overnightTax = {
+    enabled: Boolean(rawTax?.enabled),
+    allYear: rawTax?.allYear !== false,
+    startDate: typeof rawTax?.startDate === 'string' ? rawTax.startDate : '',
+    endDate: typeof rawTax?.endDate === 'string' ? rawTax.endDate : '',
+    amountPerPerson: Math.max(0, Number(amountPerPerson.toFixed(2))),
+    childExemptUnderAge: Math.max(0, Math.floor(childExemptUnderAge)),
+    maxDays: Math.max(1, Math.floor(maxDays))
+  }
+
   return {
     mode: String(value?.mode || '').toLowerCase() === 'person' ? 'person' : 'room',
     boardChargeMode: 'per_person',
     fallbackKidDiscountPct: Math.max(0, Math.min(100, fallbackKidDiscountPct)),
     extraBedDiscountPct: Math.max(0, Math.min(100, extraBedDiscountPct)),
+    overnightTax,
     ageBands
   }
 }
@@ -293,6 +392,10 @@ onMounted(loadForm)
   color: #334155;
 }
 
+.checkbox-stack input {
+  align-self: flex-start;
+}
+
 .params-grid input {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
@@ -337,6 +440,10 @@ onMounted(loadForm)
 .beach-note p {
   margin: 0;
   color: #334155;
+}
+
+.tax-hint {
+  margin-top: 12px;
 }
 
 @media (max-width: 800px) {

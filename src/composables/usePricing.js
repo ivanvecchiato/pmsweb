@@ -11,12 +11,55 @@ const hotelPricingPolicy = ref({
   boardChargeMode: 'per_person',
   fallbackKidDiscountPct: 0,
   extraBedDiscountPct: 0,
+  overnightTax: {
+    enabled: false,
+    allYear: true,
+    startDate: '',
+    endDate: '',
+    amountPerPerson: 0,
+    childExemptUnderAge: 3,
+    maxDays: 10
+  },
   ageBands: [
     { label: 'Infant', minAge: 0, maxAge: 2, pricingType: 'fixed', fixedPrice: 15, discountPct: 0 },
     { label: 'Child', minAge: 3, maxAge: 11, pricingType: 'discount', discountPct: 50, fixedPrice: 0 },
     { label: 'Teen', minAge: 12, maxAge: 17, pricingType: 'discount', discountPct: 20, fixedPrice: 0 }
   ]
 })
+
+const isValidISODate = (value) => {
+  if (typeof value !== 'string') return false
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = new Date(`${value}T00:00:00`)
+  return !Number.isNaN(date.getTime()) && toISODate(date) === value
+}
+
+const normalizeOvernightTax = (rawTax = {}) => {
+  const enabled = Boolean(rawTax?.enabled)
+  const allYear = rawTax?.allYear !== false
+
+  let amountPerPerson = Number(rawTax?.amountPerPerson)
+  if (!Number.isFinite(amountPerPerson)) amountPerPerson = 0
+
+  let childExemptUnderAge = Number(rawTax?.childExemptUnderAge)
+  if (!Number.isFinite(childExemptUnderAge)) childExemptUnderAge = 0
+
+  let maxDays = Number(rawTax?.maxDays)
+  if (!Number.isFinite(maxDays) || maxDays <= 0) maxDays = 10
+
+  const startDate = isValidISODate(rawTax?.startDate) ? rawTax.startDate : ''
+  const endDate = isValidISODate(rawTax?.endDate) ? rawTax.endDate : ''
+
+  return {
+    enabled,
+    allYear,
+    startDate,
+    endDate,
+    amountPerPerson: Math.max(0, Number(amountPerPerson.toFixed(2))),
+    childExemptUnderAge: Math.max(0, Math.floor(childExemptUnderAge)),
+    maxDays: Math.max(1, Math.floor(maxDays))
+  }
+}
 
 const normalizePolicy = (rawPolicy = {}) => {
   const mode = String(rawPolicy?.mode || '').toLowerCase() === 'person' ? 'person' : 'room'
@@ -52,6 +95,9 @@ const normalizePolicy = (rawPolicy = {}) => {
     boardChargeMode: String(rawPolicy?.boardChargeMode || 'per_person'),
     fallbackKidDiscountPct: Math.max(0, Math.min(100, fallbackKidDiscountPct)),
     extraBedDiscountPct: Math.max(0, Math.min(100, extraBedDiscountPct)),
+    overnightTax: normalizeOvernightTax(
+      rawPolicy?.overnightTax || rawPolicy?.overnight_tax || rawPolicy?.tassaDiSoggiorno || {}
+    ),
     ageBands
   }
 }
@@ -345,6 +391,73 @@ const calculateQuotePrice = (checkin, checkout, roomType, type = 'hotel', person
   }
 }
 
+const calculateOvernightTax = ({
+  checkin,
+  checkout,
+  adults = 0,
+  children = 0,
+  kidsAges = [],
+  policy = hotelPricingPolicy.value
+} = {}) => {
+  const taxPolicy = normalizeOvernightTax(policy?.overnightTax || {})
+  const result = {
+    enabled: taxPolicy.enabled,
+    taxablePersons: 0,
+    taxableDays: 0,
+    amountPerPerson: taxPolicy.amountPerPerson,
+    total: 0,
+    breakdown: []
+  }
+
+  if (!taxPolicy.enabled || taxPolicy.amountPerPerson <= 0) return result
+
+  const start = new Date(`${checkin}T00:00:00`)
+  const end = new Date(`${checkout}T00:00:00`)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) return result
+
+  const safeAdults = Math.max(0, Number(adults || 0))
+  const safeChildren = Math.max(0, Number(children || 0))
+
+  let taxableChildren = 0
+  for (let i = 0; i < safeChildren; i++) {
+    const age = Number(Array.isArray(kidsAges) ? kidsAges[i] : NaN)
+    const isExempt = Number.isFinite(age) && age < taxPolicy.childExemptUnderAge
+    if (!isExempt) taxableChildren += 1
+  }
+
+  result.taxablePersons = safeAdults + taxableChildren
+  if (result.taxablePersons <= 0) return result
+
+  let current = new Date(start)
+  while (current < end) {
+    const dateStr = toISODate(current)
+    let inRange = true
+    if (!taxPolicy.allYear) {
+      inRange = Boolean(taxPolicy.startDate && taxPolicy.endDate && dateStr >= taxPolicy.startDate && dateStr <= taxPolicy.endDate)
+    }
+
+    if (inRange) {
+      const amount = Number((result.taxablePersons * taxPolicy.amountPerPerson).toFixed(2))
+      result.breakdown.push({
+        date: dateStr,
+        persons: result.taxablePersons,
+        amountPerPerson: taxPolicy.amountPerPerson,
+        amount
+      })
+    }
+
+    current.setDate(current.getDate() + 1)
+  }
+
+  if (!result.breakdown.length) return result
+
+  const cappedBreakdown = result.breakdown.slice(0, taxPolicy.maxDays)
+  result.breakdown = cappedBreakdown
+  result.taxableDays = cappedBreakdown.length
+  result.total = Number(cappedBreakdown.reduce((sum, day) => sum + Number(day.amount || 0), 0).toFixed(2))
+  return result
+}
+
 export const usePricing = () => ({
   pricelists: computed(() => pricelists.value),
   timetables: computed(() => timetables.value),
@@ -357,5 +470,6 @@ export const usePricing = () => ({
   toISODate,
   calculateDayPrice,
   calculateWeightedGuests,
-  calculateQuotePrice
+  calculateQuotePrice,
+  calculateOvernightTax
 })

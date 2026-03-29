@@ -48,6 +48,20 @@
       </table>
     </div>
 
+    <!-- Ordinato per area -->
+    <div v-if="areaData.length" class="table-stats-section">
+      <h2 class="section-title">Ordinato per area</h2>
+      <div class="area-stats-grid">
+        <div v-for="(row, idx) in areaData" :key="idx" class="area-stat-card">
+          <div class="area-stat-name">{{ row.area }}</div>
+          <div class="area-stat-amount">{{ formatCurrency(row.sales) }}</div>
+          <div class="area-stat-bar">
+            <div class="area-stat-bar-fill" :style="{ width: areaBarWidth(row.sales) + '%' }"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Ordinato per tavolo/camera -->
     <div v-if="tableData.length" class="table-stats-section">
       <h2 class="section-title">Ordinato per tavolo / camera</h2>
@@ -78,6 +92,7 @@ const viewMode = ref('daily')
 const salesData = ref([])
 const aggregatedSalesData = ref([])
 const tableData = ref([])
+const areaData = ref([])
 let chart = null
 
 const toISODate = (date) => {
@@ -100,16 +115,20 @@ onMounted(() => {
 
 const fetchSales = async () => {
   try {
-    const [salesRes, tableRes] = await Promise.all([
+    const [salesRes, tableRes, areaRes] = await Promise.all([
       axios.get('http://localhost:8088/api/mbar/sales_by_day', {
         params: { from: fromDate.value, to: toDate.value }
       }),
       axios.get('http://localhost:8088/api/mbar/sales_by_table', {
         params: { from: fromDate.value, to: toDate.value }
+      }),
+      axios.get('http://localhost:8088/api/mbar/sales_by_area', {
+        params: { from: fromDate.value, to: toDate.value }
       })
     ])
     salesData.value = salesRes.data.sales || []
     tableData.value = tableRes.data.tables || []
+    areaData.value = areaRes.data.areas || []
     aggregateAndRenderChart()
   } catch (error) {
     console.error('Errore nel caricamento delle vendite:', error)
@@ -236,6 +255,11 @@ watch(viewMode, () => {
     aggregateAndRenderChart()
   }
 })
+
+const areaBarWidth = (sales) => {
+  const max = Math.max(...areaData.value.map(r => r.sales), 1)
+  return Math.round((sales / max) * 100)
+}
 
 const formatDate = (dateStr) => {
   const date = new Date(dateStr)
@@ -466,5 +490,49 @@ const formatCurrency = (value) => {
   padding: 3px 10px;
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.area-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.area-stat-card {
+  background: white;
+  border-radius: 10px;
+  padding: 16px 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.area-stat-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.area-stat-amount {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #1d4ed8;
+}
+
+.area-stat-bar {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.area-stat-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  border-radius: 999px;
+  transition: width 0.4s ease;
 }
 </style>
