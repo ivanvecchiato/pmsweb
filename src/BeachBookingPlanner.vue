@@ -727,15 +727,125 @@ const createQuote = () => {
   showQuoteBuilder.value = true;
 };
 
+// --- Context menu spiaggia ---
+const showBeachActionMenu = ref(false);
+const beachActionMenuBooking = ref(null);
+const beachActionMenuPosition = ref({ x: 0, y: 0 });
+
+const beachActionMenuStyle = computed(() => ({
+  left: `${beachActionMenuPosition.value.x}px`,
+  top: `${beachActionMenuPosition.value.y}px`
+}));
+
+function openBeachBookingActions(event, booking) {
+  beachActionMenuBooking.value = booking;
+  const menuWidth = 180, menuHeight = 80, pad = 8;
+  const x = Math.min(event.clientX, window.innerWidth - menuWidth - pad);
+  const y = Math.min(event.clientY + 8, window.innerHeight - menuHeight - pad);
+  beachActionMenuPosition.value = { x: Math.max(pad, x), y: Math.max(pad, y) };
+  showBeachActionMenu.value = true;
+}
+
+function closeBeachActionMenu() {
+  showBeachActionMenu.value = false;
+  beachActionMenuBooking.value = null;
+}
+
+function openEditFromBeachMenu() {
+  if (!beachActionMenuBooking.value) return;
+  const booking = beachActionMenuBooking.value;
+  closeBeachActionMenu();
+  openEditBooking(booking);
+}
+
+function openAddServiceBeachFromMenu() {
+  if (!beachActionMenuBooking.value) return;
+  addServiceTarget.value = beachActionMenuBooking.value;
+  addServiceForm.value = { serviceId: '', quantity: 1, note: '' };
+  closeBeachActionMenu();
+  showAddServiceModal.value = true;
+}
+
+// Chiudi context menu su click globale
+function handleGlobalClickBeach() {
+  if (showBeachActionMenu.value) closeBeachActionMenu();
+}
+
+// --- Servizi (beach) ---
+const availableServices = ref([]);
+const showAddServiceModal = ref(false);
+const addServiceTarget = ref(null);
+const addingService = ref(false);
+const addServiceForm = ref({ serviceId: '', quantity: 1, note: '' });
+
+async function loadAvailableServices() {
+  try {
+    const { data } = await axios.get('http://localhost:8081/api/pms/services');
+    availableServices.value = Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error('Errore caricamento servizi:', e);
+  }
+}
+
+function availableServicesForType(type) {
+  return availableServices.value;
+}
+
+function closeAddServiceModal() {
+  showAddServiceModal.value = false;
+  addServiceTarget.value = null;
+}
+
+async function confirmAddServiceBeach() {
+  if (!addServiceForm.value.serviceId || !addServiceTarget.value) return;
+  const svc = availableServices.value.find(s => s.id === addServiceForm.value.serviceId);
+  if (!svc) return;
+  addingService.value = true;
+  try {
+    const serviceEntry = {
+      serviceId: svc.id,
+      name: svc.name,
+      price: svc.price,
+      quantity: addServiceForm.value.quantity || 1,
+      note: addServiceForm.value.note || '',
+      addedAt: new Date().toISOString()
+    };
+    const result = await axios.post('http://localhost:8081/api/pms/beach/add_service', {
+      reservationId: addServiceTarget.value.id,
+      service: serviceEntry
+    });
+    if (result.data?.services) {
+      addServiceTarget.value = { ...addServiceTarget.value, services: result.data.services };
+    }
+    addServiceForm.value = { serviceId: '', quantity: 1, note: '' };
+    await reloadAll();
+  } catch (e) {
+    console.error('Errore aggiunta servizio:', e);
+    alert('Errore durante l\'aggiunta del servizio.');
+  } finally {
+    addingService.value = false;
+  }
+}
+
+function formatServiceDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  return d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 onMounted(async () => {
   await reloadAll();
   window.addEventListener('mousemove', handleMouseMove);
   window.addEventListener('mouseup', handleMouseUp);
+  window.addEventListener('click', handleGlobalClickBeach);
+  loadAvailableServices();
 });
 
 onUnmounted(() => {
   window.removeEventListener('mousemove', handleMouseMove);
   window.removeEventListener('mouseup', handleMouseUp);
+  window.removeEventListener('click', handleGlobalClickBeach);
 });
 
 watch(() => newBookingData.value.checkin, (newIn) => {
@@ -885,6 +995,7 @@ watch(selectedBooking, (id) => {
                 :style="getBookingStyle(booking)"
                 @mousedown="handleMouseDown($event, booking, 'move')"
                 @click.prevent.stop="openEditBooking(booking)" @dblclick.prevent.stop="openEditBooking(booking)"
+                @contextmenu.prevent.stop="openBeachBookingActions($event, booking)"
               >
                 <div
                   class="resize-handle resize-left"
@@ -1000,6 +1111,88 @@ watch(selectedBooking, (id) => {
               <button type="submit" class="btn btn-save">{{ editingBooking ? 'Salva' : 'Conferma Prenotazione' }}</button>
             </div>
           </form>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Context menu spiaggia -->
+    <div
+      v-if="showBeachActionMenu"
+      class="booking-action-menu"
+      :style="beachActionMenuStyle"
+      @click.stop
+    >
+      <button type="button" class="booking-action-item" @click="openEditFromBeachMenu">
+        Modifica
+      </button>
+      <button type="button" class="booking-action-item" @click="openAddServiceBeachFromMenu">
+        Aggiungi Servizio
+      </button>
+    </div>
+
+    <!-- Modale Aggiungi Servizio (beach) -->
+    <transition name="fade">
+      <div v-if="showAddServiceModal" class="modal-overlay" @click.self="closeAddServiceModal">
+        <div class="modal-card">
+          <div class="modal-header-row">
+            <h3 class="modal-title">Servizi Prenotazione</h3>
+            <button class="close-btn" @click="closeAddServiceModal">&times;</button>
+          </div>
+          <p class="modal-sub" v-if="addServiceTarget">
+            Prenotazione: <strong>{{ addServiceTarget.guest || addServiceTarget.accountholder?.firstname || addServiceTarget.id }}</strong>
+          </p>
+
+          <!-- Lista servizi già aggiunti -->
+          <div v-if="addServiceTarget?.services?.length" class="existing-services">
+            <div class="existing-services-title">Servizi aggiunti</div>
+            <div
+              v-for="(svc, idx) in addServiceTarget.services"
+              :key="idx"
+              class="existing-service-row"
+            >
+              <div class="existing-service-info">
+                <span class="existing-service-name">{{ svc.name }} × {{ svc.quantity }}</span>
+                <span v-if="svc.note" class="existing-service-note">{{ svc.note }}</span>
+                <span v-if="svc.addedAt" class="existing-service-date">{{ formatServiceDate(svc.addedAt) }}</span>
+              </div>
+              <span class="existing-service-price">
+                {{ svc.price != null ? '€' + (Number(svc.price) * (svc.quantity || 1)).toFixed(2) : '—' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Form aggiunta nuovo servizio -->
+          <div class="add-service-form">
+            <div class="add-service-form-title">Aggiungi servizio</div>
+            <div class="form-section" style="margin-bottom:1rem">
+              <label>Servizio *</label>
+              <select v-model="addServiceForm.serviceId">
+                <option value="">-- Seleziona --</option>
+                <option
+                  v-for="s in availableServicesForType('beach')"
+                  :key="s.id"
+                  :value="s.id"
+                >{{ s.name }}{{ s.price != null ? ' — €' + Number(s.price).toFixed(2) : '' }}</option>
+              </select>
+            </div>
+            <div class="form-row-inline">
+              <div class="form-section">
+                <label>Quantità</label>
+                <input v-model.number="addServiceForm.quantity" type="number" min="1" />
+              </div>
+              <div class="form-section">
+                <label>Note</label>
+                <input v-model="addServiceForm.note" type="text" placeholder="Opzionale" />
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer-row">
+            <button class="btn-cancel" @click="closeAddServiceModal">Chiudi</button>
+            <button class="btn-save" :disabled="!addServiceForm.serviceId || addingService" @click="confirmAddServiceBeach">
+              {{ addingService ? 'Aggiunta...' : 'Aggiungi' }}
+            </button>
+          </div>
         </div>
       </div>
     </transition>
@@ -1448,6 +1641,109 @@ watch(selectedBooking, (id) => {
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* Context menu spiaggia */
+.booking-action-menu {
+  position: fixed;
+  z-index: 2200;
+  min-width: 180px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.booking-action-item {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: left;
+  color: #111827;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.booking-action-item:hover { background: #f3f4f6; }
+
+/* Modale servizi beach */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+.modal-card {
+  background: white;
+  width: 90%;
+  max-width: 480px;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+}
+.modal-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+.modal-title { margin: 0; font-size: 1.1rem; font-weight: 700; color: #111827; }
+.modal-sub { font-size: 0.85rem; color: #6b7280; margin: 0 0 0.75rem; }
+.form-row-inline { display: flex; gap: 1rem; margin-bottom: 1rem; }
+.modal-footer-row { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; }
+.btn-save { background: #2563eb; color: white; border: none; padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.875rem; }
+.btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-cancel { background: #f3f4f6; color: #374151; border: none; padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer; font-size: 0.875rem; }
+
+.existing-services {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 1rem;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.existing-services-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+.existing-service-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 5px 0;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.85rem;
+  gap: 8px;
+}
+.existing-service-row:last-child { border-bottom: none; }
+.existing-service-info { display: flex; flex-direction: column; gap: 1px; }
+.existing-service-name { font-weight: 600; color: #1e293b; }
+.existing-service-note { color: #6b7280; font-size: 0.78rem; font-style: italic; }
+.existing-service-date { color: #94a3b8; font-size: 0.72rem; }
+.existing-service-price { font-weight: 700; color: #374151; white-space: nowrap; flex-shrink: 0; }
+.add-service-form { margin-top: 0.25rem; }
+.add-service-form-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
 
 @media (max-width: 768px) {
   .header { flex-direction: column; align-items: stretch; }

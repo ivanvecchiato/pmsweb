@@ -87,6 +87,12 @@ const router = createRouter({
       name: 'GuestAccount',
       component: () => import('../GuestAccount.vue'),
       meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'] }
+    },
+    {
+      path: '/services',
+      name: 'ServicesConfig',
+      component: () => import('../ServicesConfig.vue'),
+      meta: { requiresAuth: true, permission: 'listino' }
     }
   ]
 })

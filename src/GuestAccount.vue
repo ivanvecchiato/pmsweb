@@ -35,6 +35,7 @@
               <th>Periodo</th>
               <th>Hotel netto</th>
               <th>Tassa soggiorno</th>
+              <th>Servizi</th>
               <th>Totale conto</th>
             </tr>
           </thead>
@@ -50,6 +51,7 @@
               <td>{{ formatDate(account.checkin) }} -> {{ formatDate(account.checkout) }}</td>
               <td>{{ formatCurrency(account.hotelNetTotal) }}</td>
               <td>{{ formatCurrency(account.overnightTax.total) }}</td>
+              <td>{{ formatCurrency(account.servicesTotal) }}</td>
               <td class="total-cell">{{ formatCurrency(account.accountTotal) }}</td>
             </tr>
           </tbody>
@@ -104,19 +106,24 @@
           <span>Tassa di soggiorno (IVA esente)</span>
           <span>{{ formatCurrency(selectedAccount.overnightTax.total) }}</span>
         </div>
+        <template v-if="selectedAccount.services && selectedAccount.services.length">
+          <div class="line-row services-header-row">
+            <span><strong>Servizi aggiuntivi</strong></span>
+            <span>{{ formatCurrency(selectedAccount.servicesTotal) }}</span>
+          </div>
+          <div v-for="(svc, i) in selectedAccount.services" :key="i" class="line-row service-line">
+            <span>
+              {{ svc.name }}
+              <span class="svc-qty" v-if="svc.quantity && svc.quantity > 1"> x{{ svc.quantity }}</span>
+              <span class="svc-note" v-if="svc.note"> — {{ svc.note }}</span>
+              <span class="svc-date" v-if="svc.addedAt"> · {{ formatDateTime(svc.addedAt) }}</span>
+            </span>
+            <span>{{ getServiceLineTotal(svc) > 0 ? formatCurrency(getServiceLineTotal(svc)) : '—' }}</span>
+          </div>
+        </template>
         <div class="line-row total-row">
           <span>Totale conto</span>
           <span>{{ formatCurrency(selectedAccount.accountTotal) }}</span>
-        </div>
-      </div>
-
-      <div v-if="selectedAccount.overnightTax.breakdown.length" class="lines-block">
-        <h3>Dettaglio tassa per giorno</h3>
-        <div class="daily-tax-grid">
-          <div v-for="day in selectedAccount.overnightTax.breakdown" :key="day.date" class="line-row">
-            <span>{{ formatDate(day.date) }} · {{ day.persons }} pers.</span>
-            <span>{{ formatCurrency(day.amount) }}</span>
-          </div>
         </div>
       </div>
     </section>
@@ -176,6 +183,13 @@ const accounts = computed(() => {
       kidsAges: booking.kidsAges
     })
 
+    const services = Array.isArray(booking.services) ? booking.services : []
+    const servicesTotal = Number(
+      services
+        .reduce((sum, service) => sum + getServiceLineTotal(service), 0)
+        .toFixed(2)
+    )
+
     return {
       ...booking,
       roomName: roomData.name || `Camera ${booking.roomId}`,
@@ -183,7 +197,9 @@ const accounts = computed(() => {
       hotelNetTotal,
       overnightTax,
       taxes: { overnight: overnightTax },
-      accountTotal: Number((hotelNetTotal + Number(overnightTax.total || 0)).toFixed(2))
+      services,
+      servicesTotal,
+      accountTotal: Number((hotelNetTotal + Number(overnightTax.total || 0) + servicesTotal).toFixed(2))
     }
   })
 })
@@ -218,6 +234,40 @@ const formatCurrency = (value) => {
   const num = Number(value)
   const safe = Number.isFinite(num) ? num : 0
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(safe)
+}
+
+const formatDateTime = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d)) return String(iso)
+  return d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+const parseNumber = (value) => {
+  if (value == null) return NaN
+  if (typeof value === 'number') return Number.isFinite(value) ? value : NaN
+  if (typeof value === 'string') {
+    const normalized = value.trim().replace(',', '.')
+    const parsed = Number(normalized)
+    return Number.isFinite(parsed) ? parsed : NaN
+  }
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : NaN
+}
+
+const getServiceLineTotal = (service) => {
+  if (!service || typeof service !== 'object') return 0
+
+  const qtyRaw = parseNumber(service.quantity)
+  const quantity = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1
+
+  const unitPrice = parseNumber(service.price)
+  if (Number.isFinite(unitPrice)) return unitPrice * quantity
+
+  const amount = parseNumber(service.amount ?? service.total)
+  if (Number.isFinite(amount)) return amount
+
+  return 0
 }
 
 const normalizeKidsAges = (ages, expectedCount) => {
@@ -336,7 +386,8 @@ const normalizeBookings = (apiPayload) => {
       checkout: addDaysISO(checkin, duration),
       duration,
       board: String(res.board || 'bb').toLowerCase(),
-      fixedPrice: res.fixedPrice ?? null
+      fixedPrice: res.fixedPrice ?? null,
+      services: Array.isArray(res.services) ? res.services : []
     }
   })
 }
@@ -522,6 +573,24 @@ onMounted(loadAccounts)
   font-weight: 700;
   color: #0f172a;
 }
+
+.services-header-row {
+  font-weight: 600;
+  color: #047857;
+  background: #f0fdf4;
+  border-radius: 4px;
+  padding: 6px 0;
+}
+
+.service-line {
+  padding-left: 12px;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.svc-qty { color: #6b7280; font-size: 0.8rem; }
+.svc-note { color: #6b7280; font-style: italic; font-size: 0.8rem; }
+.svc-date { color: #9ca3af; font-size: 0.75rem; }
 
 .btn {
   border: 1px solid transparent;

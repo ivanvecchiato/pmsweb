@@ -180,6 +180,20 @@
               <span class="label">Promo Onda</span>
             </router-link>
 
+            <router-link
+              v-if="hasPermission('listino') || hasPermission('listino_beach')"
+              to="/services"
+              :class="['menu-item', { active: route.path === '/services' }]"
+              aria-label="Configurazione Servizi"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Servizi</span>
+            </router-link>
+
           </div>
 
           <!-- Logout button -->
