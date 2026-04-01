@@ -121,9 +121,76 @@
             <span>{{ getServiceLineTotal(svc) > 0 ? formatCurrency(getServiceLineTotal(svc)) : '—' }}</span>
           </div>
         </template>
+        <template v-else>
+          <div class="line-row service-line">
+            <span>Servizi aggiuntivi</span>
+            <span>{{ formatCurrency(0) }}</span>
+          </div>
+        </template>
+
+        <div class="line-row services-header-row">
+          <span><strong>Caparre / Acconti</strong></span>
+          <span>{{ formatCurrency(selectedAccountPaymentTotal) }}</span>
+        </div>
+        <template v-if="selectedAccountPayments.length">
+          <div v-for="(pay, i) in selectedAccountPayments" :key="`pay-${i}`" class="line-row service-line">
+            <span>
+              {{ pay.type || 'acconto' }}
+              <span class="svc-date" v-if="pay.paymentDate"> · {{ formatDate(pay.paymentDate) }}</span>
+              <span class="svc-note" v-if="pay.paymentMode"> — {{ pay.paymentMode }}</span>
+            </span>
+            <span>{{ formatCurrency(pay.amount || 0) }}</span>
+          </div>
+        </template>
+        <template v-else>
+          <div class="line-row service-line">
+            <span>Nessuna caparra/acconto registrato</span>
+            <span>{{ formatCurrency(0) }}</span>
+          </div>
+        </template>
+
+        <div class="line-row">
+          <span>Residuo da incassare</span>
+          <span>{{ formatCurrency(selectedAccountRemaining) }}</span>
+        </div>
         <div class="line-row total-row">
           <span>Totale conto</span>
           <span>{{ formatCurrency(selectedAccount.accountTotal) }}</span>
+        </div>
+      </div>
+
+      <div class="lines-block">
+        <h3>Gestione pagamento checkout</h3>
+        <div class="counter-row">
+          <span>Prossimo progressivo backend</span>
+          <strong>{{ counterInfo?.nextProgressive ?? '-' }}</strong>
+        </div>
+        <div class="counter-row">
+          <span>Progressivo riservato per questo conto</span>
+          <strong>{{ selectedReservedProgressive ?? 'non riservato' }}</strong>
+        </div>
+
+        <div class="payment-entry-form">
+          <input v-model.number="paymentDraft.amount" type="number" min="0" step="0.01" placeholder="Importo" />
+          <input v-model="paymentDraft.paymentDate" type="date" />
+          <input v-model="paymentDraft.paymentMode" type="text" placeholder="Modalita'" />
+          <select v-model="paymentDraft.type">
+            <option value="caparra">Caparra</option>
+            <option value="acconto">Acconto</option>
+          </select>
+          <button type="button" class="btn btn-secondary" @click="addPaymentEntry">Aggiungi</button>
+        </div>
+
+        <div class="payment-actions-row">
+          <button type="button" class="btn btn-secondary" :disabled="isReservingProgressive" @click="reserveProgressive">
+            {{ isReservingProgressive ? 'Riserva in corso...' : 'Riserva progressivo' }}
+          </button>
+          <button type="button" class="btn btn-secondary" @click="printA4Receipt">
+            Stampa ricevuta A4
+          </button>
+          <button type="button" class="btn btn-primary" :disabled="isClosingAccount" @click="closeAccountAndPrintFiscal">
+            {{ isClosingAccount ? 'Chiusura in corso...' : 'Chiudi conto e stampa fiscale' }}
+          </button>
         </div>
       </div>
     </section>
@@ -131,11 +198,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
+import { useRoute } from 'vue-router'
 import { usePricing } from './composables/usePricing'
 
 const { calculateQuotePrice, calculateOvernightTax, loadHotelPricingPolicy } = usePricing()
+const route = useRoute()
 
 const isLoading = ref(false)
 const roomsById = ref({})
@@ -150,6 +219,12 @@ defaultTo.setDate(defaultTo.getDate() + 30)
 
 const fromDate = ref(toISODate(defaultFrom))
 const toDate = ref(toISODate(defaultTo))
+const paymentEntriesByReservation = ref({})
+const paymentDraft = ref({ amount: '', paymentDate: toISODate(new Date()), paymentMode: 'Contanti', type: 'acconto' })
+const counterInfo = ref(null)
+const reservedProgressiveByReservation = ref({})
+const isReservingProgressive = ref(false)
+const isClosingAccount = ref(false)
 
 const accounts = computed(() => {
   return rawBookings.value.map((booking) => {
@@ -208,6 +283,27 @@ const selectedAccount = computed(() => {
   if (!accounts.value.length) return null
   const found = accounts.value.find((account) => account.id === selectedAccountId.value)
   return found || accounts.value[0]
+})
+
+const selectedAccountPayments = computed(() => {
+  if (!selectedAccount.value) return []
+  return paymentEntriesByReservation.value[selectedAccount.value.id] || []
+})
+
+const selectedAccountPaymentTotal = computed(() => {
+  return Number(
+    selectedAccountPayments.value.reduce((sum, entry) => sum + Number(entry?.amount || 0), 0).toFixed(2)
+  )
+})
+
+const selectedAccountRemaining = computed(() => {
+  if (!selectedAccount.value) return 0
+  return Number((Number(selectedAccount.value.accountTotal || 0) - selectedAccountPaymentTotal.value).toFixed(2))
+})
+
+const selectedReservedProgressive = computed(() => {
+  if (!selectedAccount.value) return null
+  return reservedProgressiveByReservation.value[selectedAccount.value.id] || null
 })
 
 function toISODate(date) {
@@ -371,6 +467,7 @@ const normalizeBookings = (apiPayload) => {
     const adults = Math.max(0, Number(res.adults ?? res.pax ?? 1))
     const children = Math.max(0, Number(res.kids ?? res.children ?? 0))
     const overnightTaxInfo = getOvernightTaxSnapshotFromReservation(res)
+    const deposits = normalizeDeposits(res)
 
     return {
       id: res.id,
@@ -387,9 +484,164 @@ const normalizeBookings = (apiPayload) => {
       duration,
       board: String(res.board || 'bb').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
-      services: Array.isArray(res.services) ? res.services : []
+      services: Array.isArray(res.services) ? res.services : [],
+      deposits
     }
   })
+}
+
+const normalizeDeposits = (reservation) => {
+  const raw = reservation?.deposits
+    ?? reservation?.deposit
+    ?? reservation?.caparra
+    ?? []
+
+  return (Array.isArray(raw) ? raw : [])
+    .map((dep) => ({
+      amount: Number(dep?.amount ?? 0),
+      paymentDate: String(dep?.payment_date ?? dep?.paymentDate ?? '').trim(),
+      paymentMode: String(dep?.payment_mode ?? dep?.paymentMode ?? '').trim(),
+      type: String(dep?.type || 'caparra')
+    }))
+    .filter((dep) => Number.isFinite(dep.amount) && dep.amount >= 0)
+}
+
+const ensureReservationPayments = (account) => {
+  if (!account) return
+  if (paymentEntriesByReservation.value[account.id]) return
+  const baseDeposits = Array.isArray(account.deposits) ? account.deposits : []
+  paymentEntriesByReservation.value = {
+    ...paymentEntriesByReservation.value,
+    [account.id]: baseDeposits.map((entry) => ({
+      amount: Number(entry.amount || 0),
+      paymentDate: entry.paymentDate || '',
+      paymentMode: entry.paymentMode || '',
+      type: entry.type || 'caparra'
+    }))
+  }
+}
+
+const addPaymentEntry = () => {
+  if (!selectedAccount.value) return
+
+  const amount = Number(paymentDraft.value.amount)
+  if (!Number.isFinite(amount) || amount < 0) {
+    alert('Inserisci un importo valido')
+    return
+  }
+
+  const current = paymentEntriesByReservation.value[selectedAccount.value.id] || []
+  paymentEntriesByReservation.value = {
+    ...paymentEntriesByReservation.value,
+    [selectedAccount.value.id]: [
+      ...current,
+      {
+        amount: Number(amount.toFixed(2)),
+        paymentDate: paymentDraft.value.paymentDate || '',
+        paymentMode: (paymentDraft.value.paymentMode || '').trim(),
+        type: paymentDraft.value.type || 'acconto'
+      }
+    ]
+  }
+
+  paymentDraft.value = {
+    amount: '',
+    paymentDate: toISODate(new Date()),
+    paymentMode: 'Contanti',
+    type: 'acconto'
+  }
+}
+
+const removePaymentEntry = (index) => {
+  if (!selectedAccount.value) return
+  const current = paymentEntriesByReservation.value[selectedAccount.value.id] || []
+  current.splice(index, 1)
+  paymentEntriesByReservation.value = {
+    ...paymentEntriesByReservation.value,
+    [selectedAccount.value.id]: [...current]
+  }
+}
+
+const loadProgressiveCounter = async () => {
+  try {
+    const response = await axios.get('http://localhost:8081/api/pms/hotel/account/counter')
+    counterInfo.value = response.data || null
+  } catch (error) {
+    console.error('Errore caricamento contatore progressivo:', error)
+    alert('Errore caricamento contatore progressivo')
+  }
+}
+
+const reserveProgressive = async () => {
+  if (!selectedAccount.value) return
+  isReservingProgressive.value = true
+  try {
+    const response = await axios.post('http://localhost:8081/api/pms/hotel/account/reserve_progressive', {
+      reservationId: selectedAccount.value.id
+    })
+    const progressive = Number(response.data?.progressive)
+    if (Number.isFinite(progressive)) {
+      reservedProgressiveByReservation.value = {
+        ...reservedProgressiveByReservation.value,
+        [selectedAccount.value.id]: progressive
+      }
+    }
+    await loadProgressiveCounter()
+  } catch (error) {
+    console.error('Errore riserva progressivo:', error)
+    alert('Errore riserva progressivo')
+  } finally {
+    isReservingProgressive.value = false
+  }
+}
+
+const printA4Receipt = () => {
+  window.print()
+}
+
+const closeAccountAndPrintFiscal = async () => {
+  if (!selectedAccount.value) return
+
+  const progressive = selectedReservedProgressive.value
+  if (!Number.isFinite(Number(progressive)) || Number(progressive) <= 0) {
+    alert('Riserva prima un numero progressivo')
+    return
+  }
+
+  isClosingAccount.value = true
+  try {
+    const payload = {
+      reservationId: selectedAccount.value.id,
+      progressive: Number(progressive),
+      account: selectedAccount.value,
+      payments: selectedAccountPayments.value,
+      operator: 0
+    }
+
+    const response = await axios.post('http://localhost:8081/api/pms/hotel/account/close', payload)
+    if (!response.data?.success) {
+      alert(response.data?.error || 'Errore chiusura conto')
+      return
+    }
+
+    alert(`Conto chiuso con progressivo ${progressive}. Comando stampa fiscale inviato al backend.`)
+    await loadAccounts()
+    await loadProgressiveCounter()
+  } catch (error) {
+    console.error('Errore chiusura conto:', error)
+    alert('Errore durante la chiusura conto')
+  } finally {
+    isClosingAccount.value = false
+  }
+}
+
+const applyRouteReservationSelection = () => {
+  const reservationId = String(route.query.reservationId || '').trim()
+  if (!reservationId) return
+
+  const found = rawBookings.value.find((booking) => String(booking.id) === reservationId)
+  if (!found) return
+  selectedAccountId.value = found.id
 }
 
 const loadAccounts = async () => {
@@ -407,6 +659,7 @@ const loadAccounts = async () => {
     } else if (!rawBookings.value.some((booking) => booking.id === selectedAccountId.value)) {
       selectedAccountId.value = rawBookings.value[0].id
     }
+    applyRouteReservationSelection()
   } catch (error) {
     console.error('Errore caricamento conti hotel:', error)
     alert('Errore caricamento conti hotel')
@@ -415,7 +668,21 @@ const loadAccounts = async () => {
   }
 }
 
-onMounted(loadAccounts)
+watch(selectedAccount, (account) => {
+  ensureReservationPayments(account)
+})
+
+watch(
+  () => route.query.reservationId,
+  () => {
+    applyRouteReservationSelection()
+  }
+)
+
+onMounted(async () => {
+  await loadAccounts()
+  await loadProgressiveCounter()
+})
 </script>
 
 <style scoped>
@@ -605,6 +872,41 @@ onMounted(loadAccounts)
   color: #fff;
 }
 
+.btn-secondary {
+  background: #0f172a;
+  color: #fff;
+}
+
+.counter-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  color: #334155;
+}
+
+.payment-entry-form {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.payment-entry-form input,
+.payment-entry-form select {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 0;
+}
+
+.payment-actions-row {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
@@ -613,6 +915,32 @@ onMounted(loadAccounts)
 @media (max-width: 900px) {
   .header {
     align-items: flex-start;
+  }
+
+  .payment-entry-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .header,
+  .filters,
+  .payment-entry-form,
+  .payment-actions-row,
+  .btn {
+    display: none !important;
+  }
+
+  .guest-account-page {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .card {
+    border: 0;
+    box-shadow: none;
+    padding: 0;
   }
 }
 </style>

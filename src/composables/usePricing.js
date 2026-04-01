@@ -114,9 +114,14 @@ const loadHotelPricingPolicy = async () => {
 
 const saveHotelPricingPolicy = async (pricing) => {
   const normalized = normalizePolicy(pricing)
+  const currentSectionResponse = await axios.get('http://localhost:8081/api/pms/getconfigs?section=hotel')
+  const currentSection = currentSectionResponse?.data && typeof currentSectionResponse.data === 'object'
+    ? currentSectionResponse.data
+    : {}
   const payload = {
     section: 'hotel',
     data: {
+      ...currentSection,
       pricing: normalized
     }
   }

@@ -153,6 +153,33 @@
       </p>
     </section>
 
+    <section class="card">
+      <h2>Dati Struttura per Stampa A4</h2>
+      <p class="hint">Questi dati vengono usati nell'intestazione ufficiale del conto stampato.</p>
+      <div class="params-grid">
+        <label>
+          Nome struttura
+          <input v-model="structureForm.name" type="text" placeholder="es. Hotel Riviera" />
+        </label>
+        <label>
+          Indirizzo
+          <input v-model="structureForm.address" type="text" placeholder="es. Via Roma 1" />
+        </label>
+        <label>
+          Citta'
+          <input v-model="structureForm.city" type="text" placeholder="es. Jesolo" />
+        </label>
+        <label>
+          P.IVA
+          <input v-model="structureForm.vatNumber" type="text" placeholder="es. IT01234567890" />
+        </label>
+        <label class="full-width">
+          URL logo file
+          <input v-model="structureForm.logoUrl" type="text" placeholder="es. https://dominio/logo.png" />
+        </label>
+      </div>
+    </section>
+
     <section class="card beach-note">
       <h2>Nota modalità Beach</h2>
       <p>
@@ -170,9 +197,10 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import axios from 'axios'
 import { usePricing } from './composables/usePricing'
 
-const { loadHotelPricingPolicy, saveHotelPricingPolicy } = usePricing()
+const { loadHotelPricingPolicy } = usePricing()
 
 const loading = ref(false)
 const form = ref({
@@ -191,6 +219,16 @@ const form = ref({
   },
   ageBands: []
 })
+
+const structureForm = ref({
+  name: '',
+  address: '',
+  city: '',
+  vatNumber: '',
+  logoUrl: ''
+})
+
+const loadedHotelSection = ref({})
 
 const normalizeForm = (value) => {
   let fallbackKidDiscountPct = Number(value?.fallbackKidDiscountPct)
@@ -250,11 +288,26 @@ const normalizeForm = (value) => {
   }
 }
 
+const normalizeStructureForm = (value) => {
+  const source = value && typeof value === 'object' ? value : {}
+  return {
+    name: String(source.name || source.businessName || '').trim(),
+    address: String(source.address || source.street || '').trim(),
+    city: String(source.city || '').trim(),
+    vatNumber: String(source.vatNumber || source.vat || source.piva || '').trim(),
+    logoUrl: String(source.logoUrl || source.logo || '').trim()
+  }
+}
+
 const loadForm = async () => {
   loading.value = true
   try {
-    const policy = await loadHotelPricingPolicy()
-    form.value = normalizeForm(policy)
+    await loadHotelPricingPolicy()
+    const res = await axios.get('http://localhost:8081/api/pms/getconfigs?section=hotel')
+    const hotelSection = res?.data && typeof res.data === 'object' ? res.data : {}
+    loadedHotelSection.value = hotelSection
+    form.value = normalizeForm(hotelSection?.pricing || hotelSection)
+    structureForm.value = normalizeStructureForm(hotelSection?.structure)
   } catch (err) {
     console.error('Errore caricamento policy hotel:', err)
     alert('Errore caricamento policy prezzi')
@@ -281,12 +334,25 @@ const removeBand = (index) => {
 const save = async () => {
   loading.value = true
   try {
-    const payload = normalizeForm(form.value)
-    await saveHotelPricingPolicy(payload)
-    alert('Policy prezzi salvata correttamente')
+    const normalizedPricing = normalizeForm(form.value)
+    const normalizedStructure = normalizeStructureForm(structureForm.value)
+    const mergedSection = {
+      ...(loadedHotelSection.value || {}),
+      pricing: normalizedPricing,
+      structure: normalizedStructure
+    }
+
+    await axios.post('http://localhost:8081/api/pms/setconfigs', {
+      section: 'hotel',
+      data: mergedSection
+    })
+
+    await loadHotelPricingPolicy()
+    loadedHotelSection.value = mergedSection
+    alert('Policy prezzi e dati struttura salvati correttamente')
   } catch (err) {
     console.error('Errore salvataggio policy hotel:', err)
-    alert('Errore salvataggio policy prezzi')
+    alert('Errore salvataggio configurazione hotel')
   } finally {
     loading.value = false
   }
@@ -400,6 +466,16 @@ onMounted(loadForm)
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 8px;
+}
+
+.params-grid select {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.full-width {
+  grid-column: 1 / -1;
 }
 
 .actions-inline {

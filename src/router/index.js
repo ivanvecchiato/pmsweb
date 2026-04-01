@@ -93,6 +93,12 @@ const router = createRouter({
       name: 'ServicesConfig',
       component: () => import('../ServicesConfig.vue'),
       meta: { requiresAuth: true, permission: 'listino' }
+    },
+    {
+      path: '/payments/checkout/:reservationId',
+      name: 'CheckoutPayment',
+      component: () => import('../CheckoutPaymentStub.vue'),
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'] }
     }
   ]
 })
