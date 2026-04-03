@@ -113,7 +113,6 @@
                 
                 <div class="booking-content">
                   <div class="booking-guest">{{ booking.guest }}</div>
-                  <div class="booking-status">{{ getBookingStatusLabel(booking) }}</div>
                   <div
                     v-if="getBookingStatus(booking) === STATUS_CHECKOUT_PENDING_PAYMENT"
                     class="booking-status-badge booking-status-badge-pending"
@@ -2158,14 +2157,6 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.booking-status {
-  font-size: 0.68rem;
-  opacity: 0.9;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .booking-status-badge {
