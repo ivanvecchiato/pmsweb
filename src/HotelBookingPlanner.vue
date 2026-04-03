@@ -3,6 +3,28 @@
     <div class="header">
       <h1 class="title">Planning Prenotazioni Hotel</h1>
       <div class="header-controls">
+        <button
+          @click="syncHotelH5s"
+          class="btn-nav btn-sync"
+          :disabled="isSyncingH5s"
+          :title="isSyncingH5s ? 'Sincronizzazione H5S in corso' : 'Sincronizza da H5S'"
+          aria-label="Sincronizza prenotazioni da H5S"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            :class="{ 'is-spinning': isSyncingH5s }"
+          >
+            <path d="M23 4v6h-6"></path>
+            <path d="M1 20v-6h6"></path>
+            <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+            <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+          </svg>
+        </button>
         <div class="date-navigation">
           <button @click="previousPeriod" class="btn-nav" title="Periodo precedente">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -440,6 +462,7 @@ const router = useRouter();
 
 const cellWidth = 60;
 const cellHeight = 40;
+const isSyncingH5s = ref(false);
 
 const mouseLineX = ref(0);
 const hoverDate = ref('');
@@ -1149,6 +1172,24 @@ const postToFirstAvailableEndpoint = async (endpoints, payload) => {
   }
 
   throw lastError;
+};
+
+const syncHotelH5s = async () => {
+  if (isSyncingH5s.value) return;
+
+  isSyncingH5s.value = true;
+  const syncEndpoint = 'http://localhost:8081/api/pms/hotel/sync_h5s';
+
+  try {
+    await axios.get(syncEndpoint, { timeout: 60000 });
+
+    getReservations();
+  } catch (error) {
+    console.error('Errore sincronizzazione H5S:', error);
+    alert('Errore durante la sincronizzazione H5S');
+  } finally {
+    isSyncingH5s.value = false;
+  }
 };
 
 const normalizeBoardForBackend = (boardValue) => {
@@ -1916,6 +1957,28 @@ onUnmounted(() => {
   background: #3b82f6;
   border-color: #3b82f6;
   color: white;
+}
+
+.btn-sync {
+  background: #f3f4f6;
+}
+
+.btn-sync:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.is-spinning {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .title {
