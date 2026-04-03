@@ -1796,7 +1796,7 @@ const convertReservations = (apiReservations) => {
       board: (res.board || 'BB').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
       notes: getReservationNotes(res),
-      guest: res.accountholder.firstname + ' ' + res.accountholder.lastname,
+      guest: (res.accountholder?.firstname ?? '') + ' ' + (res.accountholder?.lastname ?? ''),
       color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
     };
   }).filter(booking => getBookingStatus(booking) !== STATUS_CANCELLED);
