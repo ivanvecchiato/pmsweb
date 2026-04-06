@@ -310,12 +310,50 @@
 
         <div class="modal-footer">
           <button type="button" @click="showModal = false" class="btn btn-cancel">{{ isModalReadOnly ? 'Chiudi' : 'Annulla' }}</button>
-          <button v-if="editingBooking && !isModalReadOnly" type="button" class="btn btn-danger" @click.prevent="deleteBooking(); showModal=false">
-            Elimina
+          <button v-if="editingBooking && !isModalReadOnly" type="button" class="btn btn-danger" @click.prevent="openCancelDialog">
+            Cancella
           </button>
           <button v-if="!isModalReadOnly" type="submit" class="btn btn-save">{{ editingBooking ? 'Salva' : 'Conferma Prenotazione' }}</button>
         </div>
       </form>
+    </div>
+  </div>
+</transition>
+
+<transition name="fade">
+  <div v-if="showCancelDialog" class="modal-overlay" @click.self="showCancelDialog = false">
+    <div class="modal-content modal-content--narrow">
+      <div class="modal-header">
+        <h3>Cancella Prenotazione</h3>
+        <button @click="showCancelDialog = false" class="close-btn">&times;</button>
+      </div>
+      <div class="cancel-dialog-body">
+        <p class="cancel-dialog-guest" v-if="editingBooking">
+          <strong>{{ editingBooking.guest || (editingBooking.guestName + ' ' + editingBooking.guestSurname) }}</strong>
+        </p>
+        <div class="form-section">
+          <label>Motivazione cancellazione <span class="required-star">*</span></label>
+          <textarea
+            v-model="cancelReason"
+            rows="3"
+            maxlength="500"
+            placeholder="Indica il motivo della cancellazione (obbligatorio)"
+            class="cancel-reason-textarea"
+            autofocus
+          />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-cancel" @click="showCancelDialog = false">Torna</button>
+        <button
+          type="button"
+          class="btn btn-danger"
+          :disabled="!cancelReason.trim() || isCancelling"
+          @click="confirmCancel"
+        >
+          {{ isCancelling ? 'Attendere...' : 'Conferma Cancellazione' }}
+        </button>
+      </div>
     </div>
   </div>
 </transition>
@@ -541,6 +579,10 @@ const isModalReadOnly = ref(false);
 const showBookingActionMenu = ref(false);
 const actionMenuBooking = ref(null);
 const actionMenuPosition = ref({ x: 0, y: 0 });
+
+const showCancelDialog = ref(false);
+const cancelReason = ref('');
+const isCancelling = ref(false);
 
 const STATUS_BOOKED_NO_DEPOSIT = 100;
 const STATUS_BOOKED_CONFIRMED = 200;
@@ -1729,6 +1771,31 @@ const deleteBooking = () => {
   } else {
     bookings.value = bookings.value.filter(b => b.id !== selectedBooking.value);
     selectedBooking.value = null;
+  }
+};
+
+const openCancelDialog = () => {
+  cancelReason.value = '';
+  showCancelDialog.value = true;
+};
+
+const confirmCancel = async () => {
+  if (!cancelReason.value.trim() || isCancelling.value) return;
+  isCancelling.value = true;
+  try {
+    await axios.post('http://localhost:8081/api/pms/hotel/cancel_reservation', {
+      id: editingBooking.value.id,
+      cancellation_reason: cancelReason.value.trim()
+    });
+    bookings.value = bookings.value.filter(b => b.id !== editingBooking.value.id);
+    selectedBooking.value = null;
+    editingBooking.value = null;
+    showCancelDialog.value = false;
+    showModal.value = false;
+  } catch (err) {
+    console.error('Errore cancellazione:', err);
+  } finally {
+    isCancelling.value = false;
   }
 };
 

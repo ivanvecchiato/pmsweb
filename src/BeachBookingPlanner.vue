@@ -23,6 +23,9 @@ const cellHeight = 36;
 const selectedBooking = ref(null);
 const showModal = ref(false);
 const editingBooking = ref(null); // store booking being edited when modal open
+const showCancelDialog = ref(false);
+const cancelReason = ref('');
+const isCancelling = ref(false);
 const showMap = ref(true);
 const now = new Date();
 const selectedDate = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
@@ -628,6 +631,33 @@ const deleteBooking = async () => {
   }
 };
 
+const openCancelDialog = () => {
+  cancelReason.value = '';
+  showCancelDialog.value = true;
+};
+
+const confirmCancel = async () => {
+  if (!cancelReason.value.trim() || isCancelling.value) return;
+  const targetId = selectedBookingObj.value?.id ?? editingBooking.value?.id;
+  if (!targetId) return;
+  isCancelling.value = true;
+  try {
+    await axios.post('http://localhost:8081/api/pms/beach/cancel_reservation', {
+      id: targetId,
+      cancellation_reason: cancelReason.value.trim()
+    });
+    bookings.value = bookings.value.filter(b => b.id !== targetId);
+    selectedBooking.value = null;
+    editingBooking.value = null;
+    showCancelDialog.value = false;
+    showModal.value = false;
+  } catch (err) {
+    console.error('Errore cancellazione:', err);
+  } finally {
+    isCancelling.value = false;
+  }
+};
+
 const fetchPlaces = async () => {
   const res = await axios.get('http://localhost:8081/api/pms/beach/getplan?mode=flat');
   places.value = res.data.map(normalizeResource);
@@ -1026,7 +1056,7 @@ watch(selectedBooking, (id) => {
           <input type="text" v-model="editGuest.last" class="input-field" />
         </div>
         <button class="btn btn-secondary" @click="saveGuest">Salva Cliente</button>
-        <button class="btn btn-danger" @click="deleteBooking">Elimina</button>
+        <button class="btn btn-danger" @click="openCancelDialog">Cancella</button>
       </div>
     </div>
 
@@ -1105,12 +1135,50 @@ watch(selectedBooking, (id) => {
 
             <div class="modal-footer">
               <button type="button" @click="showModal = false" class="btn btn-cancel">Annulla</button>
-              <button v-if="editingBooking" type="button" class="btn btn-danger" @click.prevent="deleteBooking(); showModal=false">
-                Elimina
+              <button v-if="editingBooking" type="button" class="btn btn-danger" @click.prevent="openCancelDialog">
+                Cancella
               </button>
               <button type="submit" class="btn btn-save">{{ editingBooking ? 'Salva' : 'Conferma Prenotazione' }}</button>
             </div>
           </form>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="fade">
+      <div v-if="showCancelDialog" class="modal-overlay" @click.self="showCancelDialog = false">
+        <div class="modal-content modal-content--narrow">
+          <div class="modal-header">
+            <h3>Cancella Prenotazione</h3>
+            <button @click="showCancelDialog = false" class="close-btn">&times;</button>
+          </div>
+          <div class="cancel-dialog-body">
+            <p class="cancel-dialog-guest" v-if="selectedBookingObj || editingBooking">
+              <strong>{{ (selectedBookingObj || editingBooking)?.guest || ((selectedBookingObj || editingBooking)?.guestFirst + ' ' + (selectedBookingObj || editingBooking)?.guestLast) }}</strong>
+            </p>
+            <div class="form-section">
+              <label>Motivazione cancellazione <span class="required-star">*</span></label>
+              <textarea
+                v-model="cancelReason"
+                rows="3"
+                maxlength="500"
+                placeholder="Indica il motivo della cancellazione (obbligatorio)"
+                class="cancel-reason-textarea"
+                autofocus
+              />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-cancel" @click="showCancelDialog = false">Torna</button>
+            <button
+              type="button"
+              class="btn btn-danger"
+              :disabled="!cancelReason.trim() || isCancelling"
+              @click="confirmCancel"
+            >
+              {{ isCancelling ? 'Attendere...' : 'Conferma Cancellazione' }}
+            </button>
+          </div>
         </div>
       </div>
     </transition>
