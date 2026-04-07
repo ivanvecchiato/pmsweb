@@ -58,6 +58,23 @@
         <div class="counter-row"><span>Prossimo progressivo backend</span><strong>{{ counterInfo?.nextProgressive ?? '-' }}</strong></div>
         <div class="counter-row"><span>Progressivo riservato</span><strong>{{ reservedProgressive ?? 'non riservato' }}</strong></div>
 
+        <!-- Bar Consumptions Section -->
+        <div class="bar-section">
+          <h4>Consumazioni Bar</h4>
+          <div v-if="isLoadingBar" class="bar-loading">Caricamento consumazioni bar...</div>
+          <div v-else-if="barConsumptions.length === 0" class="bar-empty">Nessuna consumazione bar</div>
+          <div v-else class="bars-list">
+            <div v-for="(item, i) in barConsumptions" :key="`bar-${i}`" class="bar-item">
+              <span class="bar-name">{{ item.name }}<span v-if="item.quantity > 1"> x{{ item.quantity }}</span></span>
+              <span class="bar-price">{{ formatCurrency(getBarLineTotal(item)) }}</span>
+            </div>
+          </div>
+          <div v-if="barConsumptions.length > 0" class="bar-total">
+            <strong>Totale Bar:</strong>
+            <strong>{{ formatCurrency(barConsumptionsTotal) }}</strong>
+          </div>
+        </div>
+
         <div class="payment-entry-form">
           <input v-model.number="paymentDraft.amount" type="number" min="0" step="0.01" placeholder="Importo" />
           <input v-model="paymentDraft.paymentDate" type="date" />
@@ -111,8 +128,14 @@ const structureInfo = ref({
 const paymentDraft = ref({ amount: '', paymentDate: toISODate(new Date()), paymentMode: 'Contanti', type: 'acconto' })
 const payments = ref([])
 
+const isLoadingBar = ref(false)
+const barConsumptions = ref([])
+
 const paymentTotal = computed(() => Number(payments.value.reduce((sum, p) => sum + Number(p?.amount || 0), 0).toFixed(2)))
 const remaining = computed(() => Number((Number(account.value?.accountTotal || 0) - paymentTotal.value).toFixed(2)))
+const barConsumptionsTotal = computed(() => 
+  Number(barConsumptions.value.reduce((sum, item) => sum + getBarLineTotal(item), 0).toFixed(2))
+)
 
 function toISODate(date) {
   const y = date.getFullYear()
@@ -145,6 +168,34 @@ const formatCurrency = (value) => {
   const num = Number(value)
   const safe = Number.isFinite(num) ? num : 0
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(safe)
+}
+
+const getBarLineTotal = (item) => {
+  const qty = Number(item?.quantity || 1)
+  const price = Number(item?.price || item?.amount || 0)
+  return Number.isFinite(price) ? Number((price * qty).toFixed(2)) : 0
+}
+
+const loadBarConsumptions = async () => {
+  if (!account.value || !account.value.id) return
+  isLoadingBar.value = true
+  try {
+    const params = new URLSearchParams()
+    params.set('reservationId', account.value.id)
+    if (account.value.roomId != null) params.set('roomId', account.value.roomId)
+    if (account.value.roomName) params.set('room', account.value.roomName)
+    if (account.value.checkin) params.set('checkin', account.value.checkin)
+    if (account.value.checkout) params.set('checkout', account.value.checkout)
+    const response = await axios.get(
+      `http://localhost:8081/api/pms/hotel/get_bar_consumptions?${params.toString()}`
+    )
+    barConsumptions.value = response.data?.consumptions || []
+  } catch (error) {
+    console.error('Errore caricamento consumazioni bar:', error)
+    barConsumptions.value = []
+  } finally {
+    isLoadingBar.value = false
+  }
 }
 
 const normalizeKidsAges = (ages, expectedCount) => {
@@ -291,8 +342,7 @@ const loadReservationAccount = async () => {
     const servicesTotal = Number(services.reduce((sum, svc) => sum + getServiceLineTotal(svc), 0).toFixed(2))
 
     account.value = {
-      id: res.id,
-      roomName: res.room || `Camera ${res.roomId}`,
+      id: res.id,      roomId: res.roomId ?? null,      roomName: res.room || `Camera ${res.roomId}`,
       checkin,
       checkout: addDaysISO(checkin, duration),
       duration,
@@ -479,6 +529,7 @@ const closeAccount = async () => {
       progressive: Number(reservedProgressive.value),
       account: account.value,
       payments: payments.value,
+      barConsumptions: barConsumptions.value,
       operator: 0
     })
     if (!response.data?.success) {
@@ -502,6 +553,9 @@ const goToAccounts = () => router.push('/accounts')
 
 onMounted(async () => {
   await Promise.all([loadReservationAccount(), loadCounter(), loadStructureInfo()])
+  if (account.value?.id) {
+    await loadBarConsumptions()
+  }
 })
 </script>
 
@@ -660,6 +714,57 @@ onMounted(async () => {
 .btn-secondary {
   background: #0f172a;
   color: #fff;
+}
+
+.bar-section {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+  border-radius: 6px;
+}
+
+.bar-section h4 {
+  margin: 0 0 10px 0;
+  color: #92400e;
+  font-size: 0.95rem;
+}
+
+.bar-loading,
+.bar-empty {
+  color: #b45309;
+  font-size: 0.9rem;
+  padding: 8px 0;
+}
+
+.bars-list {
+  margin-bottom: 10px;
+}
+
+.bar-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.9rem;
+  color: #92400e;
+  border-bottom: 1px solid #fef3c7;
+}
+
+.bar-name {
+  font-weight: 500;
+}
+
+.bar-price {
+  font-weight: 600;
+}
+
+.bar-total {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 2px solid #f59e0b;
+  color: #d97706;
+  font-weight: 700;
 }
 
 @media (max-width: 900px) {

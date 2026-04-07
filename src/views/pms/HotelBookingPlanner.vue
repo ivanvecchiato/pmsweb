@@ -371,6 +371,9 @@
     <button v-if="isPendingPaymentContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
       Paga
     </button>
+    <button type="button" class="booking-action-item booking-action-item--danger" @click="undoCheckoutFromMenu">
+      Annulla checkout
+    </button>
   </template>
   <template v-else>
     <button type="button" class="booking-action-item" @click="openEditFromMenu">
@@ -381,6 +384,9 @@
     </button>
     <button type="button" class="booking-action-item" @click="openAddServiceFromMenu">
       Aggiungi Servizio
+    </button>
+    <button v-if="isCheckedInContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
+      Paga conto
     </button>
   </template>
 </div>
@@ -1005,6 +1011,8 @@ const isCheckoutContextMenu = computed(() => isCheckoutLockedStatus(actionMenuBo
 
 const isPendingPaymentContextMenu = computed(() => getBookingStatus(actionMenuBooking.value) === STATUS_CHECKOUT_PENDING_PAYMENT);
 
+const isCheckedInContextMenu = computed(() => getBookingStatus(actionMenuBooking.value) === STATUS_CHECKED_IN);
+
 const modalDialogTitle = computed(() => {
   if (isModalReadOnly.value && editingBooking.value) {
     return 'Dettaglio Prenotazione';
@@ -1190,6 +1198,22 @@ const openPendingPaymentFromMenu = () => {
       reservationId: String(reservationId)
     }
   });
+};
+
+const undoCheckoutFromMenu = async () => {
+  if (!actionMenuBooking.value) return;
+  const booking = actionMenuBooking.value;
+  if (!confirm(`Annullare il checkout della prenotazione #${booking.id}?`)) return;
+  closeBookingActions();
+  try {
+    await axios.get('http://localhost:8081/api/pms/checkin', {
+      params: { reservation: booking.id, operator: 0 }
+    });
+    getReservations();
+  } catch (error) {
+    console.error('Errore annullamento checkout:', error);
+    alert('Errore durante l\'annullamento del checkout');
+  }
 };
 
 const shouldTryNextEndpoint = (error) => {
@@ -2404,6 +2428,14 @@ onUnmounted(() => {
 
 .booking-action-item:hover {
   background: #f3f4f6;
+}
+
+.booking-action-item--danger {
+  color: #dc2626;
+}
+
+.booking-action-item--danger:hover {
+  background: #fef2f2;
 }
 
 /* Modale servizi */
