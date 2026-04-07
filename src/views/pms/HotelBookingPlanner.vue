@@ -460,8 +460,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
 import { watch } from 'vue';
 import { useRouter } from 'vue-router'
-import QuoteBuilder from './QuoteBuilder.vue'
-import { usePricing } from './composables/usePricing'
+import QuoteBuilder from '../quotes/QuoteBuilder.vue'
+import { usePricing } from '@/composables/usePricing'
 
 const { calculateQuotePrice, calculateOvernightTax, loadHotelPricingPolicy } = usePricing();
 

@@ -87,7 +87,7 @@
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { useRoute, useRouter } from 'vue-router'
-import { usePricing } from './composables/usePricing'
+import { usePricing } from '@/composables/usePricing'
 
 const route = useRoute()
 const router = useRouter()

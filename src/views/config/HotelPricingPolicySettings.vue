@@ -198,7 +198,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { usePricing } from './composables/usePricing'
+import { usePricing } from '@/composables/usePricing'
 
 const { loadHotelPricingPolicy } = usePricing()
 

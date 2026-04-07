@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import axios from 'axios';
 import BeachMap from './BeachMap.vue';
 import { useRouter } from 'vue-router'
-import QuoteBuilder from './QuoteBuilder.vue'
+import QuoteBuilder from '../quotes/QuoteBuilder.vue'
 
 const places = ref([]);
 const bookings = ref([]);

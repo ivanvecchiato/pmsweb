@@ -201,7 +201,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useRoute } from 'vue-router'
-import { usePricing } from './composables/usePricing'
+import { usePricing } from '@/composables/usePricing'
 
 const { calculateQuotePrice, calculateOvernightTax, loadHotelPricingPolicy } = usePricing()
 const route = useRoute()
