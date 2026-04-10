@@ -55,6 +55,28 @@
       </table>
     </div>
 
+    <div v-if="topProducts.length" class="table-stats-section">
+      <h2 class="section-title">Prodotti più venduti</h2>
+      <div class="table-section">
+        <table class="sales-table">
+          <thead>
+            <tr>
+              <th style="width: 50%;">Prodotto</th>
+              <th style="width: 25%; text-align: right;">Quantità</th>
+              <th style="width: 25%; text-align: right;">Fatturato</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(product, idx) in topProducts" :key="product.id || idx" :class="{ 'alt-row': idx % 2 === 1 }">
+              <td>{{ product.name }}</td>
+              <td style="text-align: right;">{{ product.quantity }}</td>
+              <td class="amount" style="text-align: right;">{{ formatCurrency(product.sales) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Ordinato per area -->
     <div v-if="areaData.length" class="table-stats-section">
       <h2 class="section-title">Ordinato per area</h2>
@@ -100,6 +122,7 @@ const salesData = ref([])
 const aggregatedSalesData = ref([])
 const tableData = ref([])
 const areaData = ref([])
+const topProducts = ref([])
 let chart = null
 
 const totalSales = computed(() =>
@@ -137,9 +160,21 @@ const fetchSales = async () => {
         params: { from: fromDate.value, to: toDate.value }
       })
     ])
+
     salesData.value = salesRes.data.sales || []
     tableData.value = tableRes.data.tables || []
     areaData.value = areaRes.data.areas || []
+
+    try {
+      const topProductsRes = await axios.get('http://localhost:8088/api/mbar/product_stats', {
+        params: { query: '', from: fromDate.value, to: toDate.value }
+      })
+      topProducts.value = topProductsRes.data.top20 || []
+    } catch (topProductsError) {
+      console.error('Errore nel caricamento prodotti più venduti:', topProductsError)
+      topProducts.value = []
+    }
+
     aggregateAndRenderChart()
   } catch (error) {
     console.error('Errore nel caricamento delle vendite:', error)
