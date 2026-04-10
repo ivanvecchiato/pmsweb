@@ -25,6 +25,13 @@
       <button @click="fetchSales" class="btn-fetch">Carica</button>
     </div>
 
+    <div v-if="salesData.length > 0" class="total-section">
+      <div class="total-card">
+        <span class="total-label">Totale Ordinato nel periodo</span>
+        <strong class="total-value">{{ formatCurrency(totalSales) }}</strong>
+      </div>
+    </div>
+
     <!-- Grafico -->
     <div class="chart-section" v-if="aggregatedSalesData.length > 0">
       <canvas id="salesChart"></canvas>
@@ -82,7 +89,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, nextTick } from 'vue'
+import { ref, watch, onMounted, nextTick, computed } from 'vue'
 import axios from 'axios'
 import Chart from 'chart.js/auto'
 
@@ -94,6 +101,10 @@ const aggregatedSalesData = ref([])
 const tableData = ref([])
 const areaData = ref([])
 let chart = null
+
+const totalSales = computed(() =>
+  salesData.value.reduce((sum, item) => sum + (Number(item.sales) || 0), 0)
+)
 
 const toISODate = (date) => {
   const y = date.getFullYear()
@@ -355,6 +366,36 @@ const formatCurrency = (value) => {
 
 .btn-fetch:active {
   transform: translateY(0);
+}
+
+.total-section {
+  margin-bottom: 20px;
+}
+
+.total-card {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  background: white;
+  border: 1px solid #dbeafe;
+  border-left: 5px solid #2563eb;
+  border-radius: 8px;
+  padding: 14px 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.total-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.total-value {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #1d4ed8;
 }
 
 .chart-section {
