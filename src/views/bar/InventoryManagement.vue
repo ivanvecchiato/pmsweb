@@ -10,7 +10,7 @@ const searchQuery = ref('');
 // --- STATO MODALE SINGOLO ---
 const isModalOpen = ref(false);
 const selectedProduct = ref(null);
-const movementData = ref({ type: 'purchase', quantity: 1, note: '' });
+const movementData = ref({ type: 'purchase', quantity: 1, note: '', purchase_price: 0 });
 
 // --- STATO CARICO MASSIVO (BOLLA) ---
 const isBulkModalOpen = ref(false);
@@ -23,10 +23,10 @@ const bulkDelivery = ref({
 });
 
 const movementTypes = [
-  { id: 'purchase', label: 'Acquisto', icon: '📥' },
-  { id: 'manual_out', label: 'Scarico', icon: '📤' },
-  { id: 'self_consumption', label: 'Autoconsumo', icon: '🍴' },
-  { id: 'correction', label: 'Rettifica', icon: '⚙️' }
+  { id: 'purchase', label: 'Acquisto' },
+  { id: 'manual_out', label: 'Scarico' },
+  { id: 'self_consumption', label: 'Autoconsumo' },
+  { id: 'correction', label: 'Rettifica' }
 ];
 
 // --- STATO STATISTICHE ---
@@ -61,6 +61,10 @@ const fetchInventory = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+const refreshInventoryData = async () => {
+  await Promise.all([fetchInventory(), fetchStats(), fetchMovements()]);
 };
 
 const movements = ref([]); // Popolato da un'apposita chiamata API
@@ -108,6 +112,19 @@ const groupedMovements = computed(() => {
   return groups;
 });
 
+const latestPurchasePriceByProduct = computed(() => {
+  const latestByProduct = new Map();
+
+  movements.value.forEach((movement) => {
+    if (movement.type !== 'purchase') return;
+    if (latestByProduct.has(movement.productId)) return;
+
+    latestByProduct.set(movement.productId, Number(movement.purchase_price || 0));
+  });
+
+  return latestByProduct;
+});
+
 // --- LOGICA CARICO MASSIVO ---
 const addBulkRow = () => {
   bulkDelivery.value.items.push({ productId: null, productName: '', quantity: 1, purchase_price: 0 });
@@ -148,7 +165,7 @@ const confirmBulkDelivery = async () => {
     await Promise.all(promises);
     isBulkModalOpen.value = false;
     bulkDelivery.value = { supplierName: '', docNumber: '', items: [{ productId: null, productName: '', quantity: 1, purchase_price: 0 }] };
-    await Promise.all([fetchInventory(), fetchStats()]);
+    await refreshInventoryData();
   } catch (err) {
     alert("Errore nel salvataggio");
   } finally {
@@ -164,7 +181,8 @@ const filteredProducts = computed(() => {
     (p.inventory.suppliers?.[0]?.supplier?.toLowerCase() || '').includes(query)
   ).map(p => {
     const price = Number(p.price || 0);
-    const purchasePrice = Number(p.purchase_price || 0);
+    const lastPurchasePrice = latestPurchasePriceByProduct.value.get(p.id);
+    const purchasePrice = Number(lastPurchasePrice ?? p.purchase_price ?? 0);
 
     return {
       ...p,
@@ -181,25 +199,28 @@ const openMovementModal = (product, type = 'purchase') => {
   movementData.value.type = type;
   movementData.value.quantity = (type === 'correction') ? product.inventory.stock : 1;
   movementData.value.note = '';
+  movementData.value.purchase_price = Number(product.purchase_price || 0);
   isModalOpen.value = true;
 };
 
 const confirmMovement = async () => {
   try {
+    const purchasePrice = movementData.value.type === 'purchase'
+      ? Number(movementData.value.purchase_price || 0)
+      : Number(selectedProduct.value.purchase_price || 0);
+
     await axios.post('http://localhost:8088/api/inventory/movement', {
       productId: selectedProduct.value.id,
       ...movementData.value,
-      purchase_price: selectedProduct.value.purchase_price // Anche qui salviamo il prezzo corrente
+      purchase_price: purchasePrice
     });
     isModalOpen.value = false;
-    await Promise.all([fetchInventory(), fetchStats()]);
+    await refreshInventoryData();
   } catch (err) { alert("Errore"); }
 };
 
 onMounted(() => {
-  fetchInventory();
-  fetchStats();
-  fetchMovements();
+  refreshInventoryData();
 });
 </script>
 
@@ -211,7 +232,14 @@ onMounted(() => {
         <p class="subtitle">{{ filteredProducts.length }} prodotti in elenco</p>
       </div>
       <div class="header-actions">
-        <button @click="isBulkModalOpen = true" class="btn-bulk">📦 Registra Bolla</button>
+        <button @click="isBulkModalOpen = true" class="btn-bulk">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3 4 7l8 4 8-4-8-4Z" />
+            <path d="M4 7v10l8 4 8-4V7" />
+            <path d="M12 11v10" />
+          </svg>
+          <span>Registra Bolla</span>
+        </button>
         <div class="search-container">
           <input v-model="searchQuery" placeholder="Filtra tabella..." class="search-input" />
         </div>
@@ -256,11 +284,25 @@ onMounted(() => {
             <td class="product-cell">
               <div class="image-box">
                 <img v-if="p.imgUrl" :src="`http://localhost:8088${p.imgUrl}`" class="prod-img" />
-                <div v-else class="img-placeholder">🖼️</div>
+                <div v-else class="img-placeholder" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <rect x="4" y="5" width="16" height="14" rx="2" />
+                    <path d="M8 14l2.5-2.5a1 1 0 0 1 1.414 0L16 15.586" />
+                    <path d="M14 14l1-1a1 1 0 0 1 1.414 0L20 16.586" />
+                    <circle cx="9" cy="9" r="1.25" />
+                  </svg>
+                </div>
               </div>
               <div class="product-details">
                 <span class="p-name">{{ p.name }}</span>
-                <span class="p-supplier">🏢 {{ p.inventory.suppliers?.[0]?.supplier || 'N/D' }}</span>
+                <span class="p-supplier">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 20h16" />
+                    <path d="M6 20V7h12v13" />
+                    <path d="M9 10h.01M9 13h.01M9 16h.01M15 10h.01M15 13h.01M15 16h.01" />
+                  </svg>
+                  {{ p.inventory.suppliers?.[0]?.supplier || 'N/D' }}
+                </span>
               </div>
             </td>
             <td class="text-center">
@@ -278,9 +320,22 @@ onMounted(() => {
             </td>
             <td class="text-right">
               <div class="btn-group-actions">
-                <button @click="openMovementModal(p, 'purchase')" class="btn-sm btn-in">+</button>
-                <button @click="openMovementModal(p, 'manual_out')" class="btn-sm btn-out">-</button>
-                <button @click="openMovementModal(p, 'correction')" class="btn-sm btn-cfg">⚙</button>
+                <button @click="openMovementModal(p, 'purchase')" class="btn-sm btn-in" aria-label="Carico" title="Carico">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </button>
+                <button @click="openMovementModal(p, 'manual_out')" class="btn-sm btn-out" aria-label="Scarico" title="Scarico">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 12h14" />
+                  </svg>
+                </button>
+                <button @click="openMovementModal(p, 'correction')" class="btn-sm btn-cfg" aria-label="Rettifica" title="Rettifica">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 20h4l10-10a2.121 2.121 0 0 0-3-3L5 17v3Z" />
+                    <path d="m13.5 6.5 4 4" />
+                  </svg>
+                </button>
               </div>
             </td>
           </tr>
@@ -296,7 +351,18 @@ onMounted(() => {
     <div v-for="group in groupedMovements" :key="group.key" class="timeline-group">
       <div class="group-header" :class="{ 'bulk-header': group.isBulk }">
         <div class="group-info">
-          <span class="group-icon">{{ group.isBulk ? '📦' : '📝' }}</span>
+          <span class="group-icon" aria-hidden="true">
+            <svg v-if="group.isBulk" viewBox="0 0 24 24">
+              <path d="M12 3 4 7l8 4 8-4-8-4Z" />
+              <path d="M4 7v10l8 4 8-4V7" />
+              <path d="M12 11v10" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24">
+              <path d="M7 4h8l4 4v12H7z" />
+              <path d="M15 4v4h4" />
+              <path d="M10 12h6M10 16h6" />
+            </svg>
+          </span>
           <div>
             <span class="group-title">{{ group.docNumber }}</span>
             <small v-if="group.supplier" class="group-supplier"> | {{ group.supplier }}</small>
@@ -414,7 +480,24 @@ onMounted(() => {
             <div class="modal-body">
               <div class="causal-grid">
                 <div v-for="t in movementTypes" :key="t.id" class="causal-item" :class="{ active: movementData.type === t.id }" @click="movementData.type = t.id">
-                  <span class="c-icon">{{ t.icon }}</span>
+                  <span class="c-icon" aria-hidden="true">
+                    <svg v-if="t.id === 'purchase'" viewBox="0 0 24 24">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    <svg v-else-if="t.id === 'manual_out'" viewBox="0 0 24 24">
+                      <path d="M5 12h14" />
+                    </svg>
+                    <svg v-else-if="t.id === 'self_consumption'" viewBox="0 0 24 24">
+                      <path d="M8 4v16" />
+                      <path d="M16 4v7" />
+                      <path d="M13 4v7" />
+                      <path d="M13 11c0 1.657 1.343 3 3 3" />
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24">
+                      <path d="M4 20h4l10-10a2.121 2.121 0 0 0-3-3L5 17v3Z" />
+                      <path d="m13.5 6.5 4 4" />
+                    </svg>
+                  </span>
                   <span class="c-label">{{ t.label }}</span>
                 </div>
               </div>
@@ -422,6 +505,10 @@ onMounted(() => {
                 <div class="form-group">
                   <label>{{ movementData.type === 'correction' ? 'Nuova Giacenza' : 'Quantità' }}</label>
                   <input type="number" v-model.number="movementData.quantity" class="input-main" />
+                </div>
+                <div v-if="movementData.type === 'purchase'" class="form-group">
+                  <label>Prezzo di acquisto (€)</label>
+                  <input type="number" step="0.01" min="0" v-model.number="movementData.purchase_price" class="input-main" />
                 </div>
                 <div class="form-group">
                   <label>Note</label>
@@ -448,156 +535,62 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Layout specifico per il Modale Bulk */
-.bulk-card {
-  width: 900px;
-  max-width: 95vw;
-  max-height: 90vh;
+:global(:root) {
+  --inv-bg: #f9fafb;
+  --inv-surface: #ffffff;
+  --inv-surface-soft: #f3f4f6;
+  --inv-border: #e5e7eb;
+  --inv-border-strong: #d1d5db;
+  --inv-text: #1f2937;
+  --inv-muted: #6b7280;
+  --inv-primary: #3b82f6;
+  --inv-primary-dark: #2563eb;
+  --inv-success: #10b981;
+  --inv-warning: #f59e0b;
+  --inv-danger: #ef4444;
+  --inv-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --inv-shadow-lg: 0 18px 50px rgba(15, 23, 42, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.inventory-view {
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--inv-bg);
+  color: var(--inv-text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.inv-header {
+  background: var(--inv-surface);
+  border: 1px solid var(--inv-border);
+  border-radius: 16px;
+  box-shadow: var(--inv-shadow);
+  padding: 20px 22px;
+  margin-bottom: 20px;
   display: flex;
-  flex-direction: column;
-}
-
-.modal-card.bulk-card {
-  width: min(920px, 95vw);
-  max-width: min(920px, 95vw);
-}
-
-.scrollable-body {
-  padding: 25px;
-  overflow-y: auto;
-  flex-grow: 1;
-}
-
-.bulk-header-inputs {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 25px;
-}
-
-.bulk-header-inputs .form-group {
-  flex: 1;
-}
-
-/* Griglia Righe Bolla */
-.bulk-row {
-  display: grid;
-  grid-template-columns: minmax(240px, 1.7fr) 96px 160px 40px;
-  gap: 12px;
+  justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  gap: 16px;
 }
 
-.bulk-rows-container {
-  overflow-x: auto;
-}
-
-.header-row {
-  background: #f8fafc;
-  padding: 10px;
-  border-radius: 8px;
-  font-size: 0.75rem;
+.title-group h1 {
+  margin: 0;
+  font-size: 1.55rem;
+  line-height: 1.15;
   font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  margin-bottom: 15px;
+  letter-spacing: -0.02em;
+  color: #111827;
 }
 
-.entry-row {
-  padding: 0 5px;
-}
-
-.col-prod {
-  min-width: 0;
-}
-
-.entry-row .col-prod .input-main {
-  min-height: 46px;
-  font-size: 1.06rem;
-}
-
-/* Prezzo con prefisso € interno */
-.price-field {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.currency-prefix {
-  position: absolute;
-  left: 12px;
-  color: #94a3b8;
-  font-weight: 600;
-}
-
-.price-field .input-main {
-  padding-left: 30px !important;
-  text-align: right;
-}
-
-/* Bottoni */
-.btn-remove-mini {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: none;
-  background: #fee2e2;
-  color: #ef4444;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
-}
-
-.btn-remove-mini:hover { background: #fecaca; }
-
-.btn-add-line {
-  width: 100%;
-  padding: 12px;
-  margin-top: 15px;
-  border: 2px dashed #e2e8f0;
-  background: white;
-  border-radius: 12px;
-  color: #64748b;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-add-line:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #1e293b;
-}
-
-/* Stili comuni input */
-.input-main {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+.subtitle {
+  margin: 6px 0 0;
   font-size: 0.95rem;
-  outline: none;
-  box-sizing: border-box; /* Cruciale per evitare che l'input esca dai bordi */
+  color: var(--inv-muted);
 }
-
-.bulk-header-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-.bulk-header-inputs label { font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 5px; display: block; }
-
-.bulk-row-header { display: grid; grid-template-columns: 1fr 100px 130px 40px; gap: 10px; padding: 10px; background: #f8fafc; border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 10px; }
-
-.price-input-wrapper { position: relative; display: flex; align-items: center; }
-.currency-addon { position: absolute; left: 10px; color: #94a3b8; font-weight: 600; font-size: 0.9rem; }
-.price-input { padding-left: 25px !important; text-align: right; }
-
-.qty-input { text-align: center; font-weight: 700; }
-.btn-remove-row { border: none; background: #fee2e2; color: #ef4444; border-radius: 6px; height: 38px; cursor: pointer; }
-.btn-add-row { width: 100%; padding: 12px; margin-top: 10px; border: 2px dashed #e2e8f0; background: transparent; color: #64748b; font-weight: 600; border-radius: 10px; cursor: pointer; }
-
-.inventory-view { padding: 40px; background: #f8fafc; min-height: 100vh; font-family: 'Inter', sans-serif; color: #1e293b; }
-.inv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-.title-group h1 { font-size: 1.8rem; font-weight: 800; margin: 0; }
-.subtitle { color: #64748b; font-size: 0.9rem; margin: 5px 0 0 0; }
 
 .header-actions {
   display: flex;
@@ -607,189 +600,840 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-.search-container { background: white; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; padding: 0 15px; }
-.search-input { border: none; padding: 12px; outline: none; width: 250px; }
+.btn-bulk,
+.btn-dark,
+.btn-ghost,
+.btn-refresh,
+.btn-sm,
+.btn-add-line,
+.btn-remove-mini,
+.btn-close {
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+
+.btn-bulk {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 10px;
+  padding: 11px 16px;
+  background: var(--inv-primary);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.22);
+}
+
+.btn-bulk:hover,
+.btn-dark:hover {
+  background: var(--inv-primary-dark);
+}
+
+.btn-bulk svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.search-container {
+  min-width: 260px;
+  background: var(--inv-surface);
+  border: 1px solid var(--inv-border);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+}
+
+.search-container:focus-within {
+  border-color: var(--inv-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.search-input,
+.input-main {
+  width: 100%;
+  border: 1px solid var(--inv-border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--inv-text);
+  font: inherit;
+  outline: none;
+}
+
+.search-input {
+  width: 250px;
+  border: none;
+  padding: 11px 0;
+  background: transparent;
+}
+
+.input-main {
+  padding: 10px 12px;
+  min-height: 42px;
+}
+
+.input-main:focus {
+  border-color: var(--inv-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
 
 .btn-refresh {
   width: 42px;
   height: 42px;
-  border-radius: 10px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 10px;
+  border: 1px solid var(--inv-border);
+  background: var(--inv-surface);
   cursor: pointer;
-  transition: all 0.2s ease;
+}
+
+.btn-refresh:hover,
+.btn-close:hover,
+.btn-ghost:hover {
+  background: var(--inv-surface-soft);
 }
 
 .btn-refresh svg {
   width: 20px;
   height: 20px;
-  stroke: #334155;
+  stroke: #374151;
   stroke-width: 2;
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.btn-refresh:hover {
-  border-color: #94a3b8;
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: var(--inv-surface);
+  border: 1px solid var(--inv-border);
+  border-radius: 14px;
+  box-shadow: var(--inv-shadow);
+  padding: 18px 20px;
+}
+
+.stat-card.blue { border-top: 4px solid var(--inv-primary); }
+.stat-card.red { border-top: 4px solid var(--inv-danger); }
+.stat-card.orange { border-top: 4px solid var(--inv-warning); }
+
+.stat-card label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--inv-muted);
+  font-weight: 700;
+}
+
+.st-val {
+  font-size: 1.5rem;
+  line-height: 1.1;
+  font-weight: 700;
+  color: #111827;
+}
+
+.table-container {
+  background: var(--inv-surface);
+  border: 1px solid var(--inv-border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--inv-shadow);
+}
+
+.styled-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.styled-table thead th {
+  padding: 15px 18px;
   background: #f8fafc;
+  border-bottom: 1px solid var(--inv-border);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--inv-muted);
+  text-transform: uppercase;
 }
 
-.btn-refresh:active {
-  transform: scale(0.97);
+.styled-table tbody tr {
+  transition: background-color 0.18s ease;
 }
 
-.stats-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
-.stat-card { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; border-left: 5px solid #cbd5e1; }
-.stat-card.blue { border-left-color: #3b82f6; }
-.stat-card.red { border-left-color: #ef4444; }
-.stat-card.orange { border-left-color: #f59e0b; }
-.stat-card label { font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; }
-.st-val { font-size: 1.5rem; font-weight: 800; }
+.styled-table tbody tr:hover {
+  background: #fbfdff;
+}
 
-.table-container { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
-.styled-table { width: 100%; border-collapse: collapse; }
-.styled-table th { background: #f8fafc; padding: 16px; text-align: left; font-size: 0.7rem; color: #64748b; text-transform: uppercase; }
-.styled-table td { padding: 16px; border-bottom: 1px solid #f1f5f9; }
+.styled-table td {
+  padding: 16px 18px;
+  border-bottom: 1px solid #eef2f7;
+  vertical-align: middle;
+}
 
-.product-cell { display: flex; align-items: center; gap: 12px; }
-.image-box { width: 44px; height: 44px; border-radius: 8px; background: #f1f5f9; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid #e2e8f0; }
-.prod-img { width: 100%; height: 100%; object-fit: cover; }
-.p-name { display: block; font-weight: 700; }
-.p-supplier { font-size: 0.75rem; color: #6366f1; font-weight: 600; } /* Colore distintivo per il fornitore */
+.styled-table tbody tr:last-child td {
+  border-bottom: none;
+}
 
-.badge-stock { padding: 4px 10px; border-radius: 6px; font-weight: 700; }
-.bg-success { background: #ecfdf5; color: #059669; }
-.bg-danger { background: #fef2f2; color: #dc2626; }
+.product-cell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 
-.margin-info { display: flex; flex-direction: column; }
-.m-perc { font-size: 0.75rem; font-weight: 800; color: #10b981; }
-.text-red { color: #ef4444; }
-
-.btn-group-actions { display: flex; gap: 6px; justify-content: flex-end; }
-.btn-sm { width: 32px; height: 32px; border-radius: 8px; border: none; cursor: pointer; color: white; font-weight: bold; }
-.btn-in { background: #10b981; }
-.btn-out { background: #f59e0b; }
-.btn-cfg { background: #64748b; }
-
-/* Modal */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.modal-card { background: white; width: 500px; border-radius: 20px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
-.modal-header { padding: 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: flex-start; }
-.m-title h3 { margin: 0; }
-.btn-close {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+.image-box {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid var(--inv-border);
   background: #fff;
-  color: #0f172a;
-  font-size: 1.35rem;
-  line-height: 1;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  margin-top: 2px;
 }
-.causal-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 20px; }
-.causal-item { padding: 12px; border: 2px solid #f1f5f9; border-radius: 12px; cursor: pointer; text-align: center; }
-.causal-item.active { background: #1e293b; color: white; border-color: #1e293b; }
-.form-grid { padding: 0 20px 20px; display: grid; gap: 15px; }
-.input-main { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; }
-.modal-footer { padding: 15px 20px; background: #f8fafc; display: flex; justify-content: flex-end; gap: 10px; }
-.btn-dark { background: #1e293b; color: white; padding: 10px 20px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; }
-.btn-ghost { background: transparent; border: none; color: #64748b; cursor: pointer; }
 
-.text-center { text-align: center; }
-.text-right { text-align: right; }
-.font-mono { font-family: monospace; }
-.text-muted { color: #94a3b8; }
-.subtitle span {
-  color: #3b82f6;
+.img-placeholder {
+  color: #9ca3af;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.img-placeholder svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.prod-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-details {
+  min-width: 0;
+}
+
+.p-name {
+  display: block;
+  font-size: 1.02rem;
   font-weight: 600;
+  color: #111827;
 }
 
-/* Effetto focus sulla ricerca coerente con il form prenotazioni */
-.search-container:focus-within {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  transition: all 0.2s ease;
+.p-supplier {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 0.83rem;
+  font-weight: 500;
+  color: #6366f1;
 }
-.btn-bulk {
-  background: #6366f1;
-  color: white;
-  border: none;
-  padding: 10px 18px;
+
+.p-supplier svg,
+.group-icon svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.badge-stock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bg-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.bg-danger {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.text-muted {
+  color: #94a3b8;
+}
+
+.margin-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.m-val {
+  font-weight: 600;
+  color: #111827;
+}
+
+.m-perc {
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: var(--inv-success);
+}
+
+.text-red {
+  color: var(--inv-danger);
+}
+
+.btn-group-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-sm {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--inv-border);
   border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s;
+  box-shadow: none;
 }
-.btn-bulk:hover { background: #4f46e5; }
 
-.select-prod { appearance: auto; }
-.qty-input { text-align: center; }
+.btn-sm:hover {
+  transform: translateY(-1px);
+}
 
-.btn-remove-row { background: #fee2e2; color: #ef4444; border: none; border-radius: 8px; height: 40px; cursor: pointer; font-size: 1.2rem; }
-.btn-add-row { width: 100%; padding: 10px; background: #f8fafc; border: 2px dashed #e2e8f0; border-radius: 10px; color: #64748b; font-weight: 600; cursor: pointer; }
-.btn-add-row:hover { background: #f1f5f9; border-color: #cbd5e1; }
+.btn-sm svg,
+.c-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
-.movements-history { margin-top: 50px; }
+.btn-in {
+  color: #047857;
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+}
+
+.btn-out {
+  color: #b45309;
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+
+.btn-cfg {
+  color: #475569;
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.btn-in:hover {
+  background: #d1fae5;
+}
+
+.btn-out:hover {
+  background: #fef3c7;
+}
+
+.btn-cfg:hover {
+  background: #e2e8f0;
+}
+
+.movements-history {
+  margin-top: 0;
+  border-top: 1px solid var(--inv-border);
+  background: #fbfcfe;
+  padding: 24px;
+}
+
+.section-header {
+  margin-bottom: 14px;
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.timeline {
+  display: grid;
+  gap: 14px;
+}
 
 .timeline-group {
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  margin-bottom: 20px;
+  background: var(--inv-surface);
+  border: 1px solid var(--inv-border);
+  border-radius: 14px;
   overflow: hidden;
 }
 
 .group-header {
-  padding: 12px 20px;
-  background: #f8fafc;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #f1f5f9;
+  gap: 12px;
+  padding: 14px 18px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--inv-border);
 }
 
-.bulk-header { background: #eff6ff; border-left: 4px solid #3b82f6; }
+.bulk-header {
+  background: #eff6ff;
+}
 
-.group-info { display: flex; align-items: center; gap: 10px; }
-.group-title { font-weight: 700; color: #1e293b; }
-.group-date { font-size: 0.85rem; color: #64748b; }
+.group-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.group-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.bulk-header .group-icon {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.group-title {
+  font-weight: 600;
+  color: #111827;
+}
+
+.group-supplier,
+.group-date {
+  color: var(--inv-muted);
+}
 
 .history-item {
   display: flex;
   justify-content: space-between;
-  padding: 12px 20px;
-  border-bottom: 1px solid #f1f5f9;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #eef2f7;
 }
 
-.history-item:last-child { border-bottom: none; }
+.history-item:last-child {
+  border-bottom: none;
+}
 
-.item-main { display: flex; align-items: center; gap: 15px; }
-.item-name { font-weight: 600; width: 200px; }
+.item-main,
+.item-details {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.item-name {
+  font-weight: 600;
+  color: var(--inv-text);
+}
 
 .item-type-badge {
-  font-size: 0.7rem;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  line-height: 1;
   text-transform: uppercase;
   font-weight: 700;
 }
 
 .item-type-badge.purchase { background: #dcfce7; color: #166534; }
 .item-type-badge.breakage { background: #fee2e2; color: #991b1b; }
+.item-type-badge.manual_out,
+.item-type-badge.expired,
+.item-type-badge.self_consumption { background: #fef3c7; color: #92400e; }
+.item-type-badge.correction { background: #e0e7ff; color: #4338ca; }
 
-.item-details { display: flex; gap: 25px; align-items: center; font-size: 0.9rem; }
-.item-qty.in { color: #10b981; font-weight: 800; }
-.item-qty.out { color: #ef4444; font-weight: 800; }
-.item-stock-snap { color: #64748b; }
+.item-qty.in {
+  color: #059669;
+  font-weight: 800;
+}
+
+.item-qty.out {
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.item-stock-snap,
+.item-price {
+  color: var(--inv-muted);
+  font-size: 0.92rem;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 9999;
+}
+
+.modal-card {
+  width: min(520px, 100%);
+  background: var(--inv-surface, #ffffff);
+  border-radius: 16px;
+  border: 1px solid var(--inv-border, #e5e7eb);
+  box-shadow: var(--inv-shadow-lg);
+  overflow: hidden;
+}
+
+.bulk-card {
+  width: min(920px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+  background: var(--inv-surface, #ffffff);
+  border-bottom: 1px solid var(--inv-border, #e5e7eb);
+}
+
+.m-title h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.m-title p,
+.m-title small {
+  display: block;
+  margin-top: 6px;
+  color: var(--inv-muted);
+  line-height: 1.4;
+}
+
+.btn-close {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border: 1px solid var(--inv-border);
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+  font-size: 1.25rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 20px;
+  background: var(--inv-surface, #ffffff);
+}
+
+.scrollable-body {
+  padding: 20px;
+  background: var(--inv-surface, #ffffff);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.causal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.causal-item {
+  padding: 14px 12px;
+  border: 1px solid var(--inv-border);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.causal-item:hover {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+.causal-item.active {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.c-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+.c-label {
+  font-weight: 600;
+}
+
+.form-grid,
+.bulk-header-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.form-group label,
+.bulk-header-inputs label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--inv-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.bulk-rows-container {
+  margin-top: 18px;
+  overflow-x: auto;
+}
+
+.bulk-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.7fr) 96px 160px 40px;
+  gap: 12px;
+  align-items: center;
+}
+
+.header-row {
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: #f8fafc;
+  border: 1px solid var(--inv-border);
+  border-radius: 10px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--inv-muted);
+}
+
+.entry-row {
+  padding: 6px 4px;
+}
+
+.col-prod {
+  min-width: 0;
+}
+
+.col-qty .input-main,
+.col-price .input-main {
+  text-align: center;
+}
+
+.price-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.currency-prefix {
+  position: absolute;
+  left: 12px;
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.price-field .input-main {
+  padding-left: 28px;
+  text-align: right;
+}
+
+.btn-remove-mini {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: var(--inv-danger);
+  cursor: pointer;
+}
+
+.btn-remove-mini:hover {
+  background: #fee2e2;
+}
+
+.btn-add-line {
+  margin-top: 16px;
+  width: 100%;
+  border: 1px dashed var(--inv-border-strong);
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  padding: 12px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-add-line:hover {
+  background: var(--inv-surface-soft);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  background: #f8fafc;
+  border-top: 1px solid var(--inv-border, #e5e7eb);
+}
+
+.btn-dark,
+.btn-ghost {
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-dark {
+  border: none;
+  background: var(--inv-primary);
+  color: white;
+}
+
+.btn-dark:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.btn-ghost {
+  border: 1px solid var(--inv-border);
+  background: #fff;
+  color: #374151;
+}
+
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+@media (max-width: 980px) {
+  .inventory-view {
+    padding: 16px;
+  }
+
+  .inv-header,
+  .stats-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .inv-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    justify-content: stretch;
+  }
+
+  .search-container {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .stats-overview {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .styled-table {
+    min-width: 760px;
+  }
+
+  .table-container {
+    overflow-x: auto;
+  }
+
+  .group-header,
+  .history-item,
+  .item-details {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .form-grid,
+  .bulk-header-inputs {
+    grid-template-columns: 1fr;
+  }
+
+  .bulk-row {
+    grid-template-columns: minmax(220px, 1fr) 90px 140px 40px;
+  }
+}
 </style>
