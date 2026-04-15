@@ -70,7 +70,12 @@
     </section>
 
     <section v-if="searchMode === 'category' && selectedCategory && categoryProducts.length" class="section-container category-detail">
-      <h3>Prodotti in "{{ selectedCategory }}"</h3>
+      <div class="table-header-actions">
+        <h3>Prodotti in "{{ selectedCategory }}"</h3>
+        <button @click="exportCsv" class="btn btn-secondary" :disabled="!canExportData || loadingCategory">
+          Esporta CSV
+        </button>
+      </div>
       <div class="table-container">
         <table class="data-table">
           <thead>
@@ -95,7 +100,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 
 const searchQuery = ref('');
@@ -112,6 +117,10 @@ const categorySummary = ref({ quantity: 0, sales: 0 });
 const loadingCategory = ref(false);
 const categoryError = ref('');
 
+const canExportData = computed(() => {
+  return searchMode.value === 'category' && !!selectedCategory.value && categoryProducts.value.length > 0;
+});
+
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(value) || 0);
 };
@@ -121,6 +130,39 @@ const toISODate = (date) => {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+};
+
+const escapeCsvValue = (value) => {
+  const safeValue = String(value ?? '');
+  if (safeValue.includes(';') || safeValue.includes('"') || safeValue.includes('\n')) {
+    return `"${safeValue.replace(/"/g, '""')}"`;
+  }
+  return safeValue;
+};
+
+const exportCsv = () => {
+  if (!canExportData.value) return;
+
+  const rows = [['Nome prodotto', 'Quantita', 'Fatturato']];
+
+  categoryProducts.value.forEach((p) => {
+    rows.push([p.name, Number(p.quantity) || 0, Number(p.sales) || 0]);
+  });
+
+  const csvContent = rows
+    .map((row) => row.map((cell) => escapeCsvValue(cell)).join(';'))
+    .join('\n');
+
+  const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.setAttribute('href', url);
+  link.setAttribute('download', `stats_prodotti_${selectedCategory.value}_${fromDate.value}_${toDate.value}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
 };
 
 const fetchBaseData = async () => {
@@ -350,6 +392,35 @@ h3 {
 
 .btn-primary:hover {
   background: #2563eb;
+}
+
+.btn-secondary {
+  background: #0f766e;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+  background: #0d665f;
+}
+
+.btn-secondary:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.table-header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .loading,
