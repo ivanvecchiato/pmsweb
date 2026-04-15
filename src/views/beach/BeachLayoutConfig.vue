@@ -116,16 +116,41 @@ const generateBeachMap = async () => {
 </template>
 
 <style scoped>
-.layout-container { padding: 30px; background: #f8fafc; min-height: 100vh; }
-.layout-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+.layout-container {
+  padding: 30px;
+  background: #f8fafc;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.layout-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 30px;
+}
+
+.layout-header > div {
+  min-width: 0;
+}
+
+.layout-header h1,
+.layout-header p {
+  overflow-wrap: anywhere;
+}
 
 .sectors-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
   gap: 20px;
+  width: 100%;
 }
 
 .sector-card {
+  min-width: 0;
   background: white;
   border-radius: 15px;
   padding: 20px;
@@ -133,19 +158,116 @@ const generateBeachMap = async () => {
   border: 1px solid #e2e8f0;
 }
 
-.sector-header { display: flex; justify-content: space-between; margin-bottom: 20px; }
-.input-title { font-size: 1.2rem; font-weight: 700; border: none; border-bottom: 2px solid #3b82f6; outline: none; }
+.sector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.input-title {
+  min-width: 0;
+  width: 100%;
+  font-size: 1.2rem;
+  font-weight: 700;
+  border: none;
+  border-bottom: 2px solid #3b82f6;
+  outline: none;
+}
 
 .sector-body {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 15px;
+  align-items: start;
 }
 
-.field label { display: block; font-size: 0.75rem; color: #64748b; margin-bottom: 5px; text-transform: uppercase; font-weight: 600; }
-.field input { width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; }
+.field {
+  min-width: 0;
+}
 
-.btn-primary { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; cursor: pointer; }
-.btn-add-card { border: 2px dashed #cbd5e1; background: transparent; border-radius: 15px; color: #64748b; font-weight: 600; cursor: pointer; }
-.btn-delete { color: #ef4444; background: transparent; border: none; cursor: pointer; font-size: 0.8rem; }
+.field label {
+  display: block;
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.field input {
+  width: calc(100% - 12px);
+  max-width: 180px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.btn-primary {
+  flex-shrink: 0;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-add-card {
+  min-height: 180px;
+  width: 100%;
+  border: 2px dashed #cbd5e1;
+  background: transparent;
+  border-radius: 15px;
+  color: #64748b;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-delete {
+  flex-shrink: 0;
+  color: #ef4444;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 900px) {
+  .layout-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-primary {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .layout-container {
+    padding: 20px 16px;
+  }
+
+  .sector-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sector-body {
+    grid-template-columns: 1fr;
+  }
+
+  .field input {
+    width: 100%;
+    max-width: none;
+  }
+
+  .btn-delete {
+    align-self: flex-end;
+  }
+}
 </style>

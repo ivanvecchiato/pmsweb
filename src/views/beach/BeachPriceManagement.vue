@@ -6,10 +6,13 @@ import axios from 'axios';
 const resources = ref([]); // Lista ombrelloni (id, name, row, column)
 const pricelists = ref([]); // Listini base normalizzati per UI
 const selectedPricelist = ref(null);
+const timetable = ref([]);
+const activeView = ref('pricing'); // pricing | assignment
 
 // Stato per l'assegnazione massiva
 const selectionStart = ref(null);
 const selectionEnd = ref(null);
+const isSelecting = ref(false);
 
 // --- LOGICA BEACH SPECIFICA ---
 const toNumber = (value) => {
@@ -123,16 +126,104 @@ const resourcesByRow = computed(() => {
   return rows;
 });
 
+const toISODate = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const getDayOfYear = (dateString) => {
+  const date = new Date(dateString);
+  const start = new Date(date.getFullYear(), 0, 0);
+  const diff = date - start;
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+};
+
+const handleMouseDown = (date) => {
+  if (!selectedPricelist.value) return;
+  selectionStart.value = date;
+  selectionEnd.value = date;
+  isSelecting.value = true;
+};
+
+const handleMouseEnter = (date) => {
+  if (!isSelecting.value) return;
+  selectionEnd.value = date;
+};
+
+const handleMouseUp = () => {
+  isSelecting.value = false;
+};
+
+const isInRange = (date) => {
+  if (!selectionStart.value || !selectionEnd.value) return false;
+  const d = new Date(date);
+  const s = new Date(selectionStart.value);
+  const e = new Date(selectionEnd.value);
+  const [start, end] = s <= e ? [s, e] : [e, s];
+  return d >= start && d <= end;
+};
+
+const getDayStyle = (day) => {
+  const pricelist = pricelists.value.find((p) => String(p.id) === String(day.pricelist));
+  const color = pricelist?.color || '#e2e8f0';
+  return {
+    backgroundColor: pricelist ? `${color}33` : '#ffffff',
+    borderColor: color
+  };
+};
+
+const getDayOfMonth = (dateStr) => new Date(dateStr).getDate();
+const getMonthName = (dateStr) => new Date(dateStr).toLocaleDateString('it-IT', { month: 'short' });
+const isSunday = (dateStr) => new Date(dateStr).getDay() === 0;
+
+const saveRangeAssignment = async () => {
+  if (!selectedPricelist.value || !selectionStart.value || !selectionEnd.value) return;
+
+  const s = new Date(selectionStart.value);
+  const e = new Date(selectionEnd.value);
+  const [start, end] = s <= e ? [s, e] : [e, s];
+  const updates = [];
+
+  let current = new Date(start);
+  while (current <= end) {
+    const dateStr = toISODate(current);
+    updates.push({
+      date: dateStr,
+      pricelist: selectedPricelist.value.id,
+      day: getDayOfYear(dateStr)
+    });
+    current.setDate(current.getDate() + 1);
+  }
+
+  try {
+    await axios.post('http://localhost:8081/api/pms/updatetimetable', { updates });
+    updates.forEach((upd) => {
+      const idx = timetable.value.findIndex((d) => d.date === upd.date);
+      if (idx !== -1) timetable.value[idx].pricelist = upd.pricelist;
+    });
+    selectionStart.value = null;
+    selectionEnd.value = null;
+    alert(`Listino applicato a ${updates.length} giorni`);
+  } catch (err) {
+    console.error('Errore assegnazione range timetable beach:', err);
+    alert('Errore nell\'assegnazione range');
+  }
+};
+
 // Caricamento dati
 const fetchData = async () => {
   try {
-    const [resProd, resPrice] = await Promise.all([
+    const [resProd, resPrice, resTime] = await Promise.all([
       axios.get('http://localhost:8081/api/pms/beach/getplan?mode=flat'),
-      axios.get('http://localhost:8081/api/pms/getrates?type=beach')
+      axios.get('http://localhost:8081/api/pms/getrates?type=beach'),
+      axios.get('http://localhost:8081/api/pms/gettimetable?type=beach')
     ]);
     const normalizedResources = resProd.data.map(normalizeResource);
     resources.value = normalizedResources;
     pricelists.value = (resPrice.data || []).map((list) => buildUiPricelist(list, normalizedResources));
+    timetable.value = resTime.data || [];
     if (pricelists.value.length > 0) selectedPricelist.value = pricelists.value[0];
   } catch (err) {
     console.error("Errore caricamento:", err);
@@ -167,12 +258,14 @@ onMounted(fetchData);
 </script>
 
 <template>
-  <div class="config-container">
+  <div class="config-container" @mouseup="handleMouseUp">
     <div class="sidebar">
       <h2>Listini Spiaggia</h2>
-      <div v-for="price in pricelists" :key="price.id" 
+
+      <div v-for="price in pricelists" :key="price.id"
            class="price-card" 
            :class="{ active: selectedPricelist?.id === price.id }"
+         :style="{ borderLeftColor: price.color || '#cbd5e1' }"
            @click="selectedPricelist = price">
         <div class="price-card-info">
           <strong>{{ price.description }}</strong>
@@ -182,7 +275,24 @@ onMounted(fetchData);
     </div>
 
     <div class="main-content">
-      <section v-if="selectedPricelist" class="editor-section">
+      <div class="view-switcher">
+        <button
+          class="switch-btn"
+          :class="{ active: activeView === 'pricing' }"
+          @click="activeView = 'pricing'"
+        >
+          Definizione Listini
+        </button>
+        <button
+          class="switch-btn"
+          :class="{ active: activeView === 'assignment' }"
+          @click="activeView = 'assignment'"
+        >
+          Assegnazione Range Temporale
+        </button>
+      </div>
+
+      <section v-if="activeView === 'pricing' && selectedPricelist" class="editor-section">
         <div class="editor-header">
           <h3>Configurazione Prezzi: {{ selectedPricelist.description }}</h3>
           <button class="btn-save" @click="saveBeachPrices(selectedPricelist)">Salva Configurazione</button>
@@ -214,6 +324,34 @@ onMounted(fetchData);
           </div>
         </div>
       </section>
+
+      <div v-if="activeView === 'assignment'" class="assignment-section">
+        <div class="assignment-header">
+          <h3>Assegna "{{ selectedPricelist?.description || 'Listino' }}" al calendario</h3>
+          <p>Trascina sul calendario per selezionare un range di date.</p>
+        </div>
+
+        <div v-if="selectionStart && selectionEnd" class="range-actions">
+          <p class="selection-info">Range: {{ selectionStart }} / {{ selectionEnd }}</p>
+          <button class="btn-save-range" @click="saveRangeAssignment">Applica Listino al Range</button>
+          <button class="btn-cancel" @click="selectionStart = null; selectionEnd = null">Annulla</button>
+        </div>
+
+        <div class="calendar-grid">
+          <div
+            v-for="day in timetable"
+            :key="day.date"
+            class="day-box"
+            :class="{ 'in-selection': isInRange(day.date), 'is-sunday': isSunday(day.date) }"
+            :style="getDayStyle(day)"
+            @mousedown="handleMouseDown(day.date)"
+            @mouseenter="handleMouseEnter(day.date)"
+          >
+            <span class="day-num">{{ getDayOfMonth(day.date) }}</span>
+            <small>{{ getMonthName(day.date) }}</small>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -228,7 +366,73 @@ onMounted(fetchData);
 }
 .price-card.active { border-color: #3b82f6; background: #eff6ff; }
 
+.range-actions {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+}
+
+.selection-info {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin: 0 0 8px;
+}
+
+.btn-save-range {
+  width: 100%;
+  margin-bottom: 8px;
+  border: none;
+  background: #2563eb;
+  color: white;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-cancel {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  background: white;
+  color: #334155;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+}
+
 .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+
+.view-switcher {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.switch-btn {
+  border: 1px solid #cbd5e1;
+  background: white;
+  color: #334155;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.switch-btn.active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
 
 /* Griglia Spiaggia */
 .beach-grid-editor { display: flex; flex-direction: column; gap: 30px; }
@@ -251,4 +455,69 @@ onMounted(fetchData);
 .override-tag { font-size: 0.6rem; color: #ef4444; font-weight: 800; text-transform: uppercase; margin-top: 4px; }
 
 .btn-save { background: #1e293b; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+
+.assignment-section {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.assignment-header h3 {
+  margin: 0 0 4px;
+}
+
+.assignment-header p {
+  margin: 0 0 12px;
+  color: #64748b;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+  gap: 6px;
+  max-height: 440px;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: white;
+}
+
+.day-box {
+  height: 60px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 10px;
+  user-select: none;
+  transition: transform 0.1s;
+}
+
+.day-num {
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.in-selection {
+  transform: scale(0.95);
+  box-shadow: inset 0 0 0 3px #3b82f6;
+}
+
+.day-box.is-sunday {
+  background-color: #fff1f2;
+  border-color: #fecaca;
+}
+
+.day-box.is-sunday .day-num {
+  color: #e11d48;
+}
+
+.day-box.is-sunday small {
+  color: #fb7185;
+}
 </style>

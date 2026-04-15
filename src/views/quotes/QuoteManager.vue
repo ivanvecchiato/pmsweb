@@ -39,7 +39,7 @@
           <div class="quote-details">
             <div class="detail-row">
               <span class="label">Cliente:</span>
-              <span class="value">{{ quote.guestName }}</span>
+              <span class="value">{{ getQuoteCustomer(quote) }}</span>
             </div>
             <div class="detail-row">
               <span class="label">Periodo:</span>
@@ -47,7 +47,7 @@
             </div>
             <div class="detail-row">
               <span class="label">{{ quote.type === 'hotel' ? 'Notti' : 'Giorni' }}:</span>
-              <span class="value">{{ quote.duration }}</span>
+              <span class="value">{{ getQuoteDuration(quote) }}</span>
             </div>
             <div v-if="quote.type === 'hotel'" class="detail-row">
               <span class="label">Ospiti:</span>
@@ -55,9 +55,13 @@
                 <span v-if="quote.children > 0">, {{ quote.children }} bambin{{ quote.children !== 1 ? 'i' : 'o' }}</span>
               </span>
             </div>
-            <div v-if="quote.totalPrice" class="detail-row price-row">
+            <div v-if="quote.type === 'hotel' && getQuoteKidsAgesLabel(quote)" class="detail-row">
+              <span class="label">Età bambini:</span>
+              <span class="value">{{ getQuoteKidsAgesLabel(quote) }}</span>
+            </div>
+            <div v-if="getQuoteTotal(quote) !== null" class="detail-row price-row">
               <span class="label">Prezzo:</span>
-              <span class="value price-value">€{{ quote.totalPrice.toFixed(2) }}</span>
+              <span class="value price-value">{{ formatCurrency(getQuoteTotal(quote)) }}</span>
             </div>
           </div>
 
@@ -92,7 +96,7 @@
           <div class="info-grid">
             <div class="info-item">
               <span class="info-label">Nome:</span>
-              <span class="info-value">{{ currentQuote.guestName }}</span>
+              <span class="info-value">{{ getQuoteCustomer(currentQuote) }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Tipo:</span>
@@ -114,8 +118,12 @@
               <span class="info-value">{{ formatDate(currentQuote.checkout) }}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">Notti:</span>
-              <span class="info-value">{{ currentQuote.duration }}</span>
+              <span class="info-label">{{ currentQuote.type === 'hotel' ? 'Notti' : 'Giorni' }}:</span>
+              <span class="info-value">{{ getQuoteDuration(currentQuote) }}</span>
+            </div>
+            <div class="info-item" v-if="currentQuote.pricing_mode">
+              <span class="info-label">Pricing Mode:</span>
+              <span class="info-value">{{ currentQuote.pricing_mode }}</span>
             </div>
           </div>
         </section>
@@ -135,6 +143,10 @@
             <div class="info-item">
               <span class="info-label">Trattamento:</span>
               <span class="info-value">{{ currentQuote.board.toUpperCase() }}</span>
+            </div>
+            <div class="info-item" v-if="getQuoteKidsAgesLabel(currentQuote)">
+              <span class="info-label">Età bambini:</span>
+              <span class="info-value">{{ getQuoteKidsAgesLabel(currentQuote) }}</span>
             </div>
           </div>
         </section>
@@ -190,21 +202,42 @@
           </div>
         </section>
 
+        <section v-if="currentQuote.type === 'beach'" class="detail-section beach-place-section">
+          <h3>Seleziona Posto per Conversione</h3>
+          <p class="place-hint">Il preventivo beach e type-based; per convertire in prenotazione serve un posto reale.</p>
+          <div class="place-select-row">
+            <select v-model="selectedBeachPlaceId" :disabled="isLoadingPlaces || filteredBeachPlaces.length === 0">
+              <option value="" disabled>{{ isLoadingPlaces ? 'Caricamento posti...' : 'Seleziona un posto' }}</option>
+              <option v-for="place in filteredBeachPlaces" :key="place.id" :value="String(place.id)">
+                {{ place.name }} · Fila {{ place.row }} · {{ place.sector || 'N/D' }}
+              </option>
+            </select>
+          </div>
+          <div class="availability-status" v-if="selectedBeachPlaceId">
+            <span v-if="isCheckingAvailability" class="availability-checking">Controllo disponibilita in corso...</span>
+            <span v-else-if="beachPlaceAvailability === true" class="availability-ok">Posto disponibile per il periodo selezionato</span>
+            <span v-else-if="beachPlaceAvailability === false" class="availability-ko">Posto non disponibile nel periodo selezionato</span>
+            <span v-else class="availability-unknown">Disponibilita non verificata</span>
+          </div>
+          <small class="place-meta" v-if="currentQuote.place_type_id">Filtro attivo su type: {{ currentQuote.place_type_id }}</small>
+          <small class="place-meta" v-else>Nessun filtro type: tutti i posti disponibili</small>
+        </section>
+
         <!-- Pricing: mostra dettagli del prezzo selezionato o, per beach, il prezzo di riferimento salvato -->
         <section v-if="displayedPriceOption" class="detail-section pricing-section">
           <h3>Dettagli Prezzo - {{ displayedPriceOption.roomType }}</h3>
           <div class="info-grid">
             <div class="info-item">
-              <span class="info-label">Notti:</span>
-              <span class="info-value">{{ currentQuote.duration }}</span>
+              <span class="info-label">{{ currentQuote.type === 'hotel' ? 'Notti' : 'Giorni' }}:</span>
+              <span class="info-value">{{ getQuoteDuration(currentQuote) }}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">Tariffa/notte (per persona):</span>
-              <span class="info-value">€{{ displayedPriceOption.pricePerNight.toFixed(2) }}</span>
+              <span class="info-label">Tariffa media/{{ currentQuote.type === 'hotel' ? 'notte' : 'giorno' }}:</span>
+              <span class="info-value">{{ formatCurrency(displayedPriceOption.pricePerNight) }}</span>
             </div>
             <div class="info-item full-width">
               <span class="info-label">TOTALE PREVENTIVO:</span>
-              <span class="info-value price-highlight">€{{ displayedPriceOption.totalPrice.toFixed(2) }}</span>
+              <span class="info-value price-highlight">{{ formatCurrency(displayedPriceOption.totalPrice) }}</span>
             </div>
           </div>
           <div v-if="displayedPriceOption.quote && displayedPriceOption.quote.days" class="daily-prices">
@@ -212,7 +245,8 @@
             <div class="prices-table">
               <div v-for="day in displayedPriceOption.quote.days" :key="day.date" class="price-row">
                 <span class="date">{{ formatDate(day.date) }}</span>
-                <span class="price">€{{ day.dayTotal.toFixed(2) }}</span>
+                <span class="source" v-if="day.pricelist || day.source">L{{ day.pricelist || 0 }} · {{ day.source || 'none' }}</span>
+                <span class="price">{{ formatCurrency(day.dayTotal) }}</span>
               </div>
             </div>
           </div>
@@ -240,8 +274,8 @@
         <button 
           @click="convertToBooking" 
           class="btn btn-success"
-          :disabled="isConverting || isQuoteExpired || (currentQuote.type === 'hotel' && !selectedRoomForConversion)"
-          :title="isQuoteExpired ? 'Preventivo scaduto' : (currentQuote.type === 'hotel' && !selectedRoomForConversion ? 'Seleziona una camera' : '')"
+          :disabled="isConverting || isQuoteExpired || (currentQuote.type === 'hotel' && !selectedRoomForConversion) || (currentQuote.type === 'beach' && (!selectedBeachPlaceId || isCheckingAvailability || beachPlaceAvailability === false))"
+          :title="isQuoteExpired ? 'Preventivo scaduto' : (currentQuote.type === 'hotel' && !selectedRoomForConversion ? 'Seleziona una camera' : (currentQuote.type === 'beach' && !selectedBeachPlaceId ? 'Seleziona un posto' : (currentQuote.type === 'beach' && isCheckingAvailability ? 'Controllo disponibilita in corso' : (currentQuote.type === 'beach' && beachPlaceAvailability === false ? 'Posto non disponibile' : ''))))"
         >
           {{ isConverting ? 'Conversione...' : isQuoteExpired ? 'Preventivo Scaduto' : 'Converti in Prenotazione' }}
         </button>
@@ -259,8 +293,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
 import QuoteBuilder from './QuoteBuilder.vue'
 import { useQuotes } from '@/composables/useQuotes.js'
 import { useAuth } from '@/composables/useAuth.js'
@@ -271,6 +306,11 @@ const { pmsType, loadPmsType } = useAuth()
 
 const selectedQuoteId = ref(null)
 const selectedRoomForConversion = ref(null)
+const selectedBeachPlaceId = ref('')
+const beachPlaces = ref([])
+const isLoadingPlaces = ref(false)
+const isCheckingAvailability = ref(false)
+const beachPlaceAvailability = ref(null)
 const isLoading = ref(true)
 const isDeleting = ref(false)
 const isConverting = ref(false)
@@ -286,6 +326,14 @@ const currentQuote = computed(() => {
   return quotes.value.find(q => q.id === selectedQuoteId.value)
 })
 
+const filteredBeachPlaces = computed(() => {
+  const quote = currentQuote.value
+  if (!quote || quote.type !== 'beach') return []
+  const placeTypeId = Number(quote.place_type_id)
+  if (!Number.isFinite(placeTypeId)) return beachPlaces.value
+  return beachPlaces.value.filter((p) => Number(p.placeTypeId) === placeTypeId)
+})
+
 const isQuoteExpired = computed(() => {
   if (!currentQuote.value?.expiresAt) return false
   return new Date() > new Date(currentQuote.value.expiresAt)
@@ -296,9 +344,130 @@ const formatDate = (dateStr) => {
   return date.toLocaleDateString('it-IT', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+const formatCurrency = (value) => {
+  const num = Number(value)
+  const safe = Number.isFinite(num) ? num : 0
+  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(safe)
+}
+
+const getQuoteCustomer = (quote) => {
+  if (!quote) return '-'
+  return quote.customer || quote.guestName || quote.accountholder?.firstname || '-'
+}
+
+const getQuoteDuration = (quote) => {
+  if (!quote) return 0
+  if (Number.isFinite(Number(quote.duration))) return Number(quote.duration)
+  if (!quote.checkin || !quote.checkout) return 0
+  const start = new Date(quote.checkin)
+  const end = new Date(quote.checkout)
+  const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+  return Number.isFinite(diff) && diff > 0 ? diff : 0
+}
+
+const getQuoteTotal = (quote) => {
+  if (!quote) return null
+  const candidates = [quote.total_price, quote.totalPrice, quote.price_per_place]
+  for (const candidate of candidates) {
+    const n = Number(candidate)
+    if (Number.isFinite(n)) return n
+  }
+  return null
+}
+
+const getQuoteKidsAgesLabel = (quote) => {
+  if (!quote) return ''
+  const raw = quote.kidsAges ?? quote.childrenAges ?? quote.kids_ages ?? quote.children_ages ?? []
+  if (!Array.isArray(raw) || raw.length === 0) return ''
+
+  const normalized = raw
+    .map((v) => Number(v))
+    .filter((v) => Number.isFinite(v) && v >= 0)
+    .map((v) => Math.floor(v))
+
+  if (!normalized.length) return ''
+  return normalized.join(', ')
+}
+
+const addDaysISO = (dateStr, daysToAdd) => {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + daysToAdd)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+const checkBeachPlaceAvailability = async () => {
+  const quote = currentQuote.value
+  const placeId = Number(selectedBeachPlaceId.value)
+  if (!quote || quote.type !== 'beach' || !quote.checkin || !quote.checkout || !Number.isFinite(placeId)) {
+    beachPlaceAvailability.value = null
+    return
+  }
+
+  try {
+    isCheckingAvailability.value = true
+    const to = addDaysISO(quote.checkout, -1)
+    const res = await axios.get(`http://localhost:8081/api/pms/beach/getbookingsbyrange?from=${quote.checkin}&to=${to}`)
+    const conflicts = (res.data?.bookings || []).some((b) => {
+      if (String(b.placeId) !== String(placeId)) return false
+      const checkin = String(b.checkin || '')
+      const checkout = String(b.checkout || '')
+      return checkin < quote.checkout && checkout > quote.checkin
+    })
+    beachPlaceAvailability.value = !conflicts
+  } catch (err) {
+    console.error('Errore controllo disponibilita posto spiaggia:', err)
+    beachPlaceAvailability.value = null
+  } finally {
+    isCheckingAvailability.value = false
+  }
+}
+
+const splitCustomerName = (fullName) => {
+  const value = String(fullName || '').trim()
+  if (!value) return { firstname: 'Cliente', lastname: 'Preventivo' }
+  const parts = value.split(/\s+/)
+  if (parts.length === 1) return { firstname: parts[0], lastname: '' }
+  return {
+    firstname: parts[0],
+    lastname: parts.slice(1).join(' ')
+  }
+}
+
+const normalizeBeachPlace = (place) => {
+  const row = Number(place.row ?? place.riga ?? place.fila ?? 0)
+  const sector = place.sector ?? place.zona ?? ''
+  const name = place.name ?? place.code ?? `P-${place.id}`
+  return {
+    ...place,
+    id: place.id,
+    name,
+    row: Number.isFinite(row) ? row : 0,
+    sector,
+    placeTypeId: Number(place.place_type?.id ?? row)
+  }
+}
+
+const loadBeachPlaces = async () => {
+  try {
+    isLoadingPlaces.value = true
+    const res = await axios.get('http://localhost:8081/api/pms/beach/getplan?mode=flat')
+    beachPlaces.value = (res.data || []).map(normalizeBeachPlace)
+  } catch (err) {
+    console.error('Errore caricamento posti spiaggia:', err)
+    beachPlaces.value = []
+  } finally {
+    isLoadingPlaces.value = false
+  }
+}
+
 const selectQuote = (quote) => {
   selectedQuoteId.value = quote.id
   selectedRoomForConversion.value = null // Reset room selection
+  selectedBeachPlaceId.value = ''
+  beachPlaceAvailability.value = null
 }
 
 const selectRoomForConversion = (room) => {
@@ -311,6 +480,24 @@ const displayedPriceOption = computed(() => {
   if (selectedRoomForConversion.value) return selectedRoomForConversion.value
   const q = currentQuote.value
   if (!q) return null
+
+  if (Array.isArray(q.price_per_day) && q.price_per_day.length > 0) {
+    const days = q.price_per_day.map((d) => ({
+      date: d.date,
+      dayTotal: Number(d.price_per_place ?? d.dayTotal ?? 0),
+      source: d.source,
+      pricelist: d.pricelist
+    }))
+    const total = getQuoteTotal(q) ?? days.reduce((acc, d) => acc + Number(d.dayTotal || 0), 0)
+    const duration = getQuoteDuration(q)
+    return {
+      roomType: q.type === 'beach' ? `Type ${q.place_type_id || '-'}` : (q.roomType || 'Opzione'),
+      pricePerNight: duration > 0 ? total / duration : total,
+      totalPrice: total,
+      quote: { days }
+    }
+  }
+
   if (q.priceData) {
     return {
       roomType: q.priceData.roomType || q.priceData.roomType || (q.allRoomOptions && q.allRoomOptions[0] && q.allRoomOptions[0].roomType) || 'Opzione',
@@ -354,6 +541,21 @@ const convertToBooking = async () => {
     alert('Seleziona il tipo di camera prima di convertire')
     return
   }
+
+  if (currentQuote.value.type === 'beach' && !selectedBeachPlaceId.value) {
+    alert('Seleziona il posto spiaggia prima di convertire')
+    return
+  }
+
+  if (currentQuote.value.type === 'beach') {
+    if (beachPlaceAvailability.value === null) {
+      await checkBeachPlaceAvailability()
+    }
+    if (beachPlaceAvailability.value === false) {
+      alert('Il posto selezionato non e disponibile nel periodo del preventivo')
+      return
+    }
+  }
   
   if (!confirm('Convertire questo preventivo in prenotazione confermata?')) return
   try {
@@ -373,10 +575,14 @@ const convertToBooking = async () => {
         priceData: selectedRoomForConversion.value?.quote
       }
     } else {
-      // Beach: usa i dati del preventivo (non ha selezione camera)
+      const customer = splitCustomerName(getQuoteCustomer(currentQuote.value))
       bookingData = {
-        ...currentQuote.value,
-        roomType: null
+        placeId: Number(selectedBeachPlaceId.value),
+        checkin: currentQuote.value.checkin,
+        checkout: currentQuote.value.checkout,
+        accountholder: customer,
+        origin: 1,
+        status: 0
       }
     }
     
@@ -393,13 +599,26 @@ const convertToBooking = async () => {
 
 onMounted(async () => {
   try {
-    await loadPmsType()
-    await loadQuotes()
+    await Promise.all([loadPmsType(), loadQuotes(), loadBeachPlaces()])
   } catch (err) {
     alert('Errore nel caricamento dei preventivi: ' + err.message)
   } finally {
     isLoading.value = false
   }
+})
+
+watch([selectedBeachPlaceId, currentQuote], async () => {
+  if (currentQuote.value?.type !== 'beach') {
+    beachPlaceAvailability.value = null
+    return
+  }
+
+  if (!selectedBeachPlaceId.value) {
+    beachPlaceAvailability.value = null
+    return
+  }
+
+  await checkBeachPlaceAvailability()
 })
 </script>
 
@@ -739,6 +958,53 @@ onMounted(async () => {
   border-left: 4px solid #3b82f6;
 }
 
+.beach-place-section {
+  background: #eff6ff;
+  border-left: 4px solid #2563eb;
+}
+
+.place-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: #1e40af;
+}
+
+.place-select-row select {
+  width: 100%;
+  padding: 0.7rem;
+  border-radius: 8px;
+  border: 1px solid #93c5fd;
+  background: white;
+}
+
+.place-meta {
+  display: block;
+  margin-top: 0.5rem;
+  color: #64748b;
+}
+
+.availability-status {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.availability-checking {
+  color: #1d4ed8;
+}
+
+.availability-ok {
+  color: #047857;
+}
+
+.availability-ko {
+  color: #b91c1c;
+}
+
+.availability-unknown {
+  color: #64748b;
+}
+
 .room-options-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -882,6 +1148,14 @@ onMounted(async () => {
   color: #374151;
   font-weight: 600;
   font-size: 0.95rem;
+}
+
+.price-row .source {
+  margin-left: auto;
+  margin-right: 1rem;
+  font-size: 0.75rem;
+  color: #64748b;
+  text-transform: uppercase;
 }
 
 .price-row .price {

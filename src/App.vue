@@ -62,6 +62,20 @@
               </span>
               <span class="label">Preventivi</span>
             </router-link>
+
+            <router-link
+              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
+              to="/accounts"
+              :class="['menu-item', { active: route.path === '/accounts' }]"
+              aria-label="Conti Hotel"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 6h16v12H4zM4 10h16M8 14h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Conti</span>
+            </router-link>
           </div>
 
           <!-- AREA BAR -->
@@ -139,6 +153,20 @@
             </router-link>
 
             <router-link
+              v-if="hasPermission('listino') && isPmsTypeAllowed(['hotel'])"
+              to="/settings/hotel-pricing"
+              :class="['menu-item', { active: route.path === '/settings/hotel-pricing' }]"
+              aria-label="Policy Prezzi Hotel"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 7h18M6 12h12M8 17h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Policy Prezzi</span>
+            </router-link>
+
+            <router-link
               v-if="hasPermission('listino_beach') && isPmsTypeAllowed(['beach'])"
               to="/listino_beach"
               :class="['menu-item', { active: route.path === '/listino_beach' }]"
@@ -164,6 +192,20 @@
                 </svg>
               </span>
               <span class="label">Promo Onda</span>
+            </router-link>
+
+            <router-link
+              v-if="hasPermission('listino') || hasPermission('listino_beach')"
+              to="/services"
+              :class="['menu-item', { active: route.path === '/services' }]"
+              aria-label="Configurazione Servizi"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Servizi</span>
             </router-link>
 
           </div>

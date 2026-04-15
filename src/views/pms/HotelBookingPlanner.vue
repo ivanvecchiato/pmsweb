@@ -3,6 +3,28 @@
     <div class="header">
       <h1 class="title">Planning Prenotazioni Hotel</h1>
       <div class="header-controls">
+        <button
+          @click="syncHotelH5s"
+          class="btn-nav btn-sync"
+          :disabled="isSyncingH5s"
+          :title="isSyncingH5s ? 'Sincronizzazione H5S in corso' : 'Sincronizza da H5S'"
+          aria-label="Sincronizza prenotazioni da H5S"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            :class="{ 'is-spinning': isSyncingH5s }"
+          >
+            <path d="M23 4v6h-6"></path>
+            <path d="M1 20v-6h6"></path>
+            <path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path>
+            <path d="M20.49 15a9 9 0 0 1-14.13 3.36L1 14"></path>
+          </svg>
+        </button>
         <div class="date-navigation">
           <button @click="previousPeriod" class="btn-nav" title="Periodo precedente">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -80,6 +102,7 @@
                   'booking-conflict': hasConflict(booking)
                 }"
                 :style="getBookingStyle(booking)"
+                :title="booking.notes || ''"
                 @mousedown="handleMouseDown($event, booking, 'move')"
                 @click.prevent.stop="openBookingActions($event, booking)"
               >
@@ -90,6 +113,12 @@
                 
                 <div class="booking-content">
                   <div class="booking-guest">{{ booking.guest }}</div>
+                  <div
+                    v-if="getBookingStatus(booking) === STATUS_CHECKOUT_PENDING_PAYMENT"
+                    class="booking-status-badge booking-status-badge-pending"
+                  >
+                    In attesa pagamento
+                  </div>
                 </div>
 
                 <div
@@ -107,11 +136,12 @@
   <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>{{ editingBooking ? 'Modifica Prenotazione' : 'Nuova Prenotazione' }}</h3>
+        <h3>{{ modalDialogTitle }}</h3>
         <button @click="showModal = false" class="close-btn">&times;</button>
       </div>
       
       <form @submit.prevent="submitNewBooking" class="booking-form">
+        <fieldset class="booking-form-fieldset" :disabled="isModalReadOnly">
         <div class="dialog-layout">
           <section class="dialog-section">
             <h4 class="section-title">Prenotazione</h4>
@@ -160,6 +190,16 @@
               </div>
             </div>
 
+            <div class="form-section">
+              <label>Note prenotazione</label>
+              <textarea
+                v-model="newBookingData.notes"
+                rows="3"
+                maxlength="1000"
+                placeholder="Aggiungi note interne per il PMS"
+              />
+            </div>
+
             <div class="form-row">
               <div class="form-section">
                 <label>Adulti</label>
@@ -168,6 +208,26 @@
               <div class="form-section">
                 <label>Bambini</label>
                 <input type="number" v-model="newBookingData.children" min="0" />
+              </div>
+            </div>
+
+            <div v-if="Number(newBookingData.children) > 0" class="form-section">
+              <label>Età bambini</label>
+              <div class="kids-ages-grid">
+                <div
+                  v-for="(_, idx) in normalizedChildrenCount"
+                  :key="`kid-age-${idx}`"
+                  class="kid-age-item"
+                >
+                  <span>Bambino {{ idx + 1 }}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="17"
+                    v-model.number="newBookingData.kidsAges[idx]"
+                    placeholder="Età"
+                  />
+                </div>
               </div>
             </div>
           </section>
@@ -241,20 +301,59 @@
                   <span>{{ dep.paymentDate }}</span>
                   <span>{{ dep.paymentMode || 'N/D' }}</span>
                 </div>
-                <button type="button" class="deposit-remove" @click="removeDeposit(index)">Rimuovi</button>
+                <button v-if="!isModalReadOnly" type="button" class="deposit-remove" @click="removeDeposit(index)">Rimuovi</button>
               </div>
             </div>
           </section>
         </div>
+        </fieldset>
 
         <div class="modal-footer">
-          <button type="button" @click="showModal = false" class="btn btn-cancel">Annulla</button>
-          <button v-if="editingBooking" type="button" class="btn btn-danger" @click.prevent="deleteBooking(); showModal=false">
-            Elimina
+          <button type="button" @click="showModal = false" class="btn btn-cancel">{{ isModalReadOnly ? 'Chiudi' : 'Annulla' }}</button>
+          <button v-if="editingBooking && !isModalReadOnly" type="button" class="btn btn-danger" @click.prevent="openCancelDialog">
+            Cancella
           </button>
-          <button type="submit" class="btn btn-save">{{ editingBooking ? 'Salva' : 'Conferma Prenotazione' }}</button>
+          <button v-if="!isModalReadOnly" type="submit" class="btn btn-save">{{ editingBooking ? 'Salva' : 'Conferma Prenotazione' }}</button>
         </div>
       </form>
+    </div>
+  </div>
+</transition>
+
+<transition name="fade">
+  <div v-if="showCancelDialog" class="modal-overlay" @click.self="showCancelDialog = false">
+    <div class="modal-content modal-content--narrow">
+      <div class="modal-header">
+        <h3>Cancella Prenotazione</h3>
+        <button @click="showCancelDialog = false" class="close-btn">&times;</button>
+      </div>
+      <div class="cancel-dialog-body">
+        <p class="cancel-dialog-guest" v-if="editingBooking">
+          <strong>{{ editingBooking.guest || (editingBooking.guestName + ' ' + editingBooking.guestSurname) }}</strong>
+        </p>
+        <div class="form-section">
+          <label>Motivazione cancellazione <span class="required-star">*</span></label>
+          <textarea
+            v-model="cancelReason"
+            rows="3"
+            maxlength="500"
+            placeholder="Indica il motivo della cancellazione (obbligatorio)"
+            class="cancel-reason-textarea"
+            autofocus
+          />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-cancel" @click="showCancelDialog = false">Torna</button>
+        <button
+          type="button"
+          class="btn btn-danger"
+          :disabled="!cancelReason.trim() || isCancelling"
+          @click="confirmCancel"
+        >
+          {{ isCancelling ? 'Attendere...' : 'Conferma Cancellazione' }}
+        </button>
+      </div>
     </div>
   </div>
 </transition>
@@ -265,13 +364,92 @@
   :style="bookingActionMenuStyle"
   @click.stop
 >
-  <button type="button" class="booking-action-item" @click="openEditFromMenu">
-    Modifica
-  </button>
-  <button type="button" class="booking-action-item" @click="runBookingStatusAction">
-    {{ bookingStatusActionLabel }}
-  </button>
+  <template v-if="isCheckoutContextMenu">
+    <button type="button" class="booking-action-item" @click="openViewFromMenu">
+      Visualizza
+    </button>
+    <button v-if="isPendingPaymentContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
+      Paga
+    </button>
+    <button type="button" class="booking-action-item booking-action-item--danger" @click="undoCheckoutFromMenu">
+      Annulla checkout
+    </button>
+  </template>
+  <template v-else>
+    <button type="button" class="booking-action-item" @click="openEditFromMenu">
+      Modifica
+    </button>
+    <button v-if="bookingStatusActionLabel" type="button" class="booking-action-item" @click="runBookingStatusAction">
+      {{ bookingStatusActionLabel }}
+    </button>
+    <button type="button" class="booking-action-item" @click="openAddServiceFromMenu">
+      Aggiungi Servizio
+    </button>
+    <button v-if="isCheckedInContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
+      Paga conto
+    </button>
+  </template>
 </div>
+
+<!-- Modale Aggiungi Servizio (hotel) -->
+<transition name="fade">
+  <div v-if="showAddServiceModal" class="modal-overlay" @click.self="closeAddServiceModal">
+    <div class="modal-card">
+      <div class="modal-header-row">
+        <h3 class="modal-title">Servizi Prenotazione</h3>
+        <button class="close-btn" @click="closeAddServiceModal">&times;</button>
+      </div>
+      <p class="modal-sub" v-if="addServiceTarget">
+        <strong>{{ addServiceTarget.guest || addServiceTarget.accountholder?.firstname || addServiceTarget.id }}</strong>
+      </p>
+
+      <!-- Lista servizi già aggiunti -->
+      <div v-if="addServiceTarget?.services?.length" class="existing-services">
+        <div class="existing-services-title">Servizi aggiunti</div>
+        <div v-for="(svc, i) in addServiceTarget.services" :key="i" class="existing-service-row">
+          <div class="existing-service-info">
+            <span class="existing-service-name">{{ svc.name }}<span v-if="svc.quantity > 1"> x{{ svc.quantity }}</span></span>
+            <span v-if="svc.note" class="existing-service-note"> &mdash; {{ svc.note }}</span>
+            <span v-if="svc.addedAt" class="existing-service-date">{{ formatServiceDate(svc.addedAt) }}</span>
+          </div>
+          <span class="existing-service-price">{{ svc.price != null ? '€' + (svc.price * (svc.quantity || 1)).toFixed(2) : '—' }}</span>
+        </div>
+      </div>
+
+      <div class="add-service-form">
+        <div class="add-service-form-title">Aggiungi servizio</div>
+        <div class="form-section" style="margin-bottom:0.75rem">
+          <label>Servizio *</label>
+          <select v-model="addServiceForm.serviceId">
+            <option value="">-- Seleziona --</option>
+            <option
+              v-for="s in availableServicesForType('hotel')"
+              :key="s.id"
+              :value="s.id"
+            >{{ s.name }}{{ s.price != null ? ' — €' + Number(s.price).toFixed(2) : '' }}</option>
+          </select>
+        </div>
+        <div class="form-row-inline">
+          <div class="form-section">
+            <label>Quantità</label>
+            <input v-model.number="addServiceForm.quantity" type="number" min="1" />
+          </div>
+          <div class="form-section">
+            <label>Note</label>
+            <input v-model="addServiceForm.note" type="text" placeholder="Opzionale" />
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer-row">
+        <button class="btn btn-cancel" @click="closeAddServiceModal">Chiudi</button>
+        <button class="btn btn-save" :disabled="!addServiceForm.serviceId || addingService" @click="confirmAddService">
+          {{ addingService ? 'Aggiunta...' : 'Aggiungi' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</transition>
 
 <!-- Quote Builder Modal -->
 <QuoteBuilder 
@@ -288,7 +466,10 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
 import { watch } from 'vue';
 import { useRouter } from 'vue-router'
-import QuoteBuilder from './QuoteBuilder.vue'
+import QuoteBuilder from '../quotes/QuoteBuilder.vue'
+import { usePricing } from '@/composables/usePricing'
+
+const { calculateQuotePrice, calculateOvernightTax, loadHotelPricingPolicy } = usePricing();
 
 const rooms = ref([
   { id: 1, name: 'Camera 101 - Singola' },
@@ -324,6 +505,7 @@ const router = useRouter();
 
 const cellWidth = 60;
 const cellHeight = 40;
+const isSyncingH5s = ref(false);
 
 const mouseLineX = ref(0);
 const hoverDate = ref('');
@@ -399,9 +581,152 @@ const mouseLineStyle = computed(() => {
 
 const showModal = ref(false);
 const editingBooking = ref(null);
+const isModalReadOnly = ref(false);
 const showBookingActionMenu = ref(false);
 const actionMenuBooking = ref(null);
 const actionMenuPosition = ref({ x: 0, y: 0 });
+
+const showCancelDialog = ref(false);
+const cancelReason = ref('');
+const isCancelling = ref(false);
+
+const STATUS_BOOKED_NO_DEPOSIT = 100;
+const STATUS_BOOKED_CONFIRMED = 200;
+const STATUS_BOOKED_BOOKING_DOT_COM = 300;
+const STATUS_CHECKED_IN = 1;
+const STATUS_CHECKED_OUT = 2;
+const STATUS_CHECKOUT_PENDING_PAYMENT = 10;
+const STATUS_CANCELLED = -100;
+const STATUS_CHECKING_IN = 3;
+const STATUS_CHECKING_OUT = 4;
+
+const BOOKING_STATUS_META = {
+  [STATUS_BOOKED_NO_DEPOSIT]: {
+    label: 'Prenotata senza caparra',
+    color: '#EF5350',
+    borderColor: '#E53935',
+    textColor: '#FFFFFF'
+  },
+  [STATUS_BOOKED_CONFIRMED]: {
+    label: 'Confermata',
+    color: '#66BB6A',
+    borderColor: '#43A047',
+    textColor: '#0F172A'
+  },
+  [STATUS_BOOKED_BOOKING_DOT_COM]: {
+    label: 'Prenotata da Booking.com',
+    color: '#FFEB3B',
+    borderColor: '#FBC02D',
+    textColor: '#0F172A'
+  },
+  [STATUS_CHECKED_IN]: {
+    label: 'In check-in',
+    color: '#29B6F6',
+    borderColor: '#039BE5',
+    textColor: '#FFFFFF'
+  },
+  [STATUS_CHECKED_OUT]: {
+    label: 'In check-out',
+    color: '#424242',
+    borderColor: '#212121',
+    textColor: '#FFFFFF'
+  },
+  [STATUS_CHECKOUT_PENDING_PAYMENT]: {
+    label: 'Checkout attesa pagamento',
+    color: '#E0E0E0',
+    borderColor: '#BDBDBD',
+    textColor: '#111827'
+  },
+  [STATUS_CANCELLED]: {
+    label: 'Cancellata',
+    color: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    textColor: '#111827'
+  }
+};
+
+const BOOKING_STATUS_FALLBACK_META = {
+  label: 'Prenotata senza caparra',
+  color: '#EF5350',
+  borderColor: '#E53935',
+  textColor: '#FFFFFF'
+};
+
+// --- Servizi ---
+const availableServices = ref([]);
+const showAddServiceModal = ref(false);
+const addServiceTarget = ref(null);
+const addingService = ref(false);
+const addServiceForm = ref({ serviceId: '', quantity: 1, note: '' });
+
+async function loadAvailableServices() {
+  try {
+    const { data } = await axios.get('http://localhost:8081/api/pms/services');
+    availableServices.value = Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error('Errore caricamento servizi:', e);
+  }
+}
+
+function availableServicesForType(type) {
+  return availableServices.value;
+}
+
+function openAddServiceFromMenu() {
+  if (!actionMenuBooking.value) return;
+  if (isCheckoutLockedStatus(actionMenuBooking.value)) {
+    closeBookingActions();
+    return;
+  }
+  addServiceTarget.value = actionMenuBooking.value;
+  addServiceForm.value = { serviceId: '', quantity: 1, note: '' };
+  closeBookingActions();
+  showAddServiceModal.value = true;
+}
+
+function closeAddServiceModal() {
+  showAddServiceModal.value = false;
+  addServiceTarget.value = null;
+}
+
+async function confirmAddService() {
+  if (!addServiceForm.value.serviceId || !addServiceTarget.value) return;
+  const svc = availableServices.value.find(s => s.id === addServiceForm.value.serviceId);
+  if (!svc) return;
+  addingService.value = true;
+  try {
+    const serviceEntry = {
+      serviceId: svc.id,
+      name: svc.name,
+      price: svc.price,
+      quantity: addServiceForm.value.quantity || 1,
+      note: addServiceForm.value.note || '',
+      addedAt: new Date().toISOString()
+    };
+    const result = await axios.post('http://localhost:8081/api/pms/hotel/add_service', {
+      reservationId: addServiceTarget.value.id,
+      service: serviceEntry
+    });
+    // aggiorna i servizi visibili nella modale senza chiuderla
+    if (result.data?.services) {
+      addServiceTarget.value = { ...addServiceTarget.value, services: result.data.services };
+    }
+    addServiceForm.value = { serviceId: '', quantity: 1, note: '' };
+    getReservations();
+  } catch (e) {
+    console.error('Errore aggiunta servizio:', e);
+    alert('Errore durante l\'aggiunta del servizio.');
+  } finally {
+    addingService.value = false;
+  }
+}
+
+function formatServiceDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  return d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 const depositDraft = ref({
   amount: null,
   paymentDate: '',
@@ -411,8 +736,10 @@ const newBookingData = ref({
   roomId: '',
   guestName: '',
   guestSurname: '',
+  notes: '',
   adults: 1,
   children: 0,
+  kidsAges: [],
   checkin: '',
   checkout: '',
   board: 'bb',
@@ -450,6 +777,23 @@ const getReservationDeposits = (reservation) => {
   return [];
 };
 
+const getReservationNotes = (reservation) => {
+  if (!reservation) return '';
+
+  const rawNotes = reservation.notes
+    ?? reservation.note
+    ?? reservation.booking_notes
+    ?? reservation.booking_note
+    ?? reservation.note_booking
+    ?? reservation.internal_notes
+    ?? reservation.internal_note
+    ?? reservation.accountholder?.notes
+    ?? reservation.accountholder?.note
+    ?? '';
+
+  return String(rawNotes).trim();
+};
+
 const resetDepositDraft = (defaultDate = '') => {
   depositDraft.value = {
     amount: null,
@@ -461,6 +805,125 @@ const resetDepositDraft = (defaultDate = '') => {
 const totalDeposits = computed(() => {
   return (newBookingData.value.deposits || []).reduce((sum, dep) => sum + Number(dep.amount || 0), 0);
 });
+
+const normalizedChildrenCount = computed(() => {
+  const count = Number(newBookingData.value.children);
+  if (!Number.isFinite(count) || count <= 0) return 0;
+  return Math.floor(count);
+});
+
+const normalizeKidsAges = (ages, expectedCount) => {
+  const source = Array.isArray(ages) ? ages : [];
+  const count = Math.max(0, Number(expectedCount) || 0);
+  const normalized = [];
+  for (let i = 0; i < count; i++) {
+    const value = Number(source[i]);
+    normalized.push(Number.isFinite(value) && value >= 0 ? Math.floor(value) : null);
+  }
+  return normalized;
+};
+
+const getRawBookingStatus = (reservation) => {
+  const numeric = Number(reservation?.status);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const getBookingSourceText = (reservation) => {
+  const sourceValue = reservation?.source
+    ?? reservation?.channel
+    ?? reservation?.origin
+    ?? reservation?.provider
+    ?? reservation?.booking_source
+    ?? reservation?.bookingSource
+    ?? reservation?.reservation_source
+    ?? reservation?.reservationSource
+    ?? reservation?.accountholder?.source
+    ?? reservation?.accountholder?.origin
+    ?? '';
+  return String(sourceValue || '').trim().toLowerCase();
+};
+
+const isBookingDotComReservation = (reservation) => {
+  if (reservation?.isBookingCom === true || reservation?.bookingCom === true || reservation?.fromBookingCom === true) {
+    return true;
+  }
+
+  const sourceText = getBookingSourceText(reservation);
+  if (sourceText.includes('booking.com') || sourceText === 'booking') {
+    return true;
+  }
+
+  return sourceText.includes('bookingcom');
+};
+
+const resolveBookedDisplayStatus = (reservation, hasDeposit) => {
+  if (isBookingDotComReservation(reservation) && !hasDeposit) {
+    return STATUS_BOOKED_BOOKING_DOT_COM;
+  }
+  return hasDeposit ? STATUS_BOOKED_CONFIRMED : STATUS_BOOKED_NO_DEPOSIT;
+};
+
+const isCheckoutPaid = (reservation) => {
+  if (!reservation || typeof reservation !== 'object') return false;
+
+  const explicitPaidFlags = [
+    reservation.isPaid,
+    reservation.paid,
+    reservation.checkoutPaid,
+    reservation.checkout_paid,
+    reservation.balancePaid,
+    reservation.balance_paid,
+    reservation.saldoPaid,
+    reservation.saldo_paid
+  ];
+
+  if (explicitPaidFlags.some(flag => flag === true)) {
+    return true;
+  }
+
+  const paymentStatusRaw = reservation.paymentStatus
+    ?? reservation.payment_status
+    ?? reservation.checkoutPaymentStatus
+    ?? reservation.checkout_payment_status
+    ?? reservation.balanceStatus
+    ?? reservation.balance_status
+    ?? '';
+
+  const paymentStatus = String(paymentStatusRaw || '').trim().toLowerCase();
+  return paymentStatus === 'paid'
+    || paymentStatus === 'pagato'
+    || paymentStatus === 'settled'
+    || paymentStatus === 'completed'
+    || paymentStatus === 'complete';
+};
+
+const resolveDisplayBookingStatus = (reservation, hasDeposit) => {
+  const rawStatus = getRawBookingStatus(reservation);
+
+  if (rawStatus === STATUS_CHECKING_OUT) {
+    return STATUS_CHECKED_IN;
+  }
+
+  if (rawStatus === STATUS_CHECKING_IN) {
+    return resolveBookedDisplayStatus(reservation, hasDeposit);
+  }
+
+  if (rawStatus === STATUS_CHECKED_OUT) {
+    return isCheckoutPaid(reservation) ? STATUS_CHECKED_OUT : STATUS_CHECKOUT_PENDING_PAYMENT;
+  }
+
+  if (rawStatus === STATUS_CHECKED_IN
+    || rawStatus === STATUS_CHECKED_OUT
+    || rawStatus === STATUS_CHECKOUT_PENDING_PAYMENT
+    || rawStatus === STATUS_BOOKED_NO_DEPOSIT
+    || rawStatus === STATUS_BOOKED_CONFIRMED
+    || rawStatus === STATUS_BOOKED_BOOKING_DOT_COM
+    || rawStatus === STATUS_CANCELLED) {
+    return rawStatus;
+  }
+
+  return resolveBookedDisplayStatus(reservation, hasDeposit);
+};
 
 const addDeposit = () => {
   const amount = Number(depositDraft.value.amount);
@@ -503,14 +966,63 @@ watch(() => newBookingData.value.checkin, (newIn) => {
   }
 });
 
+watch(() => newBookingData.value.children, (newValue) => {
+  const count = Math.max(0, Number(newValue) || 0);
+  newBookingData.value.kidsAges = normalizeKidsAges(newBookingData.value.kidsAges, count);
+});
+
 const getBookingStatus = (booking) => {
-  const numeric = Number(booking?.status);
+  const numeric = Number(booking?.displayStatus ?? booking?.status);
   return Number.isFinite(numeric) ? numeric : 0;
 };
 
+const getBookingStatusMeta = (booking) => {
+  const status = getBookingStatus(booking);
+  return BOOKING_STATUS_META[status] || BOOKING_STATUS_FALLBACK_META;
+};
+
+const getBookingStatusLabel = (booking) => getBookingStatusMeta(booking).label;
+
+const getBookingStatusAction = (booking) => {
+  const status = getBookingStatus(booking);
+  if (status === STATUS_CHECKED_IN) {
+    return {
+      label: 'Check-out',
+      endpoint: 'checkout'
+    };
+  }
+  if (status === STATUS_BOOKED_NO_DEPOSIT
+    || status === STATUS_BOOKED_CONFIRMED
+    || status === STATUS_BOOKED_BOOKING_DOT_COM) {
+    return {
+      label: 'Check-in',
+      endpoint: 'checkin'
+    };
+  }
+  return null;
+};
+
+const isCheckoutLockedStatus = (booking) => {
+  const status = getBookingStatus(booking);
+  return status === STATUS_CHECKED_OUT || status === STATUS_CHECKOUT_PENDING_PAYMENT;
+};
+
+const isCheckoutContextMenu = computed(() => isCheckoutLockedStatus(actionMenuBooking.value));
+
+const isPendingPaymentContextMenu = computed(() => getBookingStatus(actionMenuBooking.value) === STATUS_CHECKOUT_PENDING_PAYMENT);
+
+const isCheckedInContextMenu = computed(() => getBookingStatus(actionMenuBooking.value) === STATUS_CHECKED_IN);
+
+const modalDialogTitle = computed(() => {
+  if (isModalReadOnly.value && editingBooking.value) {
+    return 'Dettaglio Prenotazione';
+  }
+  return editingBooking.value ? 'Modifica Prenotazione' : 'Nuova Prenotazione';
+});
+
 const bookingStatusActionLabel = computed(() => {
-  if (!actionMenuBooking.value) return 'Check-in';
-  return getBookingStatus(actionMenuBooking.value) === 1 ? 'Check-out' : 'Check-in';
+  const statusAction = getBookingStatusAction(actionMenuBooking.value);
+  return statusAction?.label || '';
 });
 
 const bookingActionMenuStyle = computed(() => ({
@@ -552,7 +1064,13 @@ const runBookingStatusAction = async () => {
   if (!actionMenuBooking.value) return;
 
   const booking = actionMenuBooking.value;
-  const endpoint = getBookingStatus(booking) === 1 ? 'checkout' : 'checkin';
+  const statusAction = getBookingStatusAction(booking);
+  if (!statusAction) {
+    closeBookingActions();
+    return;
+  }
+
+  const { endpoint } = statusAction;
 
   try {
     await axios.get(`http://localhost:8081/api/pms/${endpoint}`, {
@@ -579,6 +1097,7 @@ const addBooking = (room = null, event = null) => {
   closeBookingActions();
   selectedBooking.value = null;
   editingBooking.value = null;
+  isModalReadOnly.value = false;
 
   let checkin = '';
   if (room && event?.currentTarget) {
@@ -600,8 +1119,10 @@ const addBooking = (room = null, event = null) => {
     roomId: room?.id ?? rooms.value[0]?.id ?? '',
     guestName: '',
     guestSurname: '',
+    notes: '',
     adults: 1,
     children: 0,
+    kidsAges: [],
     checkin,
     checkout,
     board: 'bb',
@@ -617,9 +1138,7 @@ const createQuote = () => {
   showQuoteBuilder.value = true;
 };
 
-const openEditBooking = (booking) => {
-  closeBookingActions();
-  console.log('editing hotel booking', booking);
+const loadBookingIntoDialog = (booking) => {
   selectedBooking.value = booking.id;
   editingBooking.value = booking;
   const start = new Date(booking.startDate);
@@ -630,8 +1149,10 @@ const openEditBooking = (booking) => {
     roomId: booking.roomId,
     guestName: booking.guestName || booking.guest || '',
     guestSurname: booking.guestSurname || '',
+    notes: getReservationNotes(booking),
     adults: booking.adults || 1,
     children: booking.children || 0,
+    kidsAges: normalizeKidsAges(booking.kidsAges, booking.children || 0),
     checkin: toISODate(start),
     checkout: toISODate(end),
     board: booking.board || 'bb',
@@ -641,6 +1162,58 @@ const openEditBooking = (booking) => {
   };
   resetDepositDraft(toISODate(start));
   showModal.value = true;
+};
+
+const openViewBooking = (booking) => {
+  closeBookingActions();
+  isModalReadOnly.value = true;
+  loadBookingIntoDialog(booking);
+};
+
+const openEditBooking = (booking) => {
+  console.log('editing hotel booking', booking);
+  if (isCheckoutLockedStatus(booking)) {
+    openViewBooking(booking);
+    return;
+  }
+
+  closeBookingActions();
+  isModalReadOnly.value = false;
+  loadBookingIntoDialog(booking);
+};
+
+const openViewFromMenu = () => {
+  if (!actionMenuBooking.value) return;
+  const booking = actionMenuBooking.value;
+  openViewBooking(booking);
+};
+
+const openPendingPaymentFromMenu = () => {
+  const reservationId = actionMenuBooking.value?.id;
+  closeBookingActions();
+  if (reservationId == null) return;
+  router.push({
+    name: 'CheckoutPayment',
+    params: {
+      reservationId: String(reservationId)
+    }
+  });
+};
+
+const undoCheckoutFromMenu = async () => {
+  if (!actionMenuBooking.value) return;
+  const booking = actionMenuBooking.value;
+  if (!confirm(`Annullare il checkout della prenotazione #${booking.id}?`)) return;
+  closeBookingActions();
+  try {
+    await axios.get('http://localhost:8081/api/pms/checkin', {
+      params: { reservation: booking.id, operator: 0 }
+    });
+    getReservations();
+  } catch (error) {
+    console.error('Errore annullamento checkout:', error);
+    alert('Errore durante l\'annullamento del checkout');
+  }
 };
 
 const shouldTryNextEndpoint = (error) => {
@@ -666,7 +1239,48 @@ const postToFirstAvailableEndpoint = async (endpoints, payload) => {
   throw lastError;
 };
 
+const syncHotelH5s = async () => {
+  if (isSyncingH5s.value) return;
+
+  isSyncingH5s.value = true;
+  const syncEndpoint = 'http://localhost:8081/api/pms/hotel/sync_h5s';
+
+  try {
+    await axios.get(syncEndpoint, { timeout: 60000 });
+
+    getReservations();
+  } catch (error) {
+    console.error('Errore sincronizzazione H5S:', error);
+    alert('Errore durante la sincronizzazione H5S');
+  } finally {
+    isSyncingH5s.value = false;
+  }
+};
+
+const normalizeBoardForBackend = (boardValue) => {
+  if (boardValue == null) return boardValue;
+  return String(boardValue).toUpperCase();
+};
+
+const buildOvernightTaxSnapshot = () => {
+  const tax = calculateOvernightTax({
+    checkin: newBookingData.value.checkin,
+    checkout: newBookingData.value.checkout,
+    adults: Number(newBookingData.value.adults || 0),
+    children: Number(newBookingData.value.children || 0),
+    kidsAges: normalizeKidsAges(newBookingData.value.kidsAges, newBookingData.value.children)
+  });
+
+  return {
+    type: 'overnight_tax',
+    vatMode: 'exempt',
+    ...tax
+  };
+};
+
 const submitNewBooking = async () => {
+  if (isModalReadOnly.value) return;
+
   const start = new Date(newBookingData.value.checkin);
   const end = new Date(newBookingData.value.checkout);
   
@@ -687,6 +1301,9 @@ const submitNewBooking = async () => {
     paymentMode: dep.paymentMode || '',
     paymentDate: dep.paymentDate
   }));
+  const overnightTax = buildOvernightTaxSnapshot();
+  const taxesSnapshot = { overnight: overnightTax };
+  const bookingNotes = String(newBookingData.value.notes || '').trim();
 
   const payload = {
     roomId: newBookingData.value.roomId,
@@ -699,10 +1316,21 @@ const submitNewBooking = async () => {
     adults: parseInt(newBookingData.value.adults),
     children: parseInt(newBookingData.value.children),
     kids: parseInt(newBookingData.value.children),
+    kidsAges: normalizeKidsAges(newBookingData.value.kidsAges, newBookingData.value.children),
+    childrenAges: normalizeKidsAges(newBookingData.value.kidsAges, newBookingData.value.children),
     checkin: newBookingData.value.checkin,
     duration: duration,
-    board: newBookingData.value.board,
+    board: normalizeBoardForBackend(newBookingData.value.board),
     fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null,
+    pricingModeSnapshot: bookingQuote.value?.pricingMode || null,
+    note: bookingNotes,
+    notes: bookingNotes,
+    booking_note: bookingNotes,
+    booking_notes: bookingNotes,
+    overnight_tax: overnightTax,
+    overnightTax,
+    taxes: taxesSnapshot,
+    taxes_json: JSON.stringify(taxesSnapshot),
     deposits: backendDeposits,
     deposit: backendDeposits,
     deposits_json: JSON.stringify(backendDeposits.map(dep => ({
@@ -804,55 +1432,36 @@ const bookingQuote = computed(() => {
   const start = new Date(checkin);
   const end = new Date(checkout);
   const room = rooms.value.find(r => r.id === roomId);
-  
-  // Calcolo occupanti totali
   const numAdults = parseInt(adults) || 0;
   const numChildren = parseInt(children) || 0;
-  const totalPeople = numAdults + numChildren;
 
-  if (!room || start >= end || totalPeople === 0) return null;
+  if (!room || start >= end || numAdults + numChildren === 0) return null;
 
-  let totalCalculated = 0;
-  const days = [];
-  let current = new Date(start);
-
-  while (current < end) {
-    const dateStr = toISODate(current);
-    const dayData = timetable.value.find(t => t.date === dateStr);
-    
-    // Cerchiamo il listino (usando String() per evitare errori di tipo id 1 vs "1")
-    const pricelist = pricelists.value.find(p => String(p.id) === String(dayData?.pricelist));
-    
-    // 1. Quota Camera PER PERSONA
-    const ratePerPerson = pricelist?.prices.find(p => p.roomType === room.type)?.tariffa || 0;
-    const totalRoomRateDay = ratePerPerson * totalPeople;
-
-    // 2. Supplemento Trattamento PER PERSONA
-    let surchargePerPerson = 0;
-    if (board === 'hb') surchargePerPerson = pricelist?.surcharges?.hb || 0;
-    if (board === 'fb') surchargePerPerson = pricelist?.surcharges?.fb || 0;
-    const totalSurchargeDay = surchargePerPerson * totalPeople;
-
-    const dayTotal = totalRoomRateDay + totalSurchargeDay;
-
-    days.push({
-      date: dateStr,
-      ratePerPerson,
-      surchargePerPerson,
-      totalPeople,
-      dayTotal,
-      listino: pricelist?.description || 'N/A'
-    });
-
-    totalCalculated += dayTotal;
-    current.setDate(current.getDate() + 1);
-  }
+  const quote = calculateQuotePrice(
+    checkin,
+    checkout,
+    room.type,
+    'hotel',
+    numAdults + numChildren,
+    {
+      board,
+      adults: numAdults,
+      children: numChildren,
+      kidAges: newBookingData.value.kidsAges || []
+    }
+  );
+  if (!quote) return null;
 
   const finalTotal = newBookingData.value.isManualPrice 
     ? newBookingData.value.manualPrice 
-    : totalCalculated;
+    : quote.totalCalculated;
 
-  return { totalCalculated, finalTotal, days };
+  return {
+    totalCalculated: quote.totalCalculated,
+    finalTotal,
+    days: quote.days,
+    pricingMode: quote.pricingMode
+  };
 });
 
 const formatDate = (date) => {
@@ -1013,25 +1622,10 @@ const getBookingStyle = (booking) => {
   // Se la prenotazione inizia prima, la attacchiamo al bordo sinistro (slot 1)
   const displayStart = relativeStart < 1 ? 1 : relativeStart;
   const visibleDur = getVisibleDuration(booking);
-  const status = getBookingStatus(booking);
-
-  let backgroundColor = '#ef4444';
-  let borderColor = '#dc2626';
-  let textColor = '#ffffff';
-
-  if (status === 2) {
-    backgroundColor = '#9ca3af';
-    borderColor = '#6b7280';
-    textColor = '#111827';
-  } else if (status === 1) {
-    backgroundColor = '#38bdf8';
-    borderColor = '#0ea5e9';
-    textColor = '#ffffff';
-  } else if (booking.hasDeposit) {
-    backgroundColor = '#86efac';
-    borderColor = '#4ade80';
-    textColor = '#111827';
-  }
+  const statusMeta = getBookingStatusMeta(booking);
+  const backgroundColor = statusMeta.color;
+  const borderColor = statusMeta.borderColor;
+  const textColor = statusMeta.textColor;
   
   const left = (displayStart - 1) * cellWidth + 4;
   const width = (visibleDur * cellWidth) - 8;
@@ -1204,6 +1798,31 @@ const deleteBooking = () => {
   }
 };
 
+const openCancelDialog = () => {
+  cancelReason.value = '';
+  showCancelDialog.value = true;
+};
+
+const confirmCancel = async () => {
+  if (!cancelReason.value.trim() || isCancelling.value) return;
+  isCancelling.value = true;
+  try {
+    await axios.post('http://localhost:8081/api/pms/hotel/cancel_reservation', {
+      id: editingBooking.value.id,
+      cancellation_reason: cancelReason.value.trim()
+    });
+    bookings.value = bookings.value.filter(b => b.id !== editingBooking.value.id);
+    selectedBooking.value = null;
+    editingBooking.value = null;
+    showCancelDialog.value = false;
+    showModal.value = false;
+  } catch (err) {
+    console.error('Errore cancellazione:', err);
+  } finally {
+    isCancelling.value = false;
+  }
+};
+
 const getReservations = () => {
   // Chiediamo al server dati a partire da 30 giorni prima della data visibile
   // per includere le prenotazioni che finiscono dentro la finestra attuale
@@ -1247,25 +1866,31 @@ const convertReservations = (apiReservations) => {
 
     const deposits = normalizeDeposits(getReservationDeposits(res));
     const hasDeposit = deposits.some(dep => Number(dep?.amount || 0) > 0) || deposits.length > 0;
+    const rawStatus = getRawBookingStatus(res);
+    const displayStatus = resolveDisplayBookingStatus(res, hasDeposit);
 
     return {
       id: res.id,
       roomId: String(res.roomId), // Forza a stringa per il confronto
       startDate: startDateObj,
       duration: res.duration,
-      status: Number(res.status ?? 0),
+      rawStatus,
+      displayStatus,
+      status: displayStatus,
       hasDeposit,
       deposits,
       guestName: res.accountholder?.firstname || '',
       guestSurname: res.accountholder?.lastname || '',
       adults: res.adults ?? res.pax ?? 1,
       children: res.kids ?? 0,
+      kidsAges: normalizeKidsAges(res.kidsAges ?? res.childrenAges ?? res.kids_ages ?? res.children_ages, res.kids ?? 0),
       board: (res.board || 'BB').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
-      guest: res.accountholder.firstname + ' ' + res.accountholder.lastname,
+      notes: getReservationNotes(res),
+      guest: (res.accountholder?.firstname ?? '') + ' ' + (res.accountholder?.lastname ?? ''),
       color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
     };
-  });
+  }).filter(booking => getBookingStatus(booking) !== STATUS_CANCELLED);
 };
 
 const getRooms = () =>{
@@ -1342,7 +1967,9 @@ onMounted(() => {
   window.addEventListener('mouseup', handleMouseUp);
   window.addEventListener('click', handleGlobalClick);
   getRooms();
+  loadHotelPricingPolicy();
   loadPricingData();
+  loadAvailableServices();
 });
 
 onUnmounted(() => {
@@ -1422,6 +2049,28 @@ onUnmounted(() => {
   color: white;
 }
 
+.btn-sync {
+  background: #f3f4f6;
+}
+
+.btn-sync:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.is-spinning {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .title {
   font-size: 1.5rem;
   font-weight: bold;
@@ -1445,6 +2094,23 @@ onUnmounted(() => {
 
 .btn-primary:hover {
   background: #2563eb;
+}
+
+.kids-ages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+
+.kid-age-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.kid-age-item span {
+  font-size: 0.8rem;
+  color: #4b5563;
 }
 
 .btn-danger {
@@ -1573,13 +2239,39 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   align-items: center;
+  gap: 0.45rem;
   overflow: hidden;
 }
 
 .booking-guest {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.booking-status-badge {
+  margin-left: auto;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.15rem 0.38rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.booking-status-badge-pending {
+  background: #ffffff;
+  color: #424242;
+  border: 1px solid #9e9e9e;
+}
+
+.booking-form-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
 }
 
 .booking-duration {
@@ -1738,6 +2430,81 @@ onUnmounted(() => {
   background: #f3f4f6;
 }
 
+.booking-action-item--danger {
+  color: #dc2626;
+}
+
+.booking-action-item--danger:hover {
+  background: #fef2f2;
+}
+
+/* Modale servizi */
+.modal-card {
+  background: white;
+  width: 90%;
+  max-width: 480px;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+}
+.modal-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+.modal-title { margin: 0; font-size: 1.1rem; font-weight: 700; color: #111827; }
+.modal-sub { font-size: 0.85rem; color: #6b7280; margin: 0 0 0.75rem; }
+.form-row-inline { display: flex; gap: 1rem; margin-bottom: 1rem; }
+.modal-footer-row { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; }
+.btn-save { background: #2563eb; color: white; border: none; padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.875rem; }
+.btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-cancel { background: #f3f4f6; color: #374151; border: none; padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer; font-size: 0.875rem; }
+
+.existing-services {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 1rem;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.existing-services-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+.existing-service-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 5px 0;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.85rem;
+  gap: 8px;
+}
+.existing-service-row:last-child { border-bottom: none; }
+.existing-service-info { display: flex; flex-direction: column; gap: 1px; }
+.existing-service-name { font-weight: 600; color: #1e293b; }
+.existing-service-note { color: #6b7280; font-size: 0.78rem; font-style: italic; }
+.existing-service-date { color: #94a3b8; font-size: 0.72rem; }
+.existing-service-price { font-weight: 700; color: #374151; white-space: nowrap; flex-shrink: 0; }
+.add-service-form { margin-top: 0.25rem; }
+.add-service-form-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
 .modal-content {
   background: white;
   width: 90%;
@@ -1803,11 +2570,16 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
-.form-section input, .form-section select {
+.form-section input, .form-section select, .form-section textarea {
   padding: 10px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   font-size: 14px;
+}
+
+.form-section textarea {
+  resize: vertical;
+  min-height: 84px;
 }
 
 .deposit-entry-grid {

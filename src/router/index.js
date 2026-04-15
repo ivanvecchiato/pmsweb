@@ -7,49 +7,55 @@ const router = createRouter({
     {
       path: '/login',
       name: 'Login',
-      component: () => import('../Login.vue'),
+      component: () => import('@/views/auth/Login.vue'),
       meta: { isPublic: true }
     },
     {
       path: '/',
       name: 'Planner',
-      component: () => import('../HotelBookingPlanner.vue'),
+      component: () => import('@/views/pms/HotelBookingPlanner.vue'),
       meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'] }
     },
     {
       path: '/customers',
       name: 'CustomerManagement',
-      component: () => import('../CustomerManagement.vue'),
+      component: () => import('@/views/pms/CustomerManagement.vue'),
       meta: { requiresAuth: true, permission: 'customers' }
     },
     {
       path: '/listino',
       name: 'PriceManagement',
-      component: () => import('../PriceManagement.vue'),
+      component: () => import('@/views/config/PriceManagement.vue'),
+      meta: { requiresAuth: true, permission: 'listino', pmsTypes: ['hotel'] }
+    },
+    {
+      path: '/settings/hotel-pricing',
+      name: 'HotelPricingPolicySettings',
+      component: () => import('@/views/config/HotelPricingPolicySettings.vue'),
       meta: { requiresAuth: true, permission: 'listino', pmsTypes: ['hotel'] }
     },
     {
       path: '/listino_beach',
       name: 'BeachManagementDashboard',
-      component: () => import('../BeachManagementDashboard.vue'),
+      component: () => import('@/views/beach/BeachManagementDashboard.vue'),
       meta: { requiresAuth: true, permission: 'listino_beach', pmsTypes: ['beach'] }
     },
     {
       path: '/onda-push-products',
       name: 'OndaPushProductsConfig',
-      component: () => import('../OndaPushProductsConfig.vue'),
+      component: () => import('@/views/config/OndaPushProductsConfig.vue'),
       meta: { requiresAuth: true, permission: 'onda_push_products' }
     },
     {
       path: '/beach-bookings',
       name: 'BeachBookingPlanner',
-      component: () => import('../BeachBookingPlanner.vue'),
+      component: () => import('@/views/beach/BeachBookingPlanner.vue'),
       meta: { requiresAuth: true, permission: 'beach-bookings', pmsTypes: ['beach'] }
     },
     {
       path: '/inventory',
       name: 'InventoryManagement',
-      component: () => import('../InventoryManagement.vue'),
+      component: () => import('@/views/bar/InventoryManagement.vue'),
       meta: { requiresAuth: true, permission: 'inventory' }
     },
     {
@@ -61,26 +67,44 @@ const router = createRouter({
     {
       path: '/stats/products',
       name: 'StatsProducts',
-      component: () => import('../StatsProducts.vue'),
+      component: () => import('@/views/stats/StatsProducts.vue'),
       meta: { requiresAuth: true, permission: 'stats' }
     },
     {
       path: '/stats/operators',
       name: 'StatsOperators',
-      component: () => import('../StatsOperators.vue'),
+      component: () => import('@/views/stats/StatsOperators.vue'),
       meta: { requiresAuth: true, permission: 'stats' }
     },
     {
       path: '/stats/sales',
       name: 'StatsSales',
-      component: () => import('../StatsSales.vue'),
+      component: () => import('@/views/stats/StatsSales.vue'),
       meta: { requiresAuth: true, permission: 'stats' }
     },
     {
       path: '/quotes',
       name: 'QuoteManager',
-      component: () => import('../QuoteManager.vue'),
+      component: () => import('@/views/quotes/QuoteManager.vue'),
       meta: { requiresAuth: true, permission: 'home' }
+    },
+    {
+      path: '/accounts',
+      name: 'GuestAccount',
+      component: () => import('@/views/pms/GuestAccount.vue'),
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'] }
+    },
+    {
+      path: '/services',
+      name: 'ServicesConfig',
+      component: () => import('@/views/config/ServicesConfig.vue'),
+      meta: { requiresAuth: true, permission: 'listino' }
+    },
+    {
+      path: '/payments/checkout/:reservationId',
+      name: 'CheckoutPayment',
+      component: () => import('@/views/payments/CheckoutPaymentStub.vue'),
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'] }
     }
   ]
 })

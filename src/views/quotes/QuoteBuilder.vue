@@ -70,6 +70,26 @@
           </div>
         </div>
 
+        <div v-if="type === 'hotel' && normalizedChildrenCount > 0" class="form-section">
+          <label>Età bambini</label>
+          <div class="kids-ages-grid">
+            <div
+              v-for="(_, idx) in normalizedChildrenCount"
+              :key="`quote-kid-age-${idx}`"
+              class="kid-age-item"
+            >
+              <span>Bambino {{ idx + 1 }}</span>
+              <input
+                v-model.number="quoteData.kidsAges[idx]"
+                type="number"
+                min="0"
+                max="17"
+                placeholder="Età"
+              />
+            </div>
+          </div>
+        </div>
+
         <!-- Trattamento Hotel -->
         <div v-if="type === 'hotel'" class="form-section">
           <label>Trattamento *</label>
@@ -160,7 +180,7 @@ const props = defineProps({
 const emit = defineEmits(['created', 'close'])
 
 const { saveQuote } = useQuotes()
-const { loadPricelists, loadTimetable, calculateQuotePrice, getRoomTypes } = usePricing()
+const { loadPricelists, loadTimetable, loadHotelPricingPolicy, calculateQuotePrice, getRoomTypes } = usePricing()
 
 const quoteData = ref({
   name: '',
@@ -169,6 +189,7 @@ const quoteData = ref({
   checkout: '',
   adults: 1,
   children: 0,
+  kidsAges: [],
   board: 'bb',
   type: props.type,
   roomType: '' // Tipo di camera per hotel, posto per beach
@@ -191,6 +212,23 @@ const daysCount = computed(() => {
   return Math.max(0, Math.ceil((end - start) / (1000 * 60 * 60 * 24)))
 })
 
+const normalizedChildrenCount = computed(() => {
+  const count = Number(quoteData.value.children)
+  if (!Number.isFinite(count) || count <= 0) return 0
+  return Math.floor(count)
+})
+
+const normalizeKidsAges = (ages, expectedCount) => {
+  const src = Array.isArray(ages) ? ages : []
+  const count = Math.max(0, Number(expectedCount) || 0)
+  const normalized = []
+  for (let i = 0; i < count; i++) {
+    const n = Number(src[i])
+    normalized.push(Number.isFinite(n) && n >= 0 ? Math.floor(n) : null)
+  }
+  return normalized
+}
+
 // Calcola i prezzi per TUTTI i roomType (hotel) o un prezzo generico (beach)
 const calculateAllRoomPrices = () => {
   if (!quoteData.value.checkin || !quoteData.value.checkout || daysCount.value === 0) {
@@ -207,7 +245,13 @@ const calculateAllRoomPrices = () => {
         quoteData.value.checkout,
         room.roomType,
         props.type,
-        quoteData.value.adults + quoteData.value.children
+        quoteData.value.adults + quoteData.value.children,
+        {
+          board: quoteData.value.board,
+          adults: quoteData.value.adults,
+          children: quoteData.value.children,
+          kidAges: normalizeKidsAges(quoteData.value.kidsAges, quoteData.value.children)
+        }
       )
       return {
         roomType: room.roomType,
@@ -229,6 +273,7 @@ const calculateAllRoomPrices = () => {
       )
       return {
         roomType: room.placeType, // Usa placeType (es. "FILA 1")
+        placeTypeId: room.placeTypeId,
         totalPrice: quote?.finalTotal || 0,
         pricePerNight: quote?.pricePerNight || 0,
         quote
@@ -251,6 +296,13 @@ watch(
   () => [quoteData.value.checkin, quoteData.value.checkout, quoteData.value.adults, quoteData.value.children],
   () => calculateAllRoomPrices(),
   { deep: true }
+)
+
+watch(
+  () => quoteData.value.children,
+  (children) => {
+    quoteData.value.kidsAges = normalizeKidsAges(quoteData.value.kidsAges, children)
+  }
 )
 
 const isFormValid = computed(() => {
@@ -296,18 +348,39 @@ const submitQuote = async () => {
       baseDailyPrices = minOption.quote?.days
     }
     
-    await saveQuote({
-      ...quoteData.value,
-      // Mantieni la camera/fila selezionata (se presente)
-      duration: daysCount.value,
-      allRoomOptions: roomOptions, // Salva le opzioni calcolate
-      priceData: basePriceData, // Prezzo base per visibilità
-      totalPrice: baseTotalPrice, // Prezzo base per visibilità
-      pricePerNight: basePricePerNight, // Prezzo base per visibilità
-      dailyPrices: baseDailyPrices, // Prezzo base per visibilità
-      createdAt: new Date().toISOString(),
-      expiresAt: expiresAt.toISOString()
-    })
+    if (props.type === 'beach') {
+      const selectedOption = roomOptions.find((r) => r.roomType === quoteData.value.roomType) || minOption.value
+      const placeTypeId = selectedOption?.placeTypeId
+      if (!placeTypeId) {
+        throw new Error('Seleziona una fila valida per il preventivo beach.')
+      }
+
+      await saveQuote({
+        type: 'beach',
+        checkin: quoteData.value.checkin,
+        checkout: quoteData.value.checkout,
+        place_type_id: placeTypeId,
+        customer: quoteData.value.guestName,
+        name: quoteData.value.name,
+        createdAt: new Date().toISOString(),
+        expiresAt: expiresAt.toISOString()
+      })
+    } else {
+      await saveQuote({
+        ...quoteData.value,
+        kidsAges: normalizeKidsAges(quoteData.value.kidsAges, quoteData.value.children),
+        childrenAges: normalizeKidsAges(quoteData.value.kidsAges, quoteData.value.children),
+        // Mantieni la camera/fila selezionata (se presente)
+        duration: daysCount.value,
+        allRoomOptions: roomOptions, // Salva le opzioni calcolate
+        priceData: basePriceData, // Prezzo base per visibilità
+        totalPrice: baseTotalPrice, // Prezzo base per visibilità
+        pricePerNight: basePricePerNight, // Prezzo base per visibilità
+        dailyPrices: baseDailyPrices, // Prezzo base per visibilità
+        createdAt: new Date().toISOString(),
+        expiresAt: expiresAt.toISOString()
+      })
+    }
     emit('created')
     close()
   } catch (err) {
@@ -340,6 +413,9 @@ const close = () => {
 onMounted(async () => {
   isLoading.value = true
   try {
+    if (props.type === 'hotel') {
+      await loadHotelPricingPolicy()
+    }
     await loadPricelists(props.type)
     await loadTimetable(props.type)
     
@@ -374,8 +450,8 @@ onMounted(async () => {
   background: white;
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  width: 90%;
-  max-width: 500px;
+  width: min(96vw, 1100px);
+  max-width: 1100px;
   max-height: 90vh;
   overflow-y: auto;
   animation: slideUp 0.3s ease;
@@ -429,15 +505,32 @@ onMounted(async () => {
 
 .quote-form {
   padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 1rem;
 }
 
-.form-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.quote-form > .form-section,
+.quote-form > .form-row {
+  grid-column: 1 / span 8;
+}
+
+.quote-form > .rooms-section {
+  grid-column: 1 / span 8;
+}
+
+.quote-form > .info-box {
+  grid-column: 9 / -1;
+  grid-row: 1 / span 8;
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+  max-height: calc(90vh - 4rem);
+  overflow-y: auto;
+}
+
+.quote-form > .button-row {
+  grid-column: 1 / -1;
 }
 
 .form-section label {
@@ -495,6 +588,23 @@ onMounted(async () => {
 
 .hidden-radio {
   display: none;
+}
+
+.kids-ages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.75rem;
+}
+
+.kid-age-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.kid-age-item span {
+  font-size: 0.82rem;
+  color: #475569;
 }
 
 .info-box {
@@ -591,9 +701,13 @@ onMounted(async () => {
 
 .rooms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(150px, 170px);
   gap: 0.75rem;
   margin-top: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scroll-snap-type: x proximity;
 }
 
 .room-card {
@@ -608,6 +722,8 @@ onMounted(async () => {
   transition: all 0.2s ease;
   background: white;
   text-align: center;
+  min-height: 140px;
+  scroll-snap-align: start;
 }
 
 .room-card:hover {
@@ -641,5 +757,27 @@ onMounted(async () => {
   font-size: 0.75rem;
   color: #6b7280;
   font-weight: 500;
+}
+
+@media (max-width: 960px) {
+  .quote-builder-modal {
+    width: 92%;
+    max-width: 620px;
+  }
+
+  .quote-form {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .rooms-grid {
+    grid-auto-columns: minmax(140px, 1fr);
+  }
+
+  .quote-form > .info-box {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
 }
 </style>
