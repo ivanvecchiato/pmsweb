@@ -67,6 +67,20 @@
           <!-- AREA BAR -->
           <div v-if="hasPermission('inventory') || hasPermission('stats')" class="menu-section">
             <div class="section-label">BAR</div>
+
+            <router-link
+              v-if="hasPermission('inventory')"
+              to="/listino-prodotti"
+              :class="['menu-item', { active: route.path === '/listino-prodotti' }]"
+              aria-label="Listino Prodotti"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 8h16M7 4h10M9 12h6M6 16h12M8 20h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Listino</span>
+            </router-link>
             
             <router-link
               v-if="hasPermission('inventory')"

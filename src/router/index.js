@@ -53,6 +53,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'inventory' }
     },
     {
+      path: '/listino-prodotti',
+      name: 'ProductsListino',
+      component: () => import('../ProductCatalogManagement.vue'),
+      meta: { requiresAuth: true, permission: 'inventory' }
+    },
+    {
       path: '/stats/products',
       name: 'StatsProducts',
       component: () => import('../StatsProducts.vue'),
