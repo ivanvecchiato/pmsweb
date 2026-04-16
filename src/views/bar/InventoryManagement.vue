@@ -11,6 +11,8 @@ const searchQuery = ref('');
 const isModalOpen = ref(false);
 const selectedProduct = ref(null);
 const movementData = ref({ type: 'purchase', quantity: 1, note: '', purchase_price: 0, supplierName: '' });
+const isProductHistoryModalOpen = ref(false);
+const selectedHistoryProduct = ref(null);
 
 // --- STATO CARICO MASSIVO (BOLLA) ---
 const isBulkModalOpen = ref(false);
@@ -28,6 +30,16 @@ const movementTypes = [
   { id: 'self_consumption', label: 'Autoconsumo' },
   { id: 'correction', label: 'Rettifica' }
 ];
+
+const movementTypeLabels = {
+  purchase: 'Acquisto',
+  manual_out: 'Scarico',
+  self_consumption: 'Autoconsumo',
+  correction: 'Rettifica',
+  breakage: 'Rottura',
+  expired: 'Scaduto',
+  sale: 'Vendita'
+};
 
 // --- STATO STATISTICHE ---
 const stats = ref({
@@ -86,6 +98,8 @@ const groupedMovements = computed(() => {
     // Identifichiamo se il movimento fa parte di una bolla cercando "BOLLA" nella nota
     const isBulk = m.note && m.note.startsWith('BOLLA');
     const groupKey = isBulk ? m.note : `single-${m.id}`;
+    const noteParts = (m.note || '').split(' - ');
+    const bulkSupplierFromNote = noteParts.length > 1 ? noteParts.slice(1).join(' - ').trim() : '';
 
     let group = groups.find(g => g.key === groupKey);
 
@@ -94,8 +108,8 @@ const groupedMovements = computed(() => {
         key: groupKey,
         isBulk: isBulk,
         timestamp: m.timestamp,
-        supplier: isBulk ? m.note.split(' - ')[1] : null,
-        docNumber: isBulk ? m.note.split(' - ')[0] : 'Movimento Singolo',
+        supplier: isBulk ? (m.supplier || bulkSupplierFromNote || null) : (m.supplier || null),
+        docNumber: isBulk ? noteParts[0] : 'Movimento Singolo',
         items: []
       };
       groups.push(group);
@@ -125,6 +139,21 @@ const latestPurchasePriceByProduct = computed(() => {
   return latestByProduct;
 });
 
+const selectedProductMovements = computed(() => {
+  if (!selectedHistoryProduct.value?.id) return [];
+
+  return movements.value
+    .filter((m) => Number(m.productId) === Number(selectedHistoryProduct.value.id))
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+});
+
+const movementTypeLabel = (type) => movementTypeLabels[type] || type || 'N/D';
+
+const openProductHistoryModal = (product) => {
+  selectedHistoryProduct.value = product;
+  isProductHistoryModalOpen.value = true;
+};
+
 // --- LOGICA CARICO MASSIVO ---
 const addBulkRow = () => {
   bulkDelivery.value.items.push({ productId: null, productName: '', quantity: 1, purchase_price: 0 });
@@ -149,6 +178,7 @@ const confirmBulkDelivery = async () => {
   const validItems = bulkDelivery.value.items.filter(i => i.productId);
   if (validItems.length === 0) return alert("Inserisci almeno un prodotto valido");
   if (!bulkDelivery.value.docNumber) return alert("Inserisci il numero della bolla");
+  const supplierName = (bulkDelivery.value.supplierName || '').trim();
   
   try {
     loading.value = true;
@@ -158,7 +188,8 @@ const confirmBulkDelivery = async () => {
         type: 'purchase',
         quantity: item.quantity,
         purchase_price: item.purchase_price, // Inviamo il prezzo specifico della bolla
-        note: `BOLLA ${bulkDelivery.value.docNumber} - ${bulkDelivery.value.supplierName}`
+        supplier: supplierName,
+        note: `BOLLA ${bulkDelivery.value.docNumber} - ${supplierName}`
       })
     );
 
@@ -194,6 +225,58 @@ const filteredProducts = computed(() => {
   });
 });
 
+const escapeCsvValue = (value) => {
+  const text = String(value ?? '');
+  if (text.includes('"') || text.includes(',') || text.includes('\n')) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+};
+
+const exportFilteredInventoryCsv = () => {
+  const headers = [
+    'Prodotto',
+    'Fornitore',
+    'Giacenza',
+    'Soglia allarme',
+    'Prezzo vendita',
+    'Costo acquisto',
+    'Margine',
+    'Margine %'
+  ];
+
+  const rows = filteredProducts.value.map((p) => {
+    const supplier = p.inventory?.suppliers?.[0]?.supplier || 'N/D';
+    const stock = Number(p.inventory?.stock || 0);
+    const alarm = Number(p.inventory?.alarm || 0);
+
+    return [
+      p.name || '',
+      supplier,
+      stock,
+      alarm,
+      Number(p.price || 0).toFixed(2),
+      Number(p.purchase_price || 0).toFixed(2),
+      Number(p.margin || 0).toFixed(2),
+      Number(p.marginPercent || 0).toFixed(1)
+    ];
+  });
+
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map(escapeCsvValue).join(','))
+    .join('\n');
+
+  const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+
+  link.href = url;
+  link.download = `magazzino_${stamp}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
 const openMovementModal = (product, type = 'purchase') => {
   selectedProduct.value = product;
   movementData.value.type = type;
@@ -220,6 +303,7 @@ const confirmMovement = async () => {
       productId: selectedProduct.value.id,
       type: movementData.value.type,
       quantity: movementData.value.quantity,
+      supplier: movementData.value.type === 'purchase' ? supplierName : '',
       note: composedNote,
       purchase_price: purchasePrice
     });
@@ -248,6 +332,14 @@ onMounted(() => {
             <path d="M12 11v10" />
           </svg>
           <span>Registra Bolla</span>
+        </button>
+        <button @click="exportFilteredInventoryCsv" class="btn-export" :disabled="filteredProducts.length === 0">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v12" />
+            <path d="m8 11 4 4 4-4" />
+            <path d="M5 21h14" />
+          </svg>
+          <span>Esporta CSV</span>
         </button>
         <div class="search-container">
           <input v-model="searchQuery" placeholder="Filtra tabella..." class="search-input" />
@@ -343,6 +435,13 @@ onMounted(() => {
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M4 20h4l10-10a2.121 2.121 0 0 0-3-3L5 17v3Z" />
                     <path d="m13.5 6.5 4 4" />
+                  </svg>
+                </button>
+                <button @click="openProductHistoryModal(p)" class="btn-sm btn-history" aria-label="Storico prodotto" title="Storico prodotto">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 12a9 9 0 1 0 3-6.708" />
+                    <path d="M3 4v4h4" />
+                    <path d="M12 7v6l4 2" />
                   </svg>
                 </button>
               </div>
@@ -536,6 +635,54 @@ onMounted(() => {
           </div>
         </div>
       </Transition>
+
+      <Transition name="fade-scale">
+        <div v-if="isProductHistoryModalOpen" class="modal-backdrop" @click.self="isProductHistoryModalOpen = false">
+          <div class="modal-card history-card">
+            <div class="modal-header">
+              <div class="m-title">
+                <h3>Storico Movimenti: {{ selectedHistoryProduct?.name }}</h3>
+                <small>Include carichi, scarichi e scarichi per vendita</small>
+              </div>
+              <button @click="isProductHistoryModalOpen = false" class="btn-close">&times;</button>
+            </div>
+
+            <div class="modal-body scrollable-body history-body">
+              <div v-if="selectedProductMovements.length === 0" class="history-empty">
+                Nessun movimento disponibile per questo prodotto.
+              </div>
+
+              <div v-else class="history-list">
+                <div v-for="m in selectedProductMovements" :key="m.id" class="history-row">
+                  <div class="history-row-top">
+                    <span class="item-type-badge" :class="m.type">{{ movementTypeLabel(m.type) }}</span>
+                    <span class="history-date">{{ new Date(m.timestamp).toLocaleString() }}</span>
+                  </div>
+
+                  <div class="history-row-details">
+                    <span class="item-qty" :class="m.direction">
+                      {{ m.direction === 'in' ? '+' : '-' }}{{ m.quantity }}
+                    </span>
+                    <span class="item-stock-snap">
+                      Stock: {{ m.previous_stock }} → <strong>{{ m.new_stock }}</strong>
+                    </span>
+                    <span class="item-price">€ {{ Number(m.purchase_price || 0).toFixed(2) }}</span>
+                  </div>
+
+                  <div v-if="m.supplier || m.note" class="history-row-note">
+                    <span v-if="m.supplier"><strong>Fornitore:</strong> {{ m.supplier }}</span>
+                    <span v-if="m.note"><strong>Note:</strong> {{ m.note }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button @click="isProductHistoryModalOpen = false" class="btn-dark">Chiudi</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
     </Teleport>
 
     <datalist id="product-options">
@@ -626,6 +773,7 @@ textarea {
 }
 
 .btn-bulk,
+.btn-export,
 .btn-dark,
 .btn-ghost,
 .btn-refresh,
@@ -649,6 +797,39 @@ textarea {
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(59, 130, 246, 0.22);
+}
+
+.btn-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--inv-border);
+  border-radius: 10px;
+  padding: 11px 14px;
+  background: var(--inv-surface);
+  color: #1f2937;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-export svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.btn-export:hover {
+  background: var(--inv-surface-soft);
+}
+
+.btn-export:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .btn-bulk:hover,
@@ -993,6 +1174,12 @@ textarea {
   background: #f8fafc;
 }
 
+.btn-history {
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
 .btn-in:hover {
   background: #d1fae5;
 }
@@ -1003,6 +1190,10 @@ textarea {
 
 .btn-cfg:hover {
   background: #e2e8f0;
+}
+
+.btn-history:hover {
+  background: #dbeafe;
 }
 
 .movements-history {
@@ -1119,7 +1310,8 @@ textarea {
 .item-type-badge.breakage { background: #fee2e2; color: #991b1b; }
 .item-type-badge.manual_out,
 .item-type-badge.expired,
-.item-type-badge.self_consumption { background: #fef3c7; color: #92400e; }
+.item-type-badge.self_consumption,
+.item-type-badge.sale { background: #fef3c7; color: #92400e; }
 .item-type-badge.correction { background: #e0e7ff; color: #4338ca; }
 
 .item-qty.in {
@@ -1136,6 +1328,59 @@ textarea {
 .item-price {
   color: var(--inv-muted);
   font-size: 0.92rem;
+}
+
+.history-body {
+  padding-top: 14px;
+}
+
+.history-empty {
+  padding: 12px;
+  border: 1px dashed var(--inv-border-strong);
+  border-radius: 10px;
+  color: var(--inv-muted);
+  background: #fafafa;
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.history-row {
+  border: 1px solid var(--inv-border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
+}
+
+.history-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-date {
+  color: var(--inv-muted);
+  font-size: 0.86rem;
+}
+
+.history-row-details {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.history-row-note {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--inv-muted);
+  font-size: 0.9rem;
 }
 
 .modal-backdrop {
@@ -1160,6 +1405,13 @@ textarea {
 
 .bulk-card {
   width: min(920px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-card {
+  width: min(860px, 100%);
   max-height: 90vh;
   display: flex;
   flex-direction: column;

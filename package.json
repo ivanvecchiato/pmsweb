@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:mbar": "bash ./scripts/deploy-to-mbar.sh",
+    "build:deploy:mbar": "npm run build && npm run deploy:mbar"
   },
   "dependencies": {
     "axios": "^1.13.2",
