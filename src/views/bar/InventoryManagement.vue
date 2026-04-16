@@ -10,7 +10,7 @@ const searchQuery = ref('');
 // --- STATO MODALE SINGOLO ---
 const isModalOpen = ref(false);
 const selectedProduct = ref(null);
-const movementData = ref({ type: 'purchase', quantity: 1, note: '', purchase_price: 0 });
+const movementData = ref({ type: 'purchase', quantity: 1, note: '', purchase_price: 0, supplierName: '' });
 
 // --- STATO CARICO MASSIVO (BOLLA) ---
 const isBulkModalOpen = ref(false);
@@ -200,6 +200,7 @@ const openMovementModal = (product, type = 'purchase') => {
   movementData.value.quantity = (type === 'correction') ? product.inventory.stock : 1;
   movementData.value.note = '';
   movementData.value.purchase_price = Number(product.purchase_price || 0);
+  movementData.value.supplierName = '';
   isModalOpen.value = true;
 };
 
@@ -209,9 +210,17 @@ const confirmMovement = async () => {
       ? Number(movementData.value.purchase_price || 0)
       : Number(selectedProduct.value.purchase_price || 0);
 
+    const supplierName = (movementData.value.supplierName || '').trim();
+    const manualNote = (movementData.value.note || '').trim();
+    const composedNote = movementData.value.type === 'purchase'
+      ? [supplierName ? `FORNITORE: ${supplierName}` : '', manualNote].filter(Boolean).join(' | ')
+      : manualNote;
+
     await axios.post('http://localhost:8088/api/inventory/movement', {
       productId: selectedProduct.value.id,
-      ...movementData.value,
+      type: movementData.value.type,
+      quantity: movementData.value.quantity,
+      note: composedNote,
       purchase_price: purchasePrice
     });
     isModalOpen.value = false;
@@ -507,6 +516,10 @@ onMounted(() => {
                   <input type="number" v-model.number="movementData.quantity" class="input-main" />
                 </div>
                 <div v-if="movementData.type === 'purchase'" class="form-group">
+                  <label>Fornitore</label>
+                  <input type="text" v-model.trim="movementData.supplierName" placeholder="es. Beverage Srl" class="input-main" />
+                </div>
+                <div v-if="movementData.type === 'purchase'" class="form-group">
                   <label>Prezzo di acquisto (€)</label>
                   <input type="number" step="0.01" min="0" v-model.number="movementData.purchase_price" class="input-main" />
                 </div>
@@ -536,6 +549,7 @@ onMounted(() => {
 
 <style scoped>
 :global(:root) {
+  --inv-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --inv-bg: #f9fafb;
   --inv-surface: #ffffff;
   --inv-surface-soft: #f3f4f6;
@@ -561,7 +575,18 @@ onMounted(() => {
   padding: 24px;
   background: var(--inv-bg);
   color: var(--inv-text);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--inv-font);
+}
+
+.modal-backdrop {
+  font-family: var(--inv-font);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 .inv-header {
