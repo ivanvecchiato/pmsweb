@@ -2,8 +2,8 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 
-const PRODUCTS_ENDPOINT = 'http://localhost:8088/api/products'
-const PRODUCTS_ORIGIN = new URL(PRODUCTS_ENDPOINT).origin
+const PRODUCTS_ENDPOINT = '/api/products'
+const PRODUCTS_ORIGIN = import.meta.env.VITE_API_TARGET_ORIGIN || window.location.origin
 
 const categories = ref([])
 const selectedCategory = ref('')
