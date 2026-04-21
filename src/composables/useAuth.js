@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 
-const PMS_API_BASE_URL = import.meta.env.VITE_PMS_API_BASE_URL || 'http://localhost:8081'
+const PMS_API_BASE_URL = import.meta.env.VITE_PMS_API_BASE_URL || ''
 
 const rolePermissions = {
   admin: ['home', 'customers', 'beach-bookings', 'inventory', 'stats', 'listino', 'listino_beach', 'onda_push_products'],
@@ -27,20 +27,44 @@ const normalizeIntegrationType = (type) => {
     .trim()
 }
 
+const parseBooleanLike = (value) => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'y' || normalized === 'on'
+  }
+  return null
+}
+
 const parsePmsEnabled = (payload) => {
   const value = payload?.pmsEnabled ?? payload?.enabled ?? payload?.active ?? payload?.isActive ?? payload?.pms?.enabled
-  return value === true
+  const parsed = parseBooleanLike(value)
+  if (parsed !== null) return parsed
+
+  const integrationType = parseIntegrationType(payload)
+  return Boolean(integrationType)
 }
 
 const parseIntegrationType = (payload) => {
   return normalizeIntegrationType(
     payload?.pmsIntegrationType ||
       payload?.integrationType ||
+      payload?.type_ ||
       payload?.pmsTypeName ||
       payload?.pmsName ||
       payload?.provider ||
+      payload?.pms?.type_ ||
       payload?.pms?.type
   )
+}
+
+const fetchJson = async (url) => {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`)
+  }
+  return response.json()
 }
 
 const loadStoredPmsType = () => {
@@ -63,12 +87,14 @@ const loadUser = () => {
 
 const loadPmsType = async (forceRefresh = false) => {
   try {
-    const response = await fetch(`${PMS_API_BASE_URL}/api/pms/getpmstype`)
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
+    let data
+    try {
+      data = await fetchJson(`${PMS_API_BASE_URL}/api/pms/getpmstype`)
+    } catch (primaryError) {
+      const configs = await fetchJson(`${PMS_API_BASE_URL}/api/configs`)
+      data = configs?.pms ? { ...configs.pms, pms: configs.pms } : configs
     }
 
-    const data = await response.json()
     const backendType = normalizePmsType(data?.type || data?.pmsType || data?.pms?.mode)
     pmsEnabled.value = parsePmsEnabled(data)
     pmsIntegrationType.value = parseIntegrationType(data)

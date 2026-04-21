@@ -29,6 +29,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'listino', pmsTypes: ['hotel'] }
     },
     {
+      path: '/settings/configurations',
+      name: 'ConfigurationsSettings',
+      component: () => import('@/views/config/ConfigurationsSettings.vue'),
+      meta: { requiresAuth: true, permission: 'listino' }
+    },
+    {
       path: '/settings/hotel-pricing',
       name: 'HotelPricingPolicySettings',
       component: () => import('@/views/config/HotelPricingPolicySettings.vue'),

@@ -308,6 +308,7 @@ const loadForm = async () => {
     loadedHotelSection.value = hotelSection
     form.value = normalizeForm(hotelSection?.pricing || hotelSection)
     structureForm.value = normalizeStructureForm(hotelSection?.structure)
+
   } catch (err) {
     console.error('Errore caricamento policy hotel:', err)
     alert('Errore caricamento policy prezzi')
