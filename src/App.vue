@@ -5,7 +5,7 @@
       <aside class="sidebar" role="navigation" aria-label="Sidebar menu">
         <nav class="menu">
           <!-- AREA PMS -->
-          <div v-if="(hasPermission('home') && isPmsTypeAllowed(['hotel'])) || hasPermission('customers') || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach']))" class="menu-section">
+          <div v-if="canShowHotelBeachMenus && ((hasPermission('home') && isPmsTypeAllowed(['hotel'])) || hasPermission('customers') || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach'])))" class="menu-section">
             <div class="section-label">PMS</div>
             
             <router-link
@@ -135,11 +135,11 @@
           </div>
 
           <!-- AREA CONFIGURAZIONE -->
-          <div v-if="hasPermission('listino') || hasPermission('listino_beach') || hasPermission('onda_push_products')" class="menu-section">
+          <div v-if="(canShowHotelBeachMenus && (hasPermission('listino') || hasPermission('listino_beach'))) || hasPermission('onda_push_products')" class="menu-section">
             <div class="section-label">CONFIGURAZIONE</div>
             
             <router-link
-              v-if="hasPermission('listino') && isPmsTypeAllowed(['hotel'])"
+              v-if="canShowHotelBeachMenus && hasPermission('listino') && isPmsTypeAllowed(['hotel'])"
               to="/listino"
               :class="['menu-item', { active: route.path === '/listino' }]"
               aria-label="Listino Hotel"
@@ -153,7 +153,7 @@
             </router-link>
 
             <router-link
-              v-if="hasPermission('listino') && isPmsTypeAllowed(['hotel'])"
+              v-if="canShowHotelBeachMenus && hasPermission('listino') && isPmsTypeAllowed(['hotel'])"
               to="/settings/hotel-pricing"
               :class="['menu-item', { active: route.path === '/settings/hotel-pricing' }]"
               aria-label="Policy Prezzi Hotel"
@@ -167,7 +167,7 @@
             </router-link>
 
             <router-link
-              v-if="hasPermission('listino_beach') && isPmsTypeAllowed(['beach'])"
+              v-if="canShowHotelBeachMenus && hasPermission('listino_beach') && isPmsTypeAllowed(['beach'])"
               to="/listino_beach"
               :class="['menu-item', { active: route.path === '/listino_beach' }]"
               aria-label="Gestione Spiaggia"
@@ -191,11 +191,11 @@
                   <path d="M4 8h16M7 4h10M9 12h6M6 16h12M8 20h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </span>
-              <span class="label">Promo Onda</span>
+              <span class="label">Promo</span>
             </router-link>
 
             <router-link
-              v-if="hasPermission('listino') || hasPermission('listino_beach')"
+              v-if="canShowHotelBeachMenus && (hasPermission('listino') || hasPermission('listino_beach'))"
               to="/services"
               :class="['menu-item', { active: route.path === '/services' }]"
               aria-label="Configurazione Servizi"
@@ -242,7 +242,7 @@ import { useAuth } from './composables/useAuth'
 
 const route = useRoute()
 const router = useRouter()
-const { isAuthenticated, logout, hasPermission, userRole, userName, isPmsTypeAllowed } = useAuth()
+const { isAuthenticated, logout, hasPermission, userRole, userName, isPmsTypeAllowed, canShowHotelBeachMenus } = useAuth()
 
 const isStatsOpen = ref(false)
 

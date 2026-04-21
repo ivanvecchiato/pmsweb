@@ -3,7 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 
 const PRODUCTS_ENDPOINT = '/api/products'
-const PRODUCTS_ORIGIN = import.meta.env.VITE_API_TARGET_ORIGIN || window.location.origin
+const DEFAULT_PRODUCTS_ORIGIN = import.meta.env.DEV ? 'http://localhost:8088' : window.location.origin
+const PRODUCTS_ORIGIN = (import.meta.env.VITE_API_TARGET_ORIGIN || DEFAULT_PRODUCTS_ORIGIN).replace(/\/+$/, '')
 
 const categories = ref([])
 const selectedCategory = ref('')
@@ -76,11 +77,12 @@ const normalizeProduct = (product, categoryName) => {
   const rawColor = String(product?.color ?? product?.hexColor ?? product?.category_color ?? '').trim()
   const color = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(rawColor) ? rawColor : ''
   const rawImage = String(product?.imgUrl ?? product?.imageUrl ?? product?.image ?? product?.thumb ?? product?.thumbnail ?? '').trim()
-  const imageUrl = rawImage
-    ? (rawImage.startsWith('http://') || rawImage.startsWith('https://')
-      ? rawImage
-      : `${PRODUCTS_ORIGIN}${rawImage.startsWith('/') ? '' : '/'}${rawImage}`)
-    : ''
+  const imageUrl = (() => {
+    if (!rawImage) return ''
+    if (rawImage.startsWith('http://') || rawImage.startsWith('https://')) return rawImage
+    if (rawImage.startsWith('data:') || rawImage.startsWith('blob:')) return rawImage
+    return `${PRODUCTS_ORIGIN}${rawImage.startsWith('/') ? '' : '/'}${rawImage}`
+  })()
 
   return {
     id,
