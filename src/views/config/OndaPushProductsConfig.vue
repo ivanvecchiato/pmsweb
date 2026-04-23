@@ -32,7 +32,7 @@ const isSavingConfig = ref(false)
 const formMessage = ref('')
 
 const LISTINO_PRODUCTS_ENDPOINT = 'http://localhost:8088/api/products'
-const ONDA_PUSH_CONFIG_ENDPOINT = 'http://localhost:8088/api/pms/onda/recommendations'
+const ONDA_PUSH_CONFIG_ENDPOINT = 'http://localhost:8088/api/pms/onda/push-config'
 
 const normalizeProductName = (item) => {
   if (typeof item === 'string') return item.trim()
