@@ -16,8 +16,8 @@ const normalizeBoardForBackend = (payload) => {
 const loadQuotes = async (type = 'all') => {
   try {
     const url = type === 'all' 
-      ? 'http://localhost:8081/api/pms/quotes/getall'
-      : `http://localhost:8081/api/pms/quotes/getbytype?type=${type}`
+      ? '/api/pms/quotes/getall'
+      : `/api/pms/quotes/getbytype?type=${type}`
     const res = await axios.get(url)
     quotes.value = res.data || []
   } catch (err) {
@@ -30,7 +30,7 @@ const loadQuotes = async (type = 'all') => {
 const saveQuote = async (quoteData) => {
   try {
     const normalizedQuoteData = normalizeBoardForBackend(quoteData)
-    const res = await axios.post('http://localhost:8081/api/pms/quotes/save', normalizedQuoteData)
+    const res = await axios.post('/api/pms/quotes/save', normalizedQuoteData)
     await loadQuotes()
     return res.data
   } catch (err) {
@@ -42,7 +42,7 @@ const saveQuote = async (quoteData) => {
 // Elimina un preventivo
 const deleteQuote = async (quoteId) => {
   try {
-    await axios.post('http://localhost:8081/api/pms/quotes/delete', { id: quoteId })
+    await axios.post('/api/pms/quotes/delete', { id: quoteId })
     await loadQuotes()
   } catch (err) {
     console.error('Errore eliminazione preventivo:', err)
@@ -53,7 +53,7 @@ const deleteQuote = async (quoteId) => {
 // Elimina tutti i preventivi
 const deleteAllQuotes = async () => {
   try {
-    const res = await axios.post('http://localhost:8081/api/pms/quotes/deleteall')
+    const res = await axios.post('/api/pms/quotes/deleteall')
     await loadQuotes()
     return res.data
   } catch (err) {
@@ -69,8 +69,8 @@ const convertToBooking = async (quoteId, type, bookingDataOverride = null) => {
     if (!quote) throw new Error('Preventivo non trovato')
     
     const endpoint = type === 'hotel'
-      ? 'http://localhost:8081/api/pms/hotel/new_reservation'
-      : 'http://localhost:8081/api/pms/beach/new_reservation'
+      ? '/api/pms/hotel/new_reservation'
+      : '/api/pms/beach/new_reservation'
     
     // Usa i dati forniti dalla UI; aggiunge solo metadata di tracciamento conversione.
     const bookingData = {

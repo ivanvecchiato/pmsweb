@@ -150,13 +150,13 @@ onMounted(() => {
 const fetchSales = async () => {
   try {
     const [salesRes, tableRes, areaRes] = await Promise.all([
-      axios.get('http://localhost:8088/api/mbar/sales_by_day', {
+      axios.get('/api/mbar/sales_by_day', {
         params: { from: fromDate.value, to: toDate.value }
       }),
-      axios.get('http://localhost:8088/api/mbar/sales_by_table', {
+      axios.get('/api/mbar/sales_by_table', {
         params: { from: fromDate.value, to: toDate.value }
       }),
-      axios.get('http://localhost:8088/api/mbar/sales_by_area', {
+      axios.get('/api/mbar/sales_by_area', {
         params: { from: fromDate.value, to: toDate.value }
       })
     ])
@@ -166,7 +166,7 @@ const fetchSales = async () => {
     areaData.value = areaRes.data.areas || []
 
     try {
-      const topProductsRes = await axios.get('http://localhost:8088/api/mbar/product_stats', {
+      const topProductsRes = await axios.get('/api/mbar/product_stats', {
         params: { query: '', from: fromDate.value, to: toDate.value }
       })
       topProducts.value = topProductsRes.data.top20 || []

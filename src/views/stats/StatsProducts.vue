@@ -169,7 +169,7 @@ const fetchBaseData = async () => {
   loading.value = true;
   error.value = '';
   try {
-    const res = await axios.get('http://localhost:8088/api/mbar/product_stats', {
+    const res = await axios.get('/api/mbar/product_stats', {
       params: {
         query: '',
         from: fromDate.value,
@@ -213,7 +213,7 @@ const searchProduct = async () => {
   error.value = '';
 
   try {
-    const res = await axios.get('http://localhost:8088/api/mbar/product_stats', {
+    const res = await axios.get('/api/mbar/product_stats', {
       params: {
         query,
         from: fromDate.value,
@@ -236,7 +236,7 @@ const fetchCategoryDetails = async (categoryName) => {
 
   // fetch products for this category with current filters
   try {
-    const res = await axios.get('http://localhost:8088/api/mbar/product_stats/by_category', {
+    const res = await axios.get('/api/mbar/product_stats/by_category', {
       params: {
         category: categoryName,
         from: fromDate.value,

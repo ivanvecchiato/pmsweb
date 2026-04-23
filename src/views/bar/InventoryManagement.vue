@@ -54,7 +54,7 @@ const fetchStats = async () => {
   try {
     const end = new Date().toISOString();
     const start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const res = await axios.get(`http://localhost:8088/api/inventory/stats`, {
+    const res = await axios.get(`/api/inventory/stats`, {
       params: { start, end }
     });
     stats.value = res.data;
@@ -66,7 +66,7 @@ const fetchStats = async () => {
 const fetchInventory = async () => {
   loading.value = true;
   try {
-    const res = await axios.get('http://localhost:8088/api/inventory');
+    const res = await axios.get('/api/inventory');
     products.value = res.data;
   } catch (err) {
     console.error("Errore API Inventory:", err);
@@ -83,7 +83,7 @@ const movements = ref([]); // Popolato da un'apposita chiamata API
 
 const fetchMovements = async () => {
   try {
-    const res = await axios.get('http://localhost:8088/api/inventory/movements');
+    const res = await axios.get('/api/inventory/movements');
     // Ordiniamo dal più recente al più vecchio prima di raggruppare
     movements.value = res.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   } catch (err) {
@@ -183,7 +183,7 @@ const confirmBulkDelivery = async () => {
   try {
     loading.value = true;
     const promises = validItems.map(item => 
-      axios.post('http://localhost:8088/api/inventory/movement', {
+      axios.post('/api/inventory/movement', {
         productId: item.productId,
         type: 'purchase',
         quantity: item.quantity,
@@ -299,7 +299,7 @@ const confirmMovement = async () => {
       ? [supplierName ? `FORNITORE: ${supplierName}` : '', manualNote].filter(Boolean).join(' | ')
       : manualNote;
 
-    await axios.post('http://localhost:8088/api/inventory/movement', {
+    await axios.post('/api/inventory/movement', {
       productId: selectedProduct.value.id,
       type: movementData.value.type,
       quantity: movementData.value.quantity,

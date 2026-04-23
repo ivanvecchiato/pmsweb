@@ -104,7 +104,7 @@ const normalizePolicy = (rawPolicy = {}) => {
 
 const loadHotelPricingPolicy = async () => {
   try {
-    const res = await axios.get('http://localhost:8081/api/pms/getconfigs?section=hotel')
+    const res = await axios.get('/api/pms/getconfigs?section=hotel')
     hotelPricingPolicy.value = normalizePolicy(res?.data?.pricing || res?.data || {})
   } catch (err) {
     console.error('Errore caricamento policy pricing hotel:', err)
@@ -114,7 +114,7 @@ const loadHotelPricingPolicy = async () => {
 
 const saveHotelPricingPolicy = async (pricing) => {
   const normalized = normalizePolicy(pricing)
-  const currentSectionResponse = await axios.get('http://localhost:8081/api/pms/getconfigs?section=hotel')
+  const currentSectionResponse = await axios.get('/api/pms/getconfigs?section=hotel')
   const currentSection = currentSectionResponse?.data && typeof currentSectionResponse.data === 'object'
     ? currentSectionResponse.data
     : {}
@@ -125,7 +125,7 @@ const saveHotelPricingPolicy = async (pricing) => {
       pricing: normalized
     }
   }
-  await axios.post('http://localhost:8081/api/pms/setconfigs', payload)
+  await axios.post('/api/pms/setconfigs', payload)
   hotelPricingPolicy.value = normalized
   return normalized
 }
@@ -133,7 +133,7 @@ const saveHotelPricingPolicy = async (pricing) => {
 // Carica i listini di prezzo
 const loadPricelists = async (type = 'hotel') => {
   try {
-    const url = `http://localhost:8081/api/pms/getrates?type=${type}`
+    const url = `/api/pms/getrates?type=${type}`
     const res = await axios.get(url)
     pricelists.value = res.data || []
     return pricelists.value
@@ -146,7 +146,7 @@ const loadPricelists = async (type = 'hotel') => {
 // Carica il timetable (tariffe per data)
 const loadTimetable = async (type = 'hotel') => {
   try {
-    const url = `http://localhost:8081/api/pms/gettimetable?type=${type}`
+    const url = `/api/pms/gettimetable?type=${type}`
     const res = await axios.get(url)
     timetables.value[type] = res.data || []
     return timetables.value[type]

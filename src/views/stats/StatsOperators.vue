@@ -174,7 +174,7 @@ const fetchStats = async () => {
   error.value = '';
   stats.value = null;
   try {
-    const res = await axios.get('http://localhost:8088/api/mbar/operator_stats', {
+    const res = await axios.get('/api/mbar/operator_stats', {
       params: {
         query: searchQuery.value,
         from: fromDate.value,

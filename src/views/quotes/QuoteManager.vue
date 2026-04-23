@@ -409,7 +409,7 @@ const checkBeachPlaceAvailability = async () => {
   try {
     isCheckingAvailability.value = true
     const to = addDaysISO(quote.checkout, -1)
-    const res = await axios.get(`http://localhost:8081/api/pms/beach/getbookingsbyrange?from=${quote.checkin}&to=${to}`)
+    const res = await axios.get(`/api/pms/beach/getbookingsbyrange?from=${quote.checkin}&to=${to}`)
     const conflicts = (res.data?.bookings || []).some((b) => {
       if (String(b.placeId) !== String(placeId)) return false
       const checkin = String(b.checkin || '')
@@ -453,7 +453,7 @@ const normalizeBeachPlace = (place) => {
 const loadBeachPlaces = async () => {
   try {
     isLoadingPlaces.value = true
-    const res = await axios.get('http://localhost:8081/api/pms/beach/getplan?mode=flat')
+    const res = await axios.get('/api/pms/beach/getplan?mode=flat')
     beachPlaces.value = (res.data || []).map(normalizeBeachPlace)
   } catch (err) {
     console.error('Errore caricamento posti spiaggia:', err)

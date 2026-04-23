@@ -51,7 +51,7 @@ const generateBeachMap = async () => {
 
   try {
     // Salviamo la configurazione nel database
-    await axios.post('http://localhost:8081/api/pms/beach/setup', {
+    await axios.post('/api/pms/beach/setup', {
       sectors: sectors.value,
       resources: allResources
     });

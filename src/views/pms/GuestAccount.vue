@@ -447,7 +447,7 @@ const getOvernightTaxSnapshotFromReservation = (reservation) => {
 }
 
 const loadRooms = async () => {
-  const res = await axios.get('http://localhost:8081/api/pms/getrooms')
+  const res = await axios.get('/api/pms/getrooms')
   const mapped = {}
   ;(res.data || []).forEach((room) => {
     mapped[String(room.id)] = {
@@ -564,7 +564,7 @@ const removePaymentEntry = (index) => {
 
 const loadProgressiveCounter = async () => {
   try {
-    const response = await axios.get('http://localhost:8081/api/pms/hotel/account/counter')
+    const response = await axios.get('/api/pms/hotel/account/counter')
     counterInfo.value = response.data || null
   } catch (error) {
     console.error('Errore caricamento contatore progressivo:', error)
@@ -576,7 +576,7 @@ const reserveProgressive = async () => {
   if (!selectedAccount.value) return
   isReservingProgressive.value = true
   try {
-    const response = await axios.post('http://localhost:8081/api/pms/hotel/account/reserve_progressive', {
+    const response = await axios.post('/api/pms/hotel/account/reserve_progressive', {
       reservationId: selectedAccount.value.id
     })
     const progressive = Number(response.data?.progressive)
@@ -618,7 +618,7 @@ const closeAccountAndPrintFiscal = async () => {
       operator: 0
     }
 
-    const response = await axios.post('http://localhost:8081/api/pms/hotel/account/close', payload)
+    const response = await axios.post('/api/pms/hotel/account/close', payload)
     if (!response.data?.success) {
       alert(response.data?.error || 'Errore chiusura conto')
       return
@@ -650,7 +650,7 @@ const loadAccounts = async () => {
     await loadHotelPricingPolicy()
     await loadRooms()
 
-    const url = `http://localhost:8081/api/pms/getbookingsbyrange?from=${fromDate.value}&to=${toDate.value}`
+    const url = `/api/pms/getbookingsbyrange?from=${fromDate.value}&to=${toDate.value}`
     const response = await axios.get(url)
     rawBookings.value = normalizeBookings(response.data)
 

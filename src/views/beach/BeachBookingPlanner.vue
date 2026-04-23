@@ -497,7 +497,7 @@ const updateReservation = async (booking, options = {}) => {
     manualPrice: effectiveFixedPrice,
     isManualPrice: effectiveFixedPrice !== null
   };
-  await axios.post('http://localhost:8081/api/pms/beach/updatereservation', payload);
+  await axios.post('/api/pms/beach/updatereservation', payload);
 };
 
 const handleMouseUp = async () => {
@@ -590,7 +590,7 @@ const submitNewBooking = async () => {
     };
 
     try {
-      await axios.post('http://localhost:8081/api/pms/beach/new_reservation', payload);
+      await axios.post('/api/pms/beach/new_reservation', payload);
       showModal.value = false;
       await fetchBookings();
     } catch (err) {
@@ -610,7 +610,7 @@ const saveGuest = async () => {
     }
   };
   try {
-    await axios.post('http://localhost:8081/api/pms/beach/updatereservation', payload);
+    await axios.post('/api/pms/beach/updatereservation', payload);
     selectedBookingObj.value.guestFirst = editGuest.value.first;
     selectedBookingObj.value.guestLast = editGuest.value.last;
     selectedBookingObj.value.guest = `${editGuest.value.first} ${editGuest.value.last}`.trim() || 'Senza Nome';
@@ -623,7 +623,7 @@ const deleteBooking = async () => {
   if (!selectedBookingObj.value) return;
   if (!confirm('Vuoi eliminare questa prenotazione?')) return;
   try {
-    await axios.post('http://localhost:8081/api/pms/beach/deletereservation', { id: selectedBookingObj.value.id });
+    await axios.post('/api/pms/beach/deletereservation', { id: selectedBookingObj.value.id });
     bookings.value = bookings.value.filter(b => b.id !== selectedBookingObj.value.id);
     selectedBooking.value = null;
   } catch (err) {
@@ -642,7 +642,7 @@ const confirmCancel = async () => {
   if (!targetId) return;
   isCancelling.value = true;
   try {
-    await axios.post('http://localhost:8081/api/pms/beach/cancel_reservation', {
+    await axios.post('/api/pms/beach/cancel_reservation', {
       id: targetId,
       cancellation_reason: cancelReason.value.trim()
     });
@@ -659,7 +659,7 @@ const confirmCancel = async () => {
 };
 
 const fetchPlaces = async () => {
-  const res = await axios.get('http://localhost:8081/api/pms/beach/getplan?mode=flat');
+  const res = await axios.get('/api/pms/beach/getplan?mode=flat');
   places.value = res.data.map(normalizeResource);
 };
 
@@ -668,15 +668,15 @@ const fetchBookings = async () => {
   const toDate = new Date(startDate.value);
   toDate.setDate(toDate.getDate() + days.value - 1);
   const to = toISODate(toDate);
-  const res = await axios.get(`http://localhost:8081/api/pms/beach/getbookingsbyrange?from=${from}&to=${to}`);
+  const res = await axios.get(`/api/pms/beach/getbookingsbyrange?from=${from}&to=${to}`);
   const raw = res.data?.bookings || res.data || [];
   bookings.value = (Array.isArray(raw) ? raw : []).map(normalizeBooking);
 };
 
 const loadPricingData = async () => {
   const [resRates, resTime] = await Promise.all([
-    axios.get('http://localhost:8081/api/pms/getrates?type=beach'),
-    axios.get('http://localhost:8081/api/pms/gettimetable?type=beach')
+    axios.get('/api/pms/getrates?type=beach'),
+    axios.get('/api/pms/gettimetable?type=beach')
   ]);
   pricelists.value = resRates.data || [];
   timetable.value = resTime.data || [];
@@ -745,7 +745,7 @@ const generateDemoPlan = async () => {
     }
   });
   try {
-    await axios.post('http://localhost:8081/api/pms/beach/setup', { sectors, resources });
+    await axios.post('/api/pms/beach/setup', { sectors, resources });
     await reloadAll();
   } catch (err) {
     console.error('Errore generazione piano demo:', err);
@@ -810,7 +810,7 @@ const addServiceForm = ref({ serviceId: '', quantity: 1, note: '' });
 
 async function loadAvailableServices() {
   try {
-    const { data } = await axios.get('http://localhost:8081/api/pms/services');
+    const { data } = await axios.get('/api/pms/services');
     availableServices.value = Array.isArray(data) ? data : [];
   } catch (e) {
     console.error('Errore caricamento servizi:', e);
@@ -840,7 +840,7 @@ async function confirmAddServiceBeach() {
       note: addServiceForm.value.note || '',
       addedAt: new Date().toISOString()
     };
-    const result = await axios.post('http://localhost:8081/api/pms/beach/add_service', {
+    const result = await axios.post('/api/pms/beach/add_service', {
       reservationId: addServiceTarget.value.id,
       service: serviceEntry
     });

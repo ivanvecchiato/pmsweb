@@ -154,7 +154,7 @@ const startNewPricelist = () => {
 
 const savePrices = async (pricelist) => {
   try {
-    const endpoint = 'http://localhost:8081/api/pms/saverate';
+    const endpoint = '/api/pms/saverate';
 
     await axios.post(endpoint, pricelist);
     
@@ -239,7 +239,7 @@ const saveRangeAssignment = async () => {
 
   try {
     // Invio al backend (es. updateBulkTimetable)
-    await axios.post('http://localhost:8081/api/pms/updatetimetable', { updates });
+    await axios.post('/api/pms/updatetimetable', { updates });
     
     // Aggiorna localmente il timetable per vedere subito il cambio colore
     updates.forEach(upd => {
@@ -258,8 +258,8 @@ const saveRangeAssignment = async () => {
 // Caricamento dati
 const loadData = async () => {
   try {
-    const resPrices = await axios.get('http://localhost:8081/api/pms/getrates');
-    const resTime = await axios.get('http://localhost:8081/api/pms/gettimetable');
+    const resPrices = await axios.get('/api/pms/getrates');
+    const resTime = await axios.get('/api/pms/gettimetable');
     pricelists.value = resPrices.data;
     timetable.value = resTime.data;
   } catch (e) {

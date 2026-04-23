@@ -48,7 +48,7 @@ const sectorsMap = computed(() => {
 const fetchData = async () => {
   loading.value = true;
   try {
-    const resData = await axios.get(`http://localhost:8081/api/pms/beach/getplan?mode=flat&includeReservations=true&date=${props.selectedDate}`);
+    const resData = await axios.get(`/api/pms/beach/getplan?mode=flat&includeReservations=true&date=${props.selectedDate}`);
     resources.value = resData.data.map(normalizeResource);
   } catch (err) {
     console.error("Errore caricamento mappa:", err);

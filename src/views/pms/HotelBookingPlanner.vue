@@ -661,7 +661,7 @@ const addServiceForm = ref({ serviceId: '', quantity: 1, note: '' });
 
 async function loadAvailableServices() {
   try {
-    const { data } = await axios.get('http://localhost:8081/api/pms/services');
+    const { data } = await axios.get('/api/pms/services');
     availableServices.value = Array.isArray(data) ? data : [];
   } catch (e) {
     console.error('Errore caricamento servizi:', e);
@@ -703,7 +703,7 @@ async function confirmAddService() {
       note: addServiceForm.value.note || '',
       addedAt: new Date().toISOString()
     };
-    const result = await axios.post('http://localhost:8081/api/pms/hotel/add_service', {
+    const result = await axios.post('/api/pms/hotel/add_service', {
       reservationId: addServiceTarget.value.id,
       service: serviceEntry
     });
@@ -1073,7 +1073,7 @@ const runBookingStatusAction = async () => {
   const { endpoint } = statusAction;
 
   try {
-    await axios.get(`http://localhost:8081/api/pms/${endpoint}`, {
+    await axios.get(`/api/pms/${endpoint}`, {
       params: {
         reservation: booking.id,
         operator: 0
@@ -1206,7 +1206,7 @@ const undoCheckoutFromMenu = async () => {
   if (!confirm(`Annullare il checkout della prenotazione #${booking.id}?`)) return;
   closeBookingActions();
   try {
-    await axios.get('http://localhost:8081/api/pms/checkin', {
+    await axios.get('/api/pms/checkin', {
       params: { reservation: booking.id, operator: 0 }
     });
     getReservations();
@@ -1243,7 +1243,7 @@ const syncHotelH5s = async () => {
   if (isSyncingH5s.value) return;
 
   isSyncingH5s.value = true;
-  const syncEndpoint = 'http://localhost:8081/api/pms/hotel/sync_h5s';
+  const syncEndpoint = '/api/pms/hotel/sync_h5s';
 
   try {
     await axios.get(syncEndpoint, { timeout: 60000 });
@@ -1344,9 +1344,9 @@ const submitNewBooking = async () => {
     if (editingBooking.value) {
       payload.id = editingBooking.value.id;
       await postToFirstAvailableEndpoint([
-        'http://localhost:8081/api/pms/hotel/update_reservation',
-        'http://localhost:8081/api/pms/hotel/updatereservation',
-        'http://localhost:8081/api/pms/updatereservation'
+        '/api/pms/hotel/update_reservation',
+        '/api/pms/hotel/updatereservation',
+        '/api/pms/updatereservation'
       ], payload);
 
       showModal.value = false;
@@ -1356,9 +1356,9 @@ const submitNewBooking = async () => {
     }
 
     await postToFirstAvailableEndpoint([
-      'http://localhost:8081/api/pms/hotel/new_reservation',
-      'http://localhost:8081/api/pms/hotel/newreservation',
-      'http://localhost:8081/api/pms/newreservation'
+      '/api/pms/hotel/new_reservation',
+      '/api/pms/hotel/newreservation',
+      '/api/pms/newreservation'
     ], payload);
 
     showModal.value = false;
@@ -1746,7 +1746,7 @@ const updateReservation = (booking) => {
     duration: booking.duration
   };
 
-  axios.post('http://localhost:8081/api/pms/updatereservation', obj)
+  axios.post('/api/pms/updatereservation', obj)
     .then(response => {
       movingReservation.value = null; // CORRETTO: usa .value
       console.log('Prenotazione aggiornata con successo');
@@ -1783,7 +1783,7 @@ const handleMouseUp = () => {
 const deleteBooking = () => {
   if (editingBooking.value) {
     // call backend to delete
-    axios.post('http://localhost:8081/api/pms/hotel/delete_reservation', { id: editingBooking.value.id })
+    axios.post('/api/pms/hotel/delete_reservation', { id: editingBooking.value.id })
       .then(() => {
         bookings.value = bookings.value.filter(b => b.id !== editingBooking.value.id);
         selectedBooking.value = null;
@@ -1807,7 +1807,7 @@ const confirmCancel = async () => {
   if (!cancelReason.value.trim() || isCancelling.value) return;
   isCancelling.value = true;
   try {
-    await axios.post('http://localhost:8081/api/pms/hotel/cancel_reservation', {
+    await axios.post('/api/pms/hotel/cancel_reservation', {
       id: editingBooking.value.id,
       cancellation_reason: cancelReason.value.trim()
     });
@@ -1835,7 +1835,7 @@ const getReservations = () => {
   toDateObj.setDate(toDateObj.getDate() + days.value - 1);
   const toDate = toISODate(toDateObj);
 
-  var url = `http://localhost:8081/api/pms/getbookingsbyrange?from=${fromDate}&to=${toDate}`;
+  var url = `/api/pms/getbookingsbyrange?from=${fromDate}&to=${toDate}`;
   
   axios.get(url)
     .then(response => {
@@ -1894,7 +1894,7 @@ const convertReservations = (apiReservations) => {
 };
 
 const getRooms = () =>{
-  const url = 'http://localhost:8081/api/pms/getrooms'; // Sostituisci con il tuo endpoint API reale
+  const url = '/api/pms/getrooms'; // Sostituisci con il tuo endpoint API reale
   axios.get(url)
     .then(response => {
       console.log('Camere caricate:', response.data);
@@ -1952,8 +1952,8 @@ const timetable = ref([]);   // Da timeTableDB.json
 const loadPricingData = async () => {
   try {
     const [resPrices, resTime] = await Promise.all([
-      axios.get('http://localhost:8081/api/pms/getrates'),
-      axios.get('http://localhost:8081/api/pms/gettimetable')
+      axios.get('/api/pms/getrates'),
+      axios.get('/api/pms/gettimetable')
     ]);
     pricelists.value = resPrices.data;
     timetable.value = resTime.data;

@@ -305,7 +305,7 @@ const updateReservation = (booking) => {
     checkin: toISODate(new Date(startDate.value.getTime() + (booking.startDay) * 24 * 60 * 60 * 1000)),
     duration: booking.duration
   }
-  axios.post('http://localhost:8081/api/pms/updatereservation', obj)
+  axios.post('/api/pms/updatereservation', obj)
     .then(response => {
       movingReservation = null;
       console.log('Prenotazione aggiornata con successo:', response.data);
@@ -437,7 +437,7 @@ const getReservations = () =>{
   toDateObj.setDate(toDateObj.getDate() + days.value - 1);
   const toDate = toISODate(toDateObj);
 
-  var url = 'http://localhost:8081/api/pms/getbookingsbyrange';
+  var url = '/api/pms/getbookingsbyrange';
   url += `?from=${fromDate}&to=${toDate}`;
   console.log('Fetching reservations from:', url);
   axios.get(url)
@@ -470,7 +470,7 @@ const convertReservations = (apiReservations) => {
 };
 
 const getRooms = () =>{
-  const url = 'http://localhost:8081/api/pms/getrooms'; // Sostituisci con il tuo endpoint API reale
+  const url = '/api/pms/getrooms'; // Sostituisci con il tuo endpoint API reale
   axios.get(url)
     .then(response => {
       console.log('Camere caricate:', response.data);

@@ -303,7 +303,7 @@ const loadForm = async () => {
   loading.value = true
   try {
     await loadHotelPricingPolicy()
-    const res = await axios.get('http://localhost:8081/api/pms/getconfigs?section=hotel')
+    const res = await axios.get('/api/pms/getconfigs?section=hotel')
     const hotelSection = res?.data && typeof res.data === 'object' ? res.data : {}
     loadedHotelSection.value = hotelSection
     form.value = normalizeForm(hotelSection?.pricing || hotelSection)
@@ -343,7 +343,7 @@ const save = async () => {
       structure: normalizedStructure
     }
 
-    await axios.post('http://localhost:8081/api/pms/setconfigs', {
+    await axios.post('/api/pms/setconfigs', {
       section: 'hotel',
       data: mergedSection
     })

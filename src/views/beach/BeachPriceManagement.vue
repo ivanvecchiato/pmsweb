@@ -198,7 +198,7 @@ const saveRangeAssignment = async () => {
   }
 
   try {
-    await axios.post('http://localhost:8081/api/pms/updatetimetable', { updates });
+    await axios.post('/api/pms/updatetimetable', { updates });
     updates.forEach((upd) => {
       const idx = timetable.value.findIndex((d) => d.date === upd.date);
       if (idx !== -1) timetable.value[idx].pricelist = upd.pricelist;
@@ -216,9 +216,9 @@ const saveRangeAssignment = async () => {
 const fetchData = async () => {
   try {
     const [resProd, resPrice, resTime] = await Promise.all([
-      axios.get('http://localhost:8081/api/pms/beach/getplan?mode=flat'),
-      axios.get('http://localhost:8081/api/pms/getrates?type=beach'),
-      axios.get('http://localhost:8081/api/pms/gettimetable?type=beach')
+      axios.get('/api/pms/beach/getplan?mode=flat'),
+      axios.get('/api/pms/getrates?type=beach'),
+      axios.get('/api/pms/gettimetable?type=beach')
     ]);
     const normalizedResources = resProd.data.map(normalizeResource);
     resources.value = normalizedResources;
@@ -236,7 +236,7 @@ const saveBeachPrices = async (list) => {
     // Il payload conterrà i prezzi per fila (default) 
     // e gli override per (fila, colonna) specifici
     const payload = buildPmsPayload(list, resources.value);
-    await axios.post('http://localhost:8081/api/pms/saverate?type=beach', payload);
+    await axios.post('/api/pms/saverate?type=beach', payload);
     alert("Listino spiaggia aggiornato con successo!");
   } catch (err) {
     alert("Errore nel salvataggio");

@@ -187,7 +187,7 @@ const loadBarConsumptions = async () => {
     if (account.value.checkin) params.set('checkin', account.value.checkin)
     if (account.value.checkout) params.set('checkout', account.value.checkout)
     const response = await axios.get(
-      `http://localhost:8081/api/pms/hotel/get_bar_consumptions?${params.toString()}`
+      `/api/pms/hotel/get_bar_consumptions?${params.toString()}`
     )
     barConsumptions.value = response.data?.consumptions || []
   } catch (error) {
@@ -238,7 +238,7 @@ const getOvernightTaxSnapshotFromReservation = (reservation) => {
 }
 
 const loadCounter = async () => {
-  const response = await axios.get('http://localhost:8081/api/pms/hotel/account/counter')
+  const response = await axios.get('/api/pms/hotel/account/counter')
   counterInfo.value = response.data || null
 }
 
@@ -303,7 +303,7 @@ const extractStructureInfo = (configs) => {
 
 const loadStructureInfo = async () => {
   try {
-    const response = await axios.get('http://localhost:8081/api/pms/getconfigs')
+    const response = await axios.get('/api/pms/getconfigs')
     structureInfo.value = extractStructureInfo(response.data)
   } catch (error) {
     console.error('Errore caricamento dati struttura:', error)
@@ -315,7 +315,7 @@ const loadReservationAccount = async () => {
   isLoading.value = true
   try {
     await loadHotelPricingPolicy()
-    const bookingResponse = await axios.get(`http://localhost:8081/api/pms/hotel/reservation?id=${encodeURIComponent(reservationId.value)}`)
+    const bookingResponse = await axios.get(`/api/pms/hotel/reservation?id=${encodeURIComponent(reservationId.value)}`)
     const res = bookingResponse.data?.reservation
     if (!res) {
       account.value = null
@@ -388,7 +388,7 @@ const reserveProgressive = async () => {
   if (!account.value) return
   isReserving.value = true
   try {
-    const response = await axios.post('http://localhost:8081/api/pms/hotel/account/reserve_progressive', {
+    const response = await axios.post('/api/pms/hotel/account/reserve_progressive', {
       reservationId: account.value.id
     })
     const progressive = Number(response.data?.progressive)
@@ -524,7 +524,7 @@ const closeAccount = async () => {
 
   isClosing.value = true
   try {
-    const response = await axios.post('http://localhost:8081/api/pms/hotel/account/close', {
+    const response = await axios.post('/api/pms/hotel/account/close', {
       reservationId: account.value.id,
       progressive: Number(reservedProgressive.value),
       account: account.value,
