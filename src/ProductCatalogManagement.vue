@@ -8,6 +8,7 @@ const PRODUCTS_ORIGIN = (import.meta.env.VITE_API_TARGET_ORIGIN || DEFAULT_PRODU
 
 const categories = ref([])
 const selectedCategory = ref('')
+const searchQuery = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 const saveMessage = ref('')
@@ -21,6 +22,7 @@ const form = ref({
   id: '',
   name: '',
   price: 0,
+  purchase_price: 0,
   imageUrl: '',
   color: '#1976d2',
   category: ''
@@ -88,6 +90,7 @@ const normalizeProduct = (product, categoryName) => {
     id,
     name: String(product?.name ?? product?.productName ?? product?.description ?? product?.title ?? '').trim(),
     price: Number(product?.price ?? product?.sell_price ?? product?.listPrice ?? 0) || 0,
+    purchase_price: Number(product?.purchase_price ?? product?.purchasePrice ?? product?.cost ?? 0) || 0,
     imageUrl,
     color,
     category: categoryName
@@ -155,9 +158,20 @@ const fetchProducts = async () => {
 }
 
 const selectedProducts = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase()
+
+  if (query) {
+    return categories.value
+      .flatMap((category) => Array.isArray(category.products) ? category.products : [])
+      .filter((product) => String(product.name || '').toLowerCase().includes(query))
+      .sort((a, b) => a.name.localeCompare(b.name, 'it'))
+  }
+
   const category = categories.value.find((item) => item.name === selectedCategory.value)
   if (!category) return []
-  return [...category.products].sort((a, b) => a.name.localeCompare(b.name, 'it'))
+
+  return [...category.products]
+    .sort((a, b) => a.name.localeCompare(b.name, 'it'))
 })
 
 const imageKey = (productId) => String(productId)
@@ -176,6 +190,18 @@ const saveButtonLabel = computed(() => (saving.value
   ? (isCreatingProduct.value ? 'Creazione...' : 'Salvataggio...')
   : (isCreatingProduct.value ? 'Crea' : 'Salva')))
 
+const normalizeProductName = (name) => String(name ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+
+const isDuplicateCreateName = computed(() => {
+  if (!isCreatingProduct.value) return false
+  const candidate = normalizeProductName(form.value.name)
+  if (!candidate) return false
+
+  return categories.value.some((category) =>
+    Array.isArray(category.products) && category.products.some((product) => normalizeProductName(product.name) === candidate)
+  )
+})
+
 const selectedImageName = ref('')
 
 const ensureCategoryExists = (categoryName) => {
@@ -193,6 +219,7 @@ const openCreateDialog = () => {
     id: '',
     name: '',
     price: 0,
+    purchase_price: 0,
     imageUrl: '',
     color: '#1976d2',
     category: selectedCategory.value || availableCategoryNames.value[0] || ''
@@ -210,6 +237,7 @@ const duplicateProduct = (product) => {
     id: '',
     name: `${product.name} copia`,
     price: Number(product.price || 0),
+    purchase_price: Number(product.purchase_price || 0),
     imageUrl: product.imageUrl || '',
     color: product.color || '#1976d2',
     category: product.category || selectedCategory.value || availableCategoryNames.value[0] || ''
@@ -226,6 +254,7 @@ const openEditDialog = (product) => {
     id: String(product.id),
     name: product.name,
     price: Number(product.price || 0),
+    purchase_price: Number(product.purchase_price || 0),
     imageUrl: product.imageUrl || '',
     color: product.color || '#1976d2',
     category: product.category
@@ -274,14 +303,24 @@ const handleImageUpload = (event) => {
 const saveProduct = async () => {
   if (!isCreatingProduct.value && !editingProduct.value) return
 
+  const normalizedName = normalizeProductName(form.value.name)
+  if (!normalizedName) return
+
+  if (isCreatingProduct.value && isDuplicateCreateName.value) {
+    errorMessage.value = 'Esiste già un prodotto con questo nome.'
+    saveMessage.value = ''
+    return
+  }
+
   saving.value = true
   saveMessage.value = ''
   errorMessage.value = ''
 
   const payload = {
     id: form.value.id,
-    name: form.value.name.trim(),
+    name: String(form.value.name).trim(),
     price: Number(form.value.price) || 0,
+    purchase_price: Number(form.value.purchase_price) || 0,
     imgUrl: form.value.imageUrl.trim(),
     color: form.value.color,
     category: form.value.category
@@ -292,6 +331,7 @@ const saveProduct = async () => {
       const createPayload = {
         name: payload.name,
         price: payload.price,
+        purchase_price: payload.purchase_price,
         imgUrl: payload.imgUrl,
         color: payload.color,
         category: payload.category,
@@ -307,6 +347,7 @@ const saveProduct = async () => {
           id: createdId,
           name: payload.name,
           price: payload.price,
+          purchase_price: payload.purchase_price,
           imageUrl: payload.imgUrl,
           color: payload.color,
           category: payload.category
@@ -327,6 +368,7 @@ const saveProduct = async () => {
             ...category.products[index],
             name: payload.name,
             price: payload.price,
+            purchase_price: payload.purchase_price,
             imageUrl: payload.imgUrl,
             color: payload.color
           }
@@ -337,6 +379,11 @@ const saveProduct = async () => {
     closeDialog()
   } catch (error) {
     console.error('Errore salvataggio anagrafica prodotto', error)
+    const apiError = error?.response?.data?.error
+    if (apiError === 'duplicate_name') {
+      errorMessage.value = 'Esiste già un prodotto con questo nome.'
+      return
+    }
     errorMessage.value = isCreatingProduct.value
       ? 'Creazione non riuscita. Verifica endpoint creazione prodotto.'
       : 'Salvataggio non riuscito. Verifica endpoint aggiornamento prodotto.'
@@ -365,13 +412,29 @@ onMounted(fetchProducts)
       </div>
     </header>
 
-    <div class="filters">
-      <label for="category-select">Categoria</label>
-      <select id="category-select" v-model="selectedCategory" :disabled="loading || !categories.length">
-        <option v-for="category in categories" :key="category.name" :value="category.name">
-          {{ category.name }}
-        </option>
-      </select>
+    <div class="filters-card">
+      <div class="filters">
+        <div class="filter-field">
+          <label for="category-select" class="sr-only">Categoria</label>
+          <select id="category-select" v-model="selectedCategory" :disabled="loading || !categories.length" aria-label="Categoria prodotto">
+            <option v-for="category in categories" :key="category.name" :value="category.name">
+              {{ category.name }}
+            </option>
+          </select>
+        </div>
+
+        <div class="filter-field filter-field-search">
+          <label for="product-search" class="sr-only">Cerca per nome</label>
+          <input
+            id="product-search"
+            v-model="searchQuery"
+            type="text"
+            placeholder="Filtra per nome..."
+            aria-label="Cerca prodotto per nome"
+            :disabled="loading || !categories.length"
+          />
+        </div>
+      </div>
     </div>
 
     <p v-if="errorMessage" class="status error">{{ errorMessage }}</p>
@@ -379,13 +442,22 @@ onMounted(fetchProducts)
 
     <div class="table-wrap">
       <table v-if="selectedProducts.length" class="products-table">
+        <colgroup>
+          <col style="width: 80px" />
+          <col style="width: 80px" />
+          <col />
+          <col style="width: 120px" />
+          <col style="width: 165px" />
+          <col style="width: 110px" />
+        </colgroup>
         <thead>
           <tr>
-            <th style="width: 80px;">ID</th>
-            <th style="width: 80px;">Thumb</th>
+            <th>ID</th>
+            <th>Thumb</th>
             <th>Nome</th>
-            <th style="width: 120px; text-align: right;">Prezzo</th>
-            <th style="width: 110px; text-align: center;">Azioni</th>
+            <th class="price-head">Prezzo</th>
+            <th class="price-head">Prezzo acquisto</th>
+            <th class="actions-head">Azioni</th>
           </tr>
         </thead>
         <tbody>
@@ -409,6 +481,7 @@ onMounted(fetchProducts)
             </td>
             <td>{{ product.name }}</td>
             <td class="price">€ {{ Number(product.price || 0).toFixed(2) }}</td>
+            <td class="price">€ {{ Number(product.purchase_price || 0).toFixed(2) }}</td>
             <td class="actions-cell">
               <button class="btn-secondary btn-sm" @click.stop="duplicateProduct(product)">Duplica</button>
             </td>
@@ -439,11 +512,17 @@ onMounted(fetchProducts)
         <div class="form-row">
           <label>Nome</label>
           <input v-model="form.name" type="text" />
+          <small v-if="isCreatingProduct && isDuplicateCreateName" class="field-error">Esiste già un prodotto con questo nome.</small>
         </div>
 
         <div class="form-row">
           <label>Prezzo</label>
           <input v-model.number="form.price" type="number" step="0.01" min="0" />
+        </div>
+
+        <div class="form-row">
+          <label>Prezzo di acquisto</label>
+          <input v-model.number="form.purchase_price" type="number" step="0.01" min="0" />
         </div>
 
         <div class="form-row">
@@ -467,7 +546,7 @@ onMounted(fetchProducts)
 
         <div class="dialog-actions">
           <button class="btn-secondary" :disabled="saving" @click="closeDialog">Annulla</button>
-          <button class="btn-primary" :disabled="saving || !form.name.trim() || !form.category" @click="saveProduct">
+          <button class="btn-primary" :disabled="saving || !form.name.trim() || !form.category || (isCreatingProduct && isDuplicateCreateName)" @click="saveProduct">
             {{ saveButtonLabel }}
           </button>
         </div>
@@ -504,25 +583,78 @@ onMounted(fetchProducts)
   color: #64748b;
 }
 
-.filters {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.filters-card {
+  display: inline-block;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
   margin-bottom: 12px;
-  max-width: 320px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  max-width: 100%;
 }
 
-.filters label {
-  font-weight: 600;
+.filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-field {
+  display: flex;
+  min-width: 0;
+}
+
+.filter-field:first-child {
+  width: 240px;
+}
+
+.filter-field-search {
+  width: 240px;
 }
 
 .filters select,
+.filters input,
 .form-row input,
 .form-row select {
+  box-sizing: border-box;
   border: 1px solid #d1d5db;
   border-radius: 8px;
-  padding: 8px 10px;
+  height: 42px;
+  padding: 0 12px;
+  background: #fff;
+  line-height: 40px;
   font: inherit;
+}
+
+.filters select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 36px;
+  background-image: linear-gradient(45deg, transparent 50%, #475569 50%), linear-gradient(135deg, #475569 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 13px) calc(50% - 3px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.filters input {
+  line-height: normal;
+}
+
+.filters select,
+.filters input {
+  width: 100%;
+}
+
+.filters select:focus,
+.filters input:focus,
+.form-row input:focus,
+.form-row select:focus {
+  outline: none;
+  border-color: #1976d2;
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.12);
 }
 
 .color-row {
@@ -560,14 +692,54 @@ onMounted(fetchProducts)
 
 .products-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0 8px;
 }
+
+
 
 .products-table th,
 .products-table td {
   padding: 10px 12px;
   text-align: left;
+  white-space: nowrap;
+}
+
+.products-table th:nth-child(1),
+.products-table td:nth-child(1) {
+  width: 80px;
+}
+
+.products-table th:nth-child(2),
+.products-table td:nth-child(2) {
+  width: 80px;
+}
+
+.products-table th:nth-child(4),
+.products-table td:nth-child(4) {
+  width: 120px;
+  text-align: center;
+}
+
+.products-table th:nth-child(5),
+.products-table td:nth-child(5) {
+  width: 165px;
+  text-align: center;
+}
+
+.products-table th:nth-child(6),
+.products-table td:nth-child(6) {
+  width: 110px;
+  text-align: center;
+}
+
+.price-head {
+  text-align: center !important;
+}
+
+.actions-head {
+  text-align: center !important;
 }
 
 .products-table thead {
@@ -581,7 +753,7 @@ onMounted(fetchProducts)
 }
 
 .products-table tbody td:first-child {
-  border-left: 5px solid var(--row-color, #e2e8f0);
+  box-shadow: inset 5px 0 0 var(--row-color, #e2e8f0);
   border-top-left-radius: 8px;
   border-bottom-left-radius: 8px;
 }
@@ -601,7 +773,7 @@ onMounted(fetchProducts)
 }
 
 .price {
-  text-align: right;
+  text-align: center;
   font-weight: 600;
 }
 
@@ -691,10 +863,43 @@ onMounted(fetchProducts)
   color: #475569;
 }
 
+.field-error {
+  color: #b91c1c;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 12px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 720px) {
+  .filters-card {
+    display: block;
+  }
+
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-field,
+  .filter-field:first-child,
+  .filter-field-search {
+    width: 100%;
+  }
 }
 </style>
