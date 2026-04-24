@@ -483,7 +483,7 @@ onMounted(() => {
         <div v-for="item in group.items" :key="item.id" class="history-item">
           <div class="item-main">
             <span class="item-name">{{ item.productName }}</span>
-            <span class="item-type-badge" :class="item.type">{{ item.type }}</span>
+            <span class="item-type-badge" :class="item.type">{{ movementTypeLabel(item.type) }}</span>
           </div>
           <div class="item-details">
             <span class="item-qty" :class="item.direction">
