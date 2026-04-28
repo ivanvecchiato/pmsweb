@@ -3,13 +3,16 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 
 const PRODUCTS_ENDPOINT = '/api/products'
+const VARIANTS_ENDPOINT = '/api/variants'
 const DEFAULT_PRODUCTS_ORIGIN = import.meta.env.DEV ? 'http://localhost:8088' : window.location.origin
 const PRODUCTS_ORIGIN = (import.meta.env.VITE_API_TARGET_ORIGIN || DEFAULT_PRODUCTS_ORIGIN).replace(/\/+$/, '')
 
 const categories = ref([])
+const variantFamilies = ref([])
 const selectedCategory = ref('')
 const searchQuery = ref('')
 const loading = ref(false)
+const loadingVariants = ref(false)
 const errorMessage = ref('')
 const saveMessage = ref('')
 const brokenImages = ref({})
@@ -25,8 +28,111 @@ const form = ref({
   purchase_price: 0,
   imageUrl: '',
   color: '#1976d2',
-  category: ''
+  category: '',
+  variantFamilyId: '',
+  auto: false,
+  variants: {
+    auto: false,
+    vars: []
+  }
 })
+
+const toBoolean = (value) => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on'
+  }
+  return false
+}
+
+const toSafeNumber = (value, fallback = 0) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+const emptyVariants = () => ({
+  auto: false,
+  vars: []
+})
+
+const normalizeVariantsPayload = (rawVariants, fallbackAuto = false) => {
+  const source = rawVariants && typeof rawVariants === 'object' ? rawVariants : {}
+  const varsRaw = Array.isArray(source.vars)
+    ? source.vars
+    : Array.isArray(source.variants)
+      ? source.variants
+      : []
+
+  const auto = toBoolean(source.auto ?? source.audo ?? fallbackAuto)
+  const vars = varsRaw
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null
+
+      const id = entry.id ?? entry.variantId
+      if (id === null || id === undefined || id === '') return null
+
+      const familyId = entry.family?.id ?? entry.familyId ?? entry.family_id ?? null
+      const familyName = String(entry.family?.name ?? entry.familyName ?? entry.family_name ?? '').trim()
+      const color = String(entry.color ?? '#FFFFFF').trim() || '#FFFFFF'
+
+      return {
+        id: toSafeNumber(id, id),
+        name: String(entry.name ?? entry.variantName ?? '').trim(),
+        price: toSafeNumber(entry.price, 0),
+        color,
+        family: {
+          id: familyId === null || familyId === undefined || familyId === '' ? null : toSafeNumber(familyId, familyId),
+          name: familyName
+        }
+      }
+    })
+    .filter((entry) => entry && entry.name)
+
+  return {
+    auto,
+    vars
+  }
+}
+
+const normalizeVariantFamilies = (payload) => {
+  const rawFamilies = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.variants)
+      ? payload.variants
+      : []
+
+  return rawFamilies
+    .map((family) => {
+      const id = family?.familyId ?? family?.id
+      const name = String(family?.familyName ?? family?.name ?? '').trim()
+      const variants = Array.isArray(family?.variants)
+        ? family.variants
+          .map((variant) => {
+            const variantId = variant?.id ?? variant?.variantId
+            if (variantId === null || variantId === undefined || variantId === '') return null
+
+            return {
+              id: toSafeNumber(variantId, variantId),
+              name: String(variant?.name ?? variant?.label ?? '').trim(),
+              price: toSafeNumber(variant?.price, 0),
+              color: String(variant?.color ?? '#FFFFFF').trim() || '#FFFFFF'
+            }
+          })
+          .filter((variant) => variant && variant.name)
+        : []
+
+      if ((id === null || id === undefined || id === '') || !name) return null
+
+      return {
+        id: toSafeNumber(id, id),
+        name,
+        variants
+      }
+    })
+    .filter((family) => family && family.variants.length > 0)
+}
 
 const normalizeCategoryName = (item) => {
   if (!item || typeof item !== 'object') return ''
@@ -86,6 +192,8 @@ const normalizeProduct = (product, categoryName) => {
     return `${PRODUCTS_ORIGIN}${rawImage.startsWith('/') ? '' : '/'}${rawImage}`
   })()
 
+  const normalizedVariants = normalizeVariantsPayload(product?.variants, product?.auto ?? product?.audo)
+
   return {
     id,
     name: String(product?.name ?? product?.productName ?? product?.description ?? product?.title ?? '').trim(),
@@ -93,13 +201,17 @@ const normalizeProduct = (product, categoryName) => {
     purchase_price: Number(product?.purchase_price ?? product?.purchasePrice ?? product?.cost ?? 0) || 0,
     imageUrl,
     color,
-    category: categoryName
+    category: categoryName,
+    auto: normalizedVariants.auto,
+    variants: normalizedVariants
   }
 }
 
 const normalizeResponse = (payload) => {
   const rawCategories = Array.isArray(payload)
     ? payload
+    : Array.isArray(payload?.prodotti)
+      ? payload.prodotti
     : Array.isArray(payload?.categories)
       ? payload.categories
       : []
@@ -122,6 +234,7 @@ const normalizeResponse = (payload) => {
         .filter((product) => product.id !== null && product.id !== undefined && product.name)
 
       return {
+        id: category?.id ?? category?.categoryId ?? null,
         name: name || 'Categoria',
         products
       }
@@ -154,6 +267,20 @@ const fetchProducts = async () => {
     errorMessage.value = 'Impossibile caricare le anagrafiche prodotto.'
   } finally {
     loading.value = false
+  }
+}
+
+const fetchVariantFamilies = async () => {
+  loadingVariants.value = true
+
+  try {
+    const res = await axios.get(VARIANTS_ENDPOINT)
+    variantFamilies.value = normalizeVariantFamilies(res.data)
+  } catch (error) {
+    console.error('Errore caricamento varianti', error)
+    variantFamilies.value = []
+  } finally {
+    loadingVariants.value = false
   }
 }
 
@@ -204,17 +331,124 @@ const isDuplicateCreateName = computed(() => {
 
 const selectedImageName = ref('')
 
+const selectedVariantFamily = computed(() => {
+  return variantFamilies.value.find((family) => String(family.id) === String(form.value.variantFamilyId)) || null
+})
+
+const visibleFamilyVariants = computed(() => {
+  return selectedVariantFamily.value?.variants || []
+})
+
+const selectedVariantIds = computed(() => {
+  const ids = new Set()
+  const vars = Array.isArray(form.value.variants?.vars) ? form.value.variants.vars : []
+  vars.forEach((entry) => {
+    ids.add(String(entry.id))
+  })
+  return ids
+})
+
+const isVariantSelected = (variantId) => selectedVariantIds.value.has(String(variantId))
+
+const findVariantInForm = (variantId) => {
+  const vars = Array.isArray(form.value.variants?.vars) ? form.value.variants.vars : []
+  return vars.find((entry) => String(entry.id) === String(variantId)) || null
+}
+
+const addVariantToForm = (family, variant) => {
+  if (!family || !variant) return
+  if (isVariantSelected(variant.id)) return
+
+  const vars = Array.isArray(form.value.variants?.vars) ? [...form.value.variants.vars] : []
+  vars.push({
+    id: variant.id,
+    name: variant.name,
+    price: toSafeNumber(variant.price, 0),
+    color: variant.color,
+    family: {
+      id: family.id,
+      name: family.name
+    }
+  })
+
+  form.value.variants = {
+    auto: toBoolean(form.value.variants?.auto),
+    vars
+  }
+}
+
+const removeVariantFromForm = (variantId) => {
+  const vars = Array.isArray(form.value.variants?.vars) ? form.value.variants.vars : []
+  form.value.variants = {
+    auto: toBoolean(form.value.variants?.auto),
+    vars: vars.filter((entry) => String(entry.id) !== String(variantId))
+  }
+}
+
+const toggleVariantSelection = (family, variant, enabled) => {
+  if (enabled) {
+    addVariantToForm(family, variant)
+    return
+  }
+  removeVariantFromForm(variant.id)
+}
+
+const updateVariantPrice = (variantId, value) => {
+  const vars = Array.isArray(form.value.variants?.vars) ? [...form.value.variants.vars] : []
+  const index = vars.findIndex((entry) => String(entry.id) === String(variantId))
+  if (index < 0) return
+  vars[index] = {
+    ...vars[index],
+    price: toSafeNumber(value, 0)
+  }
+  form.value.variants = {
+    auto: toBoolean(form.value.variants?.auto),
+    vars
+  }
+}
+
 const ensureCategoryExists = (categoryName) => {
   if (!categoryName) return null
   let category = categories.value.find((item) => item.name === categoryName)
   if (!category) {
-    category = { name: categoryName, products: [] }
+    category = { id: null, name: categoryName, products: [] }
     categories.value.push(category)
   }
   return category
 }
 
+const getCategoryIdByName = (categoryName) => {
+  const category = categories.value.find((item) => item.name === categoryName)
+  if (!category) return null
+  const id = Number(category.id)
+  return Number.isFinite(id) ? id : null
+}
+
+const persistVariantsFallback = async (productId, categoryName, payload) => {
+  const normalizedProductId = Number(productId)
+  if (!Number.isFinite(normalizedProductId)) return
+
+  const categoryId = getCategoryIdByName(categoryName)
+  if (!Number.isFinite(categoryId)) return
+
+  const setProp = async (prop, value) => {
+    await axios.get('/api/setproduct', {
+      params: {
+        id: normalizedProductId,
+        category: categoryId,
+        prop,
+        value
+      }
+    })
+  }
+
+  await setProp('auto', String(toBoolean(payload.auto)))
+  await setProp('variants', JSON.stringify(payload.variants || emptyVariants()))
+}
+
 const openCreateDialog = () => {
+  const firstFamilyId = variantFamilies.value[0]?.id ?? ''
+
   form.value = {
     id: '',
     name: '',
@@ -222,7 +456,10 @@ const openCreateDialog = () => {
     purchase_price: 0,
     imageUrl: '',
     color: '#1976d2',
-    category: selectedCategory.value || availableCategoryNames.value[0] || ''
+    category: selectedCategory.value || availableCategoryNames.value[0] || '',
+    variantFamilyId: firstFamilyId,
+    auto: false,
+    variants: emptyVariants()
   }
   editingProduct.value = null
   isCreatingProduct.value = true
@@ -233,6 +470,11 @@ const openCreateDialog = () => {
 }
 
 const duplicateProduct = (product) => {
+  const normalizedVariants = normalizeVariantsPayload(product?.variants, product?.auto ?? product?.audo)
+  const firstVariantFamilyId = normalizedVariants.vars[0]?.family?.id
+    ?? variantFamilies.value[0]?.id
+    ?? ''
+
   form.value = {
     id: '',
     name: `${product.name} copia`,
@@ -240,7 +482,10 @@ const duplicateProduct = (product) => {
     purchase_price: Number(product.purchase_price || 0),
     imageUrl: product.imageUrl || '',
     color: product.color || '#1976d2',
-    category: product.category || selectedCategory.value || availableCategoryNames.value[0] || ''
+    category: product.category || selectedCategory.value || availableCategoryNames.value[0] || '',
+    variantFamilyId: firstVariantFamilyId,
+    auto: toBoolean(normalizedVariants.auto),
+    variants: normalizedVariants
   }
   editingProduct.value = null
   isCreatingProduct.value = true
@@ -250,6 +495,11 @@ const duplicateProduct = (product) => {
 }
 
 const openEditDialog = (product) => {
+  const normalizedVariants = normalizeVariantsPayload(product?.variants, product?.auto ?? product?.audo)
+  const firstVariantFamilyId = normalizedVariants.vars[0]?.family?.id
+    ?? variantFamilies.value[0]?.id
+    ?? ''
+
   form.value = {
     id: String(product.id),
     name: product.name,
@@ -257,7 +507,10 @@ const openEditDialog = (product) => {
     purchase_price: Number(product.purchase_price || 0),
     imageUrl: product.imageUrl || '',
     color: product.color || '#1976d2',
-    category: product.category
+    category: product.category,
+    variantFamilyId: firstVariantFamilyId,
+    auto: toBoolean(normalizedVariants.auto),
+    variants: normalizedVariants
   }
   editingProduct.value = product
   isCreatingProduct.value = false
@@ -316,6 +569,8 @@ const saveProduct = async () => {
   saveMessage.value = ''
   errorMessage.value = ''
 
+  const normalizedVariants = normalizeVariantsPayload(form.value.variants, form.value.auto)
+
   const payload = {
     id: form.value.id,
     name: String(form.value.name).trim(),
@@ -323,7 +578,12 @@ const saveProduct = async () => {
     purchase_price: Number(form.value.purchase_price) || 0,
     imgUrl: form.value.imageUrl.trim(),
     color: form.value.color,
-    category: form.value.category
+    category: form.value.category,
+    auto: toBoolean(form.value.auto),
+    variants: {
+      auto: toBoolean(form.value.auto),
+      vars: normalizedVariants.vars
+    }
   }
 
   try {
@@ -335,7 +595,9 @@ const saveProduct = async () => {
         imgUrl: payload.imgUrl,
         color: payload.color,
         category: payload.category,
-        category_name: payload.category
+        category_name: payload.category,
+        auto: payload.auto,
+        variants: payload.variants
       }
 
       const res = await axios.post(PRODUCTS_ENDPOINT, createPayload)
@@ -343,6 +605,8 @@ const saveProduct = async () => {
       const createdId = createdRaw.id ?? createdRaw._id ?? null
       const category = ensureCategoryExists(payload.category)
       if (category && createdId !== null && createdId !== undefined) {
+        await persistVariantsFallback(createdId, payload.category, payload)
+
         category.products.push({
           id: createdId,
           name: payload.name,
@@ -350,7 +614,9 @@ const saveProduct = async () => {
           purchase_price: payload.purchase_price,
           imageUrl: payload.imgUrl,
           color: payload.color,
-          category: payload.category
+          category: payload.category,
+          auto: payload.auto,
+          variants: payload.variants
         })
         selectedCategory.value = payload.category
       } else {
@@ -359,6 +625,7 @@ const saveProduct = async () => {
       saveMessage.value = 'Prodotto creato con successo.'
     } else {
       await axios.put(`${PRODUCTS_ENDPOINT}/${encodeURIComponent(form.value.id)}`, payload)
+      await persistVariantsFallback(form.value.id, form.value.category, payload)
 
       const category = categories.value.find((item) => item.name === form.value.category)
       if (category) {
@@ -370,7 +637,9 @@ const saveProduct = async () => {
             price: payload.price,
             purchase_price: payload.purchase_price,
             imageUrl: payload.imgUrl,
-            color: payload.color
+            color: payload.color,
+            auto: payload.auto,
+            variants: payload.variants
           }
         }
       }
@@ -393,6 +662,7 @@ const saveProduct = async () => {
 }
 
 onMounted(fetchProducts)
+onMounted(fetchVariantFamilies)
 </script>
 
 <template>
@@ -495,53 +765,110 @@ onMounted(fetchProducts)
       <div class="dialog">
         <h3>{{ dialogTitle }}</h3>
 
-        <div v-if="!isCreatingProduct" class="form-row">
-          <label>ID</label>
-          <input :value="form.id" disabled />
-        </div>
+        <div class="dialog-grid">
+          <section class="dialog-col dialog-col-main">
+            <div v-if="!isCreatingProduct" class="form-row">
+              <label>ID</label>
+              <input :value="form.id" disabled />
+            </div>
 
-        <div class="form-row">
-          <label>Categoria</label>
-          <select v-model="form.category" :disabled="!availableCategoryNames.length || saving">
-            <option v-for="categoryName in availableCategoryNames" :key="categoryName" :value="categoryName">
-              {{ categoryName }}
-            </option>
-          </select>
-        </div>
+            <div class="form-row">
+              <label>Categoria</label>
+              <select v-model="form.category" :disabled="!availableCategoryNames.length || saving">
+                <option v-for="categoryName in availableCategoryNames" :key="categoryName" :value="categoryName">
+                  {{ categoryName }}
+                </option>
+              </select>
+            </div>
 
-        <div class="form-row">
-          <label>Nome</label>
-          <input v-model="form.name" type="text" />
-          <small v-if="isCreatingProduct && isDuplicateCreateName" class="field-error">Esiste già un prodotto con questo nome.</small>
-        </div>
+            <div class="form-row">
+              <label>Nome</label>
+              <input v-model="form.name" type="text" />
+              <small v-if="isCreatingProduct && isDuplicateCreateName" class="field-error">Esiste già un prodotto con questo nome.</small>
+            </div>
 
-        <div class="form-row">
-          <label>Prezzo</label>
-          <input v-model.number="form.price" type="number" step="0.01" min="0" />
-        </div>
+            <div class="form-row">
+              <label>Prezzo</label>
+              <input v-model.number="form.price" type="number" step="0.01" min="0" />
+            </div>
 
-        <div class="form-row">
-          <label>Prezzo di acquisto</label>
-          <input v-model.number="form.purchase_price" type="number" step="0.01" min="0" />
-        </div>
+            <div class="form-row">
+              <label>Prezzo di acquisto</label>
+              <input v-model.number="form.purchase_price" type="number" step="0.01" min="0" />
+            </div>
 
-        <div class="form-row">
-          <label>Immagine URL</label>
-          <input v-model="form.imageUrl" type="text" />
-        </div>
+            <div class="form-row">
+              <label>Immagine URL</label>
+              <input v-model="form.imageUrl" type="text" />
+            </div>
 
-        <div v-if="isCreatingProduct" class="form-row">
-          <label>Upload immagine</label>
-          <input type="file" accept="image/*" @change="handleImageUpload" />
-          <small v-if="selectedImageName" class="upload-info">File selezionato: {{ selectedImageName }}</small>
-        </div>
+            <div v-if="isCreatingProduct" class="form-row">
+              <label>Upload immagine</label>
+              <input type="file" accept="image/*" @change="handleImageUpload" />
+              <small v-if="selectedImageName" class="upload-info">File selezionato: {{ selectedImageName }}</small>
+            </div>
 
-        <div class="form-row">
-          <label>Colore</label>
-          <div class="color-row">
-            <input v-model="form.color" type="color" class="color-input" />
-            <input v-model="form.color" type="text" placeholder="#1976d2" />
-          </div>
+            <div class="form-row">
+              <label>Colore</label>
+              <div class="color-row">
+                <input v-model="form.color" type="color" class="color-input" />
+                <input v-model="form.color" type="text" placeholder="#1976d2" />
+              </div>
+            </div>
+          </section>
+
+          <section class="dialog-col dialog-col-variants">
+            <h4>Associazione Varianti</h4>
+
+            <div class="form-row">
+              <label>Famiglia varianti</label>
+              <select v-model="form.variantFamilyId" :disabled="saving || loadingVariants || !variantFamilies.length">
+                <option value="" disabled>
+                  {{ loadingVariants ? 'Caricamento famiglie...' : 'Seleziona famiglia' }}
+                </option>
+                <option v-for="family in variantFamilies" :key="family.id" :value="family.id">
+                  {{ family.name }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-row compact-row">
+              <label>Automatica</label>
+              <label class="switch-field" :class="{ disabled: saving }">
+                <input v-model="form.auto" type="checkbox" :disabled="saving" class="switch-input" />
+                <span class="switch-slider" aria-hidden="true"></span>
+                <span class="switch-text">{{ form.auto ? 'Si' : 'No' }}</span>
+              </label>
+            </div>
+
+            <div class="variants-list" v-if="selectedVariantFamily && visibleFamilyVariants.length">
+              <div v-for="variant in visibleFamilyVariants" :key="variant.id" class="variant-item">
+                <label class="variant-name">
+                  <input
+                    type="checkbox"
+                    :checked="isVariantSelected(variant.id)"
+                    :disabled="saving"
+                    @change="toggleVariantSelection(selectedVariantFamily, variant, $event.target.checked)"
+                  />
+                  <span>{{ variant.name }}</span>
+                </label>
+
+                <div class="variant-price">
+                  <span>Prezzo</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    :disabled="!isVariantSelected(variant.id) || saving"
+                    :value="findVariantInForm(variant.id)?.price ?? variant.price"
+                    @input="updateVariantPrice(variant.id, $event.target.value)"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <p v-else class="variants-empty">Nessuna variante disponibile per la famiglia selezionata.</p>
+          </section>
         </div>
 
         <div class="dialog-actions">
@@ -838,7 +1165,7 @@ onMounted(fetchProducts)
 }
 
 .dialog {
-  width: min(540px, 100%);
+  width: min(980px, 100%);
   background: #fff;
   border-radius: 12px;
   padding: 16px;
@@ -853,6 +1180,142 @@ onMounted(fetchProducts)
   flex-direction: column;
   gap: 6px;
   margin-bottom: 10px;
+}
+
+.dialog-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.dialog-col {
+  min-width: 0;
+}
+
+.dialog-col-variants {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.dialog-col-variants h4 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.compact-row {
+  margin-bottom: 12px;
+}
+
+.switch-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.switch-field.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.switch-slider {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background-color 0.2s ease;
+}
+
+.switch-slider::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.switch-input:checked + .switch-slider {
+  background: #1976d2;
+}
+
+.switch-input:checked + .switch-slider::before {
+  transform: translateX(18px);
+}
+
+.switch-input:focus-visible + .switch-slider {
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
+}
+
+.switch-text {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.variants-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.variant-item {
+  display: grid;
+  grid-template-columns: 1fr 136px;
+  gap: 8px;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.variant-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.variant-price {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.variant-price span {
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.variant-price input {
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  height: 36px;
+  padding: 0 8px;
+}
+
+.variants-empty {
+  margin: 10px 0 0;
+  color: #64748b;
 }
 
 .form-row label {
@@ -900,6 +1363,10 @@ onMounted(fetchProducts)
   .filter-field:first-child,
   .filter-field-search {
     width: 100%;
+  }
+
+  .dialog-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
