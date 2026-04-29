@@ -20,7 +20,7 @@
     </div>
 
     <div class="controls" v-if="searchMode === 'product'">
-      <input v-model="searchQuery" placeholder="Nome prodotto" />
+      <input v-model="searchQuery" placeholder="Nome prodotto" @keydown.enter.prevent="searchProduct" />
       <button @click="searchProduct" class="btn btn-primary">Cerca prodotto</button>
     </div>
 
@@ -36,21 +36,90 @@
     <div v-if="loading" class="loading">Caricamento...</div>
     <div v-if="error" class="error">{{ error }}</div>
 
-    <section v-if="productResult" class="section-container">
-      <h3>Prodotto Selezionato</h3>
-      <div class="product-detail-card">
-        <div class="detail-info">
-          <p class="product-name">{{ productResult.name }}</p>
-          <div class="detail-row">
-            <span class="detail-label">Quantità:</span>
-            <span class="detail-value">{{ productResult.quantity }} pezzi</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Fatturato:</span>
-            <span class="detail-value-highlight">{{ formatCurrency(productResult.sales) }}</span>
-          </div>
-        </div>
+    <section v-if="searchMode === 'product' && productSearchDone" class="section-container">
+      <h3>Risultati ricerca prodotto</h3>
+
+      <div v-if="!productResults.length" class="empty-state">
+        Nessun prodotto trovato per "{{ searchQuery.trim() }}"
       </div>
+
+      <div v-else class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 50%;">Prodotto</th>
+              <th style="width: 15%;">Categoria</th>
+              <th style="width: 17.5%; text-align: right;">Quantità</th>
+              <th style="width: 17.5%; text-align: right;">Fatturato</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(p, idx) in productResults"
+              :key="p.id || `${p.name}-${idx}`"
+              :class="[
+                'data-row',
+                'result-row',
+                idx % 2 === 0 ? 'even' : 'odd',
+                selectedProduct && selectedProduct.id === p.id ? 'selected' : ''
+              ]"
+              @click="selectProduct(p)"
+            >
+              <td class="product-cell">{{ p.name }}</td>
+              <td>{{ p.category || '-' }}</td>
+              <td class="numeric-cell">{{ p.quantity }}</td>
+              <td class="numeric-cell numeric-highlight">{{ formatCurrency(p.sales) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section v-if="searchMode === 'product' && selectedProduct" class="section-container">
+      <h3>Andamento vendite: "{{ selectedProduct.name }}"</h3>
+
+      <div v-if="loadingProductTrend" class="loading">Caricamento andamento prodotto...</div>
+      <div v-else-if="productTrendError" class="error">{{ productTrendError }}</div>
+
+      <template v-else>
+        <div v-if="!productTrendData.length" class="empty-state">
+          Nessuna vendita rilevata per questo prodotto nel periodo selezionato.
+        </div>
+
+        <template v-else>
+          <div class="trend-controls">
+            <label>Visualizza:</label>
+            <select v-model="productTrendViewMode">
+              <option value="daily">Giornaliero</option>
+              <option value="weekly">Settimanale</option>
+              <option value="monthly">Mensile</option>
+            </select>
+          </div>
+
+          <div class="chart-section">
+            <canvas id="productTrendChart"></canvas>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 34%;">Data</th>
+                  <th style="width: 33%; text-align: right;">Quantità</th>
+                  <th style="width: 33%; text-align: right;">Fatturato</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(point, idx) in productTrendAggregatedData" :key="`${point.date}-${idx}`" :class="['data-row', idx % 2 === 0 ? 'even' : 'odd']">
+                  <td>{{ point.date }}</td>
+                  <td class="numeric-cell">{{ point.quantity }}</td>
+                  <td class="numeric-cell numeric-highlight">{{ formatCurrency(point.sales) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+      </template>
     </section>
 
     <section v-if="searchMode === 'category' && selectedCategory" class="section-container">
@@ -100,8 +169,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
+import Chart from 'chart.js/auto';
 
 const searchQuery = ref('');
 const fromDate = ref('');
@@ -109,13 +179,22 @@ const toDate = ref('');
 const searchMode = ref('product');
 const loading = ref(false);
 const error = ref('');
-const productResult = ref(null);
+const productResults = ref([]);
+const productSearchDone = ref(false);
 const selectedCategory = ref('');
 const availableCategories = ref([]);
 const categoryProducts = ref([]);
 const categorySummary = ref({ quantity: 0, sales: 0 });
 const loadingCategory = ref(false);
 const categoryError = ref('');
+const selectedProduct = ref(null);
+const productTrendData = ref([]);
+const productTrendViewMode = ref('daily');
+const loadingProductTrend = ref(false);
+const productTrendError = ref('');
+const productSearchDebounceMs = 350;
+let productSearchDebounceTimer = null;
+let productTrendChart = null;
 
 const canExportData = computed(() => {
   return searchMode.value === 'category' && !!selectedCategory.value && categoryProducts.value.length > 0;
@@ -131,6 +210,62 @@ const toISODate = (date) => {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 };
+
+const getWeekStart = (date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+};
+
+const getWeekEnd = (date) => {
+  const d = new Date(date);
+  d.setDate(d.getDate() + 6);
+  return d;
+};
+
+const productTrendAggregatedData = computed(() => {
+  if (productTrendViewMode.value === 'daily') {
+    return productTrendData.value;
+  }
+
+  if (productTrendViewMode.value === 'weekly') {
+    const weekly = {};
+    productTrendData.value.forEach((point) => {
+      const date = new Date(point.date);
+      const weekStart = getWeekStart(date);
+      const key = toISODate(weekStart);
+      if (!weekly[key]) {
+        weekly[key] = { quantity: 0, sales: 0 };
+      }
+      weekly[key].quantity += Number(point.quantity) || 0;
+      weekly[key].sales += Number(point.sales) || 0;
+    });
+
+    return Object.entries(weekly).map(([date, values]) => ({
+      date: `${date} - ${toISODate(getWeekEnd(new Date(date)))}`,
+      quantity: values.quantity,
+      sales: values.sales
+    }));
+  }
+
+  const monthly = {};
+  productTrendData.value.forEach((point) => {
+    const date = new Date(point.date);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    if (!monthly[key]) {
+      monthly[key] = { quantity: 0, sales: 0 };
+    }
+    monthly[key].quantity += Number(point.quantity) || 0;
+    monthly[key].sales += Number(point.sales) || 0;
+  });
+
+  return Object.entries(monthly).map(([date, values]) => ({
+    date,
+    quantity: values.quantity,
+    sales: values.sales
+  }));
+});
 
 const escapeCsvValue = (value) => {
   const safeValue = String(value ?? '');
@@ -182,7 +317,12 @@ const fetchBaseData = async () => {
       .filter(Boolean);
 
     // Non mostrare il totale generale: il dettaglio prodotto si mostra solo dopo ricerca esplicita.
-    productResult.value = null;
+    productResults.value = [];
+    productSearchDone.value = false;
+    selectedProduct.value = null;
+    productTrendData.value = [];
+    productTrendError.value = '';
+    destroyProductTrendChart();
 
     if (searchMode.value === 'category' && selectedCategory.value) {
       if (!availableCategories.value.includes(selectedCategory.value)) {
@@ -202,15 +342,163 @@ const fetchBaseData = async () => {
   }
 };
 
+const destroyProductTrendChart = () => {
+  if (productTrendChart) {
+    productTrendChart.destroy();
+    productTrendChart = null;
+  }
+};
+
+const renderProductTrendChart = async () => {
+  await nextTick();
+
+  const canvas = document.getElementById('productTrendChart');
+  if (!canvas) return;
+
+  destroyProductTrendChart();
+
+  productTrendChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: productTrendAggregatedData.value.map((point) => point.date),
+      datasets: [
+        {
+          label: 'Fatturato prodotto (€)',
+          data: productTrendAggregatedData.value.map((point) => point.sales),
+          yAxisID: 'ySales',
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 4,
+          pointBackgroundColor: '#3b82f6',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointHoverRadius: 6
+        },
+        {
+          type: 'bar',
+          label: 'Quantita venduta',
+          data: productTrendAggregatedData.value.map((point) => point.quantity),
+          yAxisID: 'yQty',
+          backgroundColor: 'rgba(15, 118, 110, 0.35)',
+          borderColor: '#0f766e',
+          borderWidth: 1,
+          borderRadius: 3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              if (ctx.dataset.yAxisID === 'yQty') {
+                return `${Number(ctx.parsed.y || 0).toFixed(0)} pezzi`;
+              }
+              return `€ ${Number(ctx.parsed.y || 0).toFixed(2)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        ySales: {
+          type: 'linear',
+          position: 'left',
+          beginAtZero: true,
+          ticks: {
+            callback: (value) => `€ ${Number(value).toFixed(0)}`
+          }
+        },
+        yQty: {
+          type: 'linear',
+          position: 'right',
+          beginAtZero: true,
+          grid: {
+            drawOnChartArea: false
+          },
+          ticks: {
+            callback: (value) => `${Number(value).toFixed(0)}`
+          }
+        }
+      }
+    }
+  });
+};
+
+const fetchProductTrend = async (product) => {
+  if (!product?.id) {
+    productTrendData.value = [];
+    productTrendError.value = 'Prodotto non valido per il calcolo del trend';
+    destroyProductTrendChart();
+    return;
+  }
+
+  loadingProductTrend.value = true;
+  productTrendViewMode.value = 'daily';
+  productTrendError.value = '';
+  productTrendData.value = [];
+  destroyProductTrendChart();
+
+  try {
+    const res = await axios.get('/api/mbar/product_stats/trend', {
+      params: {
+        productId: product.id,
+        from: fromDate.value,
+        to: toDate.value
+      }
+    });
+
+    const trend = Array.isArray(res.data?.trend) ? res.data.trend : [];
+    productTrendData.value = trend.map((point) => ({
+      date: point.date,
+      quantity: Number(point.quantity) || 0,
+      sales: Number(point.sales) || 0
+    }));
+
+    if (productTrendData.value.length) {
+      await renderProductTrendChart();
+    }
+  } catch (err) {
+    console.error('Errore fetch trend prodotto', err);
+    productTrendError.value = 'Impossibile caricare l\'andamento del prodotto';
+    productTrendData.value = [];
+    destroyProductTrendChart();
+  } finally {
+    loadingProductTrend.value = false;
+  }
+};
+
+const selectProduct = async (product) => {
+  selectedProduct.value = product;
+  await fetchProductTrend(product);
+};
+
 const searchProduct = async () => {
   const query = searchQuery.value.trim();
   if (!query) {
-    productResult.value = null;
+    productResults.value = [];
+    productSearchDone.value = false;
+    selectedProduct.value = null;
+    productTrendData.value = [];
+    productTrendError.value = '';
+    destroyProductTrendChart();
     return;
   }
 
   loading.value = true;
   error.value = '';
+  productSearchDone.value = false;
+  selectedProduct.value = null;
+  productTrendData.value = [];
+  productTrendError.value = '';
+  destroyProductTrendChart();
 
   try {
     const res = await axios.get('/api/mbar/product_stats', {
@@ -221,10 +509,28 @@ const searchProduct = async () => {
       }
     });
 
-    productResult.value = res.data.productSales || null;
+    const payload = res.data.productSales;
+    const normalized = Array.isArray(payload)
+      ? payload
+      : payload
+        ? [payload]
+        : [];
+
+    productResults.value = normalized
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        category: p.category,
+        quantity: Number(p.quantity) || 0,
+        sales: Number(p.sales) || 0
+      }))
+      .sort((a, b) => b.sales - a.sales);
+
+    productSearchDone.value = true;
   } catch (err) {
     console.error('Errore fetch prodotto', err);
     error.value = 'Impossibile caricare il prodotto richiesto';
+    productResults.value = [];
   } finally {
     loading.value = false;
   }
@@ -288,9 +594,77 @@ watch(searchMode, (mode) => {
     categorySummary.value = { quantity: 0, sales: 0 };
     categoryError.value = '';
   } else {
+    if (productSearchDebounceTimer) {
+      clearTimeout(productSearchDebounceTimer);
+      productSearchDebounceTimer = null;
+    }
     searchQuery.value = '';
-    productResult.value = null;
+    productResults.value = [];
+    productSearchDone.value = false;
+    selectedProduct.value = null;
+    productTrendViewMode.value = 'daily';
+    productTrendData.value = [];
+    productTrendError.value = '';
+    destroyProductTrendChart();
   }
+});
+
+watch(searchQuery, (nextQuery) => {
+  if (searchMode.value !== 'product') {
+    return;
+  }
+
+  if (productSearchDebounceTimer) {
+    clearTimeout(productSearchDebounceTimer);
+    productSearchDebounceTimer = null;
+  }
+
+  const trimmed = nextQuery.trim();
+  if (!trimmed) {
+    productResults.value = [];
+    productSearchDone.value = false;
+    error.value = '';
+    selectedProduct.value = null;
+    productTrendViewMode.value = 'daily';
+    productTrendData.value = [];
+    productTrendError.value = '';
+    destroyProductTrendChart();
+    return;
+  }
+
+  productSearchDebounceTimer = setTimeout(() => {
+    searchProduct();
+  }, productSearchDebounceMs);
+});
+
+watch(productResults, (results) => {
+  if (!selectedProduct.value) return;
+
+  const stillPresent = results.some((item) => item.id === selectedProduct.value.id);
+  if (!stillPresent) {
+    selectedProduct.value = null;
+    productTrendViewMode.value = 'daily';
+    productTrendData.value = [];
+    productTrendError.value = '';
+    destroyProductTrendChart();
+  }
+});
+
+watch(productTrendViewMode, async () => {
+  if (!selectedProduct.value || !productTrendAggregatedData.value.length) {
+    destroyProductTrendChart();
+    return;
+  }
+
+  await renderProductTrendChart();
+});
+
+onBeforeUnmount(() => {
+  if (productSearchDebounceTimer) {
+    clearTimeout(productSearchDebounceTimer);
+    productSearchDebounceTimer = null;
+  }
+  destroyProductTrendChart();
 });
 </script>
 
@@ -515,8 +889,52 @@ h3 {
   font-size: 16px;
 }
 
+.empty-state {
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 16px;
+  color: #4b5563;
+  font-weight: 500;
+}
+
 .table-container {
   overflow-x: auto;
+}
+
+.chart-section {
+  position: relative;
+  width: 100%;
+  height: 320px;
+  margin-bottom: 16px;
+}
+
+.trend-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.trend-controls label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.trend-controls select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  color: #111827;
+}
+
+.trend-controls select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .data-table {
@@ -558,6 +976,14 @@ h3 {
 .data-row td {
   padding: 14px 16px;
   color: #374151;
+}
+
+.result-row {
+  cursor: pointer;
+}
+
+.result-row.selected {
+  background: #eff6ff !important;
 }
 
 .product-cell {
