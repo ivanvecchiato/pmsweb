@@ -527,7 +527,7 @@ onMounted(() => {
 
           <div class="bulk-rows-container">
             <div class="bulk-row header-row">
-              <span class="col-prod">Prodotto (Autocompletamento)</span>
+              <span class="col-prod">Prodotto</span>
               <span class="col-qty text-center">Qtà</span>
               <span class="col-price text-center">Costo Unit.</span>
               <span class="col-action"></span>

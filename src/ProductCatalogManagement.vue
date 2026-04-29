@@ -9,12 +9,16 @@ const PRODUCTS_ORIGIN = (import.meta.env.VITE_API_TARGET_ORIGIN || DEFAULT_PRODU
 
 const categories = ref([])
 const variantFamilies = ref([])
+const activeTab = ref('products')
 const selectedCategory = ref('')
 const searchQuery = ref('')
 const loading = ref(false)
 const loadingVariants = ref(false)
+const savingVariantsConfig = ref(false)
 const errorMessage = ref('')
 const saveMessage = ref('')
+const variantsConfigMessage = ref('')
+const variantsConfigError = ref('')
 const brokenImages = ref({})
 
 const isDialogOpen = ref(false)
@@ -132,6 +136,126 @@ const normalizeVariantFamilies = (payload) => {
       }
     })
     .filter((family) => family && family.variants.length > 0)
+}
+
+const variantsConfigFamilies = ref([])
+const newFamilyName = ref('')
+
+const cloneVariantFamilies = (families) => families.map((family) => ({
+  id: family.id,
+  name: family.name,
+  variants: (Array.isArray(family.variants) ? family.variants : []).map((variant) => ({
+    id: variant.id,
+    name: variant.name,
+    price: toSafeNumber(variant.price, 0),
+    color: variant.color || '#FFFFFF'
+  }))
+}))
+
+const getNextFamilyId = () => {
+  const maxId = variantsConfigFamilies.value.reduce((max, family) => {
+    const id = Number(family.id)
+    return Number.isFinite(id) && id > max ? id : max
+  }, 0)
+  return maxId + 1
+}
+
+const getNextVariantId = () => {
+  const allVariants = variantsConfigFamilies.value.flatMap((family) => Array.isArray(family.variants) ? family.variants : [])
+  const maxId = allVariants.reduce((max, variant) => {
+    const id = Number(variant.id)
+    return Number.isFinite(id) && id > max ? id : max
+  }, 0)
+  return maxId + 1
+}
+
+const addVariantFamily = () => {
+  const name = newFamilyName.value.trim()
+  if (!name) {
+    variantsConfigError.value = 'Inserisci un nome famiglia.'
+    variantsConfigMessage.value = ''
+    return
+  }
+
+  const duplicate = variantsConfigFamilies.value.some((family) => family.name.toLowerCase() === name.toLowerCase())
+  if (duplicate) {
+    variantsConfigError.value = 'Esiste già una famiglia con questo nome.'
+    variantsConfigMessage.value = ''
+    return
+  }
+
+  variantsConfigFamilies.value.push({
+    id: getNextFamilyId(),
+    name,
+    variants: []
+  })
+  newFamilyName.value = ''
+  variantsConfigError.value = ''
+}
+
+const removeVariantFamily = (familyId) => {
+  variantsConfigFamilies.value = variantsConfigFamilies.value.filter((family) => String(family.id) !== String(familyId))
+}
+
+const addVariantToFamily = (familyId) => {
+  const family = variantsConfigFamilies.value.find((item) => String(item.id) === String(familyId))
+  if (!family) return
+
+  family.variants.push({
+    id: getNextVariantId(),
+    name: '',
+    price: 0,
+    color: '#FFFFFF'
+  })
+}
+
+const removeVariantFromFamily = (familyId, variantId) => {
+  const family = variantsConfigFamilies.value.find((item) => String(item.id) === String(familyId))
+  if (!family) return
+  family.variants = family.variants.filter((variant) => String(variant.id) !== String(variantId))
+}
+
+const sanitizeVariantsConfigPayload = () => {
+  return variantsConfigFamilies.value
+    .map((family) => ({
+      familyId: toSafeNumber(family.id, family.id),
+      familyName: String(family.name || '').trim(),
+      variants: (Array.isArray(family.variants) ? family.variants : [])
+        .map((variant) => ({
+          id: toSafeNumber(variant.id, variant.id),
+          name: String(variant.name || '').trim(),
+          price: toSafeNumber(variant.price, 0),
+          color: String(variant.color || '#FFFFFF').trim() || '#FFFFFF'
+        }))
+        .filter((variant) => variant.name)
+    }))
+    .filter((family) => family.familyName)
+}
+
+const saveVariantsConfiguration = async () => {
+  const payload = sanitizeVariantsConfigPayload()
+  if (!payload.length) {
+    variantsConfigError.value = 'Aggiungi almeno una famiglia varianti valida.'
+    variantsConfigMessage.value = ''
+    return
+  }
+
+  savingVariantsConfig.value = true
+  variantsConfigError.value = ''
+  variantsConfigMessage.value = ''
+
+  try {
+    const res = await axios.post(VARIANTS_ENDPOINT, { families: payload })
+    const normalized = normalizeVariantFamilies(res.data)
+    variantFamilies.value = normalized
+    variantsConfigFamilies.value = cloneVariantFamilies(normalized)
+    variantsConfigMessage.value = 'Configurazione varianti salvata con successo.'
+  } catch (error) {
+    console.error('Errore salvataggio configurazione varianti', error)
+    variantsConfigError.value = 'Salvataggio configurazione varianti non riuscito.'
+  } finally {
+    savingVariantsConfig.value = false
+  }
 }
 
 const normalizeCategoryName = (item) => {
@@ -275,10 +399,13 @@ const fetchVariantFamilies = async () => {
 
   try {
     const res = await axios.get(VARIANTS_ENDPOINT)
-    variantFamilies.value = normalizeVariantFamilies(res.data)
+    const normalized = normalizeVariantFamilies(res.data)
+    variantFamilies.value = normalized
+    variantsConfigFamilies.value = cloneVariantFamilies(normalized)
   } catch (error) {
     console.error('Errore caricamento varianti', error)
     variantFamilies.value = []
+    variantsConfigFamilies.value = []
   } finally {
     loadingVariants.value = false
   }
@@ -670,19 +797,45 @@ onMounted(fetchVariantFamilies)
     <header class="page-header">
       <div>
         <h1>Listino Prodotti</h1>
-        <p class="subtitle">Gestione anagrafiche prodotti per categoria</p>
       </div>
       <div class="header-actions">
-        <button class="btn-primary" :disabled="loading || !availableCategoryNames.length" @click="openCreateDialog">
+        <button v-if="activeTab === 'products'" class="btn-primary" :disabled="loading || !availableCategoryNames.length" @click="openCreateDialog">
           Nuovo prodotto
         </button>
-        <button class="btn-refresh" :disabled="loading" @click="fetchProducts">
-          {{ loading ? 'Caricamento...' : 'Aggiorna' }}
+        <button
+          class="btn-refresh"
+          :disabled="loading || loadingVariants"
+          @click="activeTab === 'products' ? fetchProducts() : fetchVariantFamilies()"
+        >
+          {{ activeTab === 'products'
+            ? (loading ? 'Caricamento...' : 'Aggiorna prodotti')
+            : (loadingVariants ? 'Caricamento...' : 'Aggiorna varianti') }}
         </button>
       </div>
     </header>
 
-    <div class="filters-card">
+    <div class="tabs-nav" role="tablist" aria-label="Sezioni listino prodotti">
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'products' }"
+        role="tab"
+        :aria-selected="activeTab === 'products'"
+        @click="activeTab = 'products'"
+      >
+        Prodotti
+      </button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'variants' }"
+        role="tab"
+        :aria-selected="activeTab === 'variants'"
+        @click="activeTab = 'variants'"
+      >
+        Varianti
+      </button>
+    </div>
+
+    <div v-if="activeTab === 'products'" class="filters-card">
       <div class="filters">
         <div class="filter-field">
           <label for="category-select" class="sr-only">Categoria</label>
@@ -707,10 +860,10 @@ onMounted(fetchVariantFamilies)
       </div>
     </div>
 
-    <p v-if="errorMessage" class="status error">{{ errorMessage }}</p>
-    <p v-if="saveMessage" class="status success">{{ saveMessage }}</p>
+    <p v-if="activeTab === 'products' && errorMessage" class="status error">{{ errorMessage }}</p>
+    <p v-if="activeTab === 'products' && saveMessage" class="status success">{{ saveMessage }}</p>
 
-    <div class="table-wrap">
+    <div v-if="activeTab === 'products'" class="table-wrap">
       <table v-if="selectedProducts.length" class="products-table">
         <colgroup>
           <col style="width: 80px" />
@@ -760,6 +913,56 @@ onMounted(fetchVariantFamilies)
       </table>
       <p v-else class="empty">Nessun prodotto disponibile per la categoria selezionata.</p>
     </div>
+
+    <section v-else class="variants-config-section">
+      <div class="variants-config-header">
+        <div>
+          <h2>Configurazione Varianti</h2>
+        </div>
+        <button class="btn-primary" :disabled="savingVariantsConfig || loadingVariants" @click="saveVariantsConfiguration">
+          {{ savingVariantsConfig ? 'Salvataggio...' : 'Salva configurazione varianti' }}
+        </button>
+      </div>
+
+      <div class="variants-family-add">
+        <input
+          v-model="newFamilyName"
+          type="text"
+          placeholder="Nuova famiglia (es. Cocktail)"
+          :disabled="savingVariantsConfig"
+        />
+        <button class="btn-secondary" :disabled="savingVariantsConfig" @click="addVariantFamily">Aggiungi famiglia</button>
+      </div>
+
+      <p v-if="variantsConfigError" class="status error">{{ variantsConfigError }}</p>
+      <p v-if="variantsConfigMessage" class="status success">{{ variantsConfigMessage }}</p>
+
+      <div v-if="variantsConfigFamilies.length" class="variants-family-list">
+        <article v-for="family in variantsConfigFamilies" :key="family.id" class="variants-family-card">
+          <div class="variants-family-row">
+            <div class="variants-family-title">Famiglia #{{ family.id }}</div>
+            <button class="btn-secondary btn-sm" :disabled="savingVariantsConfig" @click="removeVariantFamily(family.id)">Rimuovi famiglia</button>
+          </div>
+
+          <div class="form-row">
+            <label>Nome famiglia</label>
+            <input v-model="family.name" type="text" :disabled="savingVariantsConfig" />
+          </div>
+
+          <div class="variants-inner-list">
+            <div v-for="variant in family.variants" :key="variant.id" class="variants-inner-item">
+              <div class="variants-inner-id">#{{ variant.id }}</div>
+              <input v-model="variant.name" type="text" placeholder="Nome variante" :disabled="savingVariantsConfig" />
+              <input v-model.number="variant.price" type="number" min="0" step="0.01" placeholder="Prezzo default" :disabled="savingVariantsConfig" />
+              <button class="btn-secondary btn-sm" :disabled="savingVariantsConfig" @click="removeVariantFromFamily(family.id, variant.id)">Rimuovi</button>
+            </div>
+          </div>
+
+          <button class="btn-secondary btn-sm" :disabled="savingVariantsConfig" @click="addVariantToFamily(family.id)">Aggiungi variante</button>
+        </article>
+      </div>
+      <p v-else class="empty">Nessuna famiglia varianti configurata.</p>
+    </section>
 
     <div v-if="isDialogOpen" class="dialog-backdrop" @click.self="closeDialog">
       <div class="dialog">
@@ -900,6 +1103,33 @@ onMounted(fetchVariantFamilies)
   gap: 8px;
 }
 
+.tabs-nav {
+  display: flex;
+  width: fit-content;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 4px;
+  background: #f8fafc;
+  margin-bottom: 12px;
+}
+
+.tab-btn {
+  border: 0;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  background: #1976d2;
+  color: #fff;
+}
+
 .page-header h1 {
   margin: 0;
   font-size: 1.5rem;
@@ -911,7 +1141,8 @@ onMounted(fetchVariantFamilies)
 }
 
 .filters-card {
-  display: inline-block;
+  display: block;
+  clear: both;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -1126,6 +1357,94 @@ onMounted(fetchVariantFamilies)
 .empty {
   padding: 18px;
   color: #64748b;
+}
+
+.variants-config-section {
+  margin-top: 18px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.variants-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.variants-config-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.variants-family-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.variants-family-add input {
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  height: 40px;
+  padding: 0 12px;
+  width: min(420px, 100%);
+}
+
+.variants-family-list {
+  display: grid;
+  gap: 10px;
+}
+
+.variants-family-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.variants-family-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.variants-family-title {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.variants-inner-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.variants-inner-item {
+  display: grid;
+  grid-template-columns: 60px 1fr 140px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.variants-inner-item input {
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  height: 38px;
+  padding: 0 10px;
+}
+
+.variants-inner-id {
+  font-weight: 600;
+  color: #475569;
 }
 
 .btn-refresh,
@@ -1359,6 +1678,16 @@ onMounted(fetchVariantFamilies)
     align-items: stretch;
   }
 
+  .tabs-nav {
+    display: flex;
+    width: 100%;
+  }
+
+  .tab-btn {
+    flex: 1;
+    text-align: center;
+  }
+
   .filter-field,
   .filter-field:first-child,
   .filter-field-search {
@@ -1366,6 +1695,16 @@ onMounted(fetchVariantFamilies)
   }
 
   .dialog-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .variants-config-header,
+  .variants-family-add {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .variants-inner-item {
     grid-template-columns: 1fr;
   }
 }
