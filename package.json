@@ -11,17 +11,24 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy:mbar": "bash ./scripts/deploy-to-mbar.sh",
-    "build:deploy:mbar": "npm run build && npm run deploy:mbar"
+    "build:deploy:mbar": "npm run build && npm run deploy:mbar",
+    "deploy:vercel": "npx vercel --prod",
+    "deploy:firebase": "firebase deploy --only hosting",
+    "firebase:login": "firebase login",
+    "build:deploy:vercel": "npm run build && npm run deploy:vercel",
+    "build:deploy:firebase": "npm run build && npm run deploy:firebase"
   },
   "dependencies": {
     "axios": "^1.13.2",
     "chart.js": "^4.5.1",
+    "firebase": "^11.1.0",
     "vue": "^3.5.26",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.3",
     "autoprefixer": "^10.4.23",
+    "firebase-tools": "^15.16.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "vite": "^7.3.0",

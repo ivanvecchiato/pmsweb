@@ -36,3 +36,5 @@ __screenshots__/
 
 package-lock.json
 yarn.lock
+.env
+.firebase
