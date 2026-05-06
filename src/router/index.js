@@ -89,6 +89,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'stats' }
     },
     {
+      path: '/stats/documents',
+      name: 'StatsDocuments',
+      component: () => import('@/views/stats/StatsDocuments.vue'),
+      meta: { requiresAuth: true, permission: 'stats' }
+    },
+    {
       path: '/quotes',
       name: 'QuoteManager',
       component: () => import('@/views/quotes/QuoteManager.vue'),

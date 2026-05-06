@@ -130,6 +130,7 @@
                 <router-link to="/stats/sales" class="submenu-item">Vendite</router-link>
                 <router-link to="/stats/products" class="submenu-item">Prodotti</router-link>
                 <router-link to="/stats/operators" class="submenu-item">Operatori</router-link>
+                <router-link to="/stats/documents" class="submenu-item">Documenti</router-link>
               </div>
             </div>
           </div>
