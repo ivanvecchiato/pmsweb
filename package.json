@@ -16,7 +16,9 @@
     "deploy:firebase": "firebase deploy --only hosting",
     "firebase:login": "firebase login",
     "build:deploy:vercel": "npm run build && npm run deploy:vercel",
-    "build:deploy:firebase": "npm run build && npm run deploy:firebase"
+    "build:deploy:firebase": "npm run build && npm run deploy:firebase",
+    "seed:firebase": "node scripts/seed-firebase-cache.mjs",
+    "seed:firebase:remote": "MBAR_API=http://localhost:8088 node scripts/seed-firebase-cache.mjs"
   },
   "dependencies": {
     "axios": "^1.13.2",
