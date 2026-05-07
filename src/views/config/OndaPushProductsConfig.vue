@@ -275,15 +275,26 @@ onMounted(async () => {
   padding: 8px;
 }
 
+.header {
+  padding: 24px 28px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
+}
+
 .header h1 {
   margin: 0;
   font-size: 1.8rem;
-  color: #1f2937;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--ds-text);
 }
 
 .subtitle {
   margin-top: 8px;
-  color: #6b7280;
+  color: var(--ds-text-soft);
 }
 
 .slots-grid {
@@ -294,22 +305,25 @@ onMounted(async () => {
 }
 
 .slot-card {
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  padding: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  padding: 18px;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .slot-title-row h2 {
   margin: 0;
   font-size: 1.1rem;
-  color: #111827;
+  color: var(--ds-text);
+  font-weight: 800;
 }
 
 .slot-title-row small {
   display: block;
   margin-top: 4px;
-  color: #6b7280;
+  color: var(--ds-text-soft);
 }
 
 .add-row {
@@ -328,10 +342,19 @@ onMounted(async () => {
 .add-row input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 8px 10px;
+  min-height: 48px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  padding: 0 14px;
   font-size: 0.9rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
+}
+
+.add-row input:focus {
+  outline: none;
+  border-color: rgba(29, 140, 242, 0.45);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
 }
 
 .suggestions {
@@ -340,12 +363,13 @@ onMounted(async () => {
   right: 0;
   top: calc(100% + 4px);
   z-index: 20;
-  background: #fff;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  box-shadow: var(--ds-shadow-soft);
   max-height: 220px;
   overflow-y: auto;
+  backdrop-filter: blur(18px);
 }
 
 .suggestion-item {
@@ -356,40 +380,41 @@ onMounted(async () => {
   text-align: left;
   padding: 8px 10px;
   border: none;
-  background: #fff;
+  background: transparent;
   cursor: pointer;
 }
 
 .suggestion-name {
-  color: #111827;
-  font-weight: 600;
+  color: var(--ds-text);
+  font-weight: 700;
 }
 
 .suggestion-category {
-  color: #6b7280;
+  color: var(--ds-text-soft);
   font-size: 0.8rem;
 }
 
 .suggestion-item:hover {
-  background: #eff6ff;
+  background: rgba(231, 242, 255, 0.9);
 }
 
 .btn-add,
 .btn-save,
 .chip-remove {
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
 }
 
 .btn-add {
-  background: #1d4ed8;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: #fff;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-weight: 600;
+  border-radius: 16px;
+  padding: 12px 14px;
+  font-weight: 700;
   min-width: 110px;
   flex: 0 0 auto;
   white-space: nowrap;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .chips {
@@ -404,34 +429,36 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   border-radius: 999px;
-  border: 1px solid #bfdbfe;
-  background: #eff6ff;
-  color: #1e3a8a;
-  padding: 4px 10px;
+  border: 1px solid rgba(29, 140, 242, 0.16);
+  background: rgba(231, 242, 255, 0.92);
+  color: var(--ds-primary-strong);
+  padding: 6px 12px;
   font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .chip-remove {
   background: transparent;
-  color: #1e3a8a;
+  color: var(--ds-primary-strong);
   font-size: 1rem;
   line-height: 1;
+  padding: 0;
 }
 
 .empty {
   margin: 12px 0 0;
-  color: #9ca3af;
+  color: var(--ds-text-muted);
   font-size: 0.9rem;
 }
 
 .hint {
   margin: 8px 0 0;
-  color: #6b7280;
+  color: var(--ds-text-soft);
   font-size: 0.86rem;
 }
 
 .hint.error {
-  color: #b91c1c;
+  color: var(--ds-danger);
 }
 
 .footer-actions {
@@ -439,14 +466,16 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .btn-save {
-  background: #16a34a;
+  background: linear-gradient(180deg, #22c55e, #16a34a);
   color: #fff;
-  border-radius: 8px;
-  padding: 10px 14px;
+  border-radius: 16px;
+  padding: 12px 16px;
   font-weight: 700;
+  box-shadow: 0 18px 28px rgba(34, 197, 94, 0.18);
 }
 
 .btn-save:disabled {
@@ -466,6 +495,11 @@ onMounted(async () => {
 
   .btn-add {
     width: 100%;
+  }
+
+  .header,
+  .slot-card {
+    border-radius: 24px;
   }
 }
 </style>

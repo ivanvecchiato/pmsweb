@@ -689,9 +689,10 @@ onMounted(async () => {
 .guest-account-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  max-width: 1200px;
+  gap: 20px;
+  max-width: 1320px;
   margin: 0 auto;
+  padding: 8px;
 }
 
 .header {
@@ -700,16 +701,26 @@ onMounted(async () => {
   align-items: end;
   gap: 16px;
   flex-wrap: wrap;
+  padding: 24px 28px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .header h1 {
   margin: 0;
-  color: #0f172a;
+  color: var(--ds-text);
+  font-size: clamp(1.8rem, 2vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
 }
 
 .header p {
   margin: 4px 0 0;
-  color: #475569;
+  color: var(--ds-text-soft);
+  max-width: 640px;
 }
 
 .filters {
@@ -723,31 +734,44 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: #334155;
-  font-size: 0.9rem;
+  color: var(--ds-text-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .filters input {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  padding: 0 14px;
+  min-height: 44px;
   min-width: 145px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 28px;
+  padding: 20px;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .card h2 {
   margin: 0 0 12px;
-  color: #1e293b;
+  color: var(--ds-text);
+  font-size: 1.15rem;
+  font-weight: 800;
 }
 
 .state {
-  color: #64748b;
+  color: var(--ds-text-soft);
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.86);
 }
 
 .accounts-table-wrap {
@@ -763,26 +787,35 @@ onMounted(async () => {
 .accounts-table th,
 .accounts-table td {
   text-align: left;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 10px 8px;
-  color: #334155;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  padding: 12px 10px;
+  color: var(--ds-text);
+}
+
+.accounts-table th {
+  color: var(--ds-text-soft);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
 }
 
 .accounts-table tbody tr {
   cursor: pointer;
+  transition: background-color 0.16s ease;
 }
 
 .accounts-table tbody tr:hover {
-  background: #f8fafc;
+  background: rgba(248, 250, 252, 0.92);
 }
 
 .accounts-table tbody tr.selected {
-  background: #eff6ff;
+  background: rgba(231, 242, 255, 0.92);
 }
 
 .total-cell {
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 800;
+  color: var(--ds-text);
 }
 
 .info-grid {
@@ -795,37 +828,45 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .info-item .label {
-  color: #64748b;
-  font-size: 0.86rem;
+  color: var(--ds-text-soft);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .info-item .value {
-  color: #0f172a;
-  font-weight: 600;
+  color: var(--ds-text);
+  font-weight: 700;
 }
 
 .lines-block {
   margin-top: 16px;
-  border-top: 1px solid #e2e8f0;
-  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  padding-top: 16px;
 }
 
 .lines-block h3 {
   margin: 0 0 10px;
-  color: #1e293b;
+  color: var(--ds-text);
   font-size: 1rem;
+  font-weight: 800;
 }
 
 .line-row {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px dashed #e2e8f0;
-  color: #334155;
+  padding: 10px 0;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.2);
+  color: var(--ds-text);
 }
 
 .line-row:last-child {
@@ -842,11 +883,13 @@ onMounted(async () => {
 }
 
 .services-header-row {
-  font-weight: 600;
+  font-weight: 700;
   color: #047857;
   background: #f0fdf4;
-  border-radius: 4px;
-  padding: 6px 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 6px 0;
+  border-bottom: 0;
 }
 
 .service-line {
@@ -861,19 +904,20 @@ onMounted(async () => {
 
 .btn {
   border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 9px 14px;
-  font-weight: 600;
+  border-radius: 16px;
+  padding: 11px 16px;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .btn-primary {
-  background: #2563eb;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: #fff;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-secondary {
-  background: #0f172a;
+  background: linear-gradient(180deg, #1e293b, #0f172a);
   color: #fff;
 }
 
@@ -881,8 +925,12 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 0;
-  color: #334155;
+  padding: 10px 12px;
+  color: var(--ds-text);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  margin-bottom: 8px;
 }
 
 .payment-entry-form {
@@ -894,10 +942,13 @@ onMounted(async () => {
 
 .payment-entry-form input,
 .payment-entry-form select {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  padding: 0 14px;
+  min-height: 44px;
   min-width: 0;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
 }
 
 .payment-actions-row {

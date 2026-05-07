@@ -76,107 +76,105 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import axios from 'axios';
+import { ref, onMounted } from 'vue'
+import axios from 'axios'
 
-const BASE = 'http://localhost:8081';
+const BASE = 'http://localhost:8081'
 
-const services = ref([]);
-const loading = ref(true);
-const saving = ref(false);
-const showForm = ref(false);
-const editingIndex = ref(null);
+const services = ref([])
+const loading = ref(true)
+const saving = ref(false)
+const showForm = ref(false)
+const editingIndex = ref(null)
 
-const emptyForm = () => ({ name: '', description: '', price: '' });
-const form = ref(emptyForm());
+const emptyForm = () => ({ name: '', description: '', price: '' })
+const form = ref(emptyForm())
 
-onMounted(loadServices);
+onMounted(loadServices)
 
 async function loadServices() {
-  loading.value = true;
+  loading.value = true
   try {
-    const { data } = await axios.get(`${BASE}/api/pms/services`);
-    services.value = Array.isArray(data) ? data : [];
+    const { data } = await axios.get(`${BASE}/api/pms/services`)
+    services.value = Array.isArray(data) ? data : []
   } catch (e) {
-    console.error('Errore caricamento servizi:', e);
-    services.value = [];
+    console.error('Errore caricamento servizi:', e)
+    services.value = []
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 function openAddForm() {
-  editingIndex.value = null;
-  form.value = emptyForm();
-  showForm.value = true;
+  editingIndex.value = null
+  form.value = emptyForm()
+  showForm.value = true
 }
 
 function openEditForm(idx) {
-  editingIndex.value = idx;
-  const s = services.value[idx];
+  editingIndex.value = idx
+  const s = services.value[idx]
   form.value = {
     name: s.name ?? '',
     description: s.description ?? '',
-    price: s.price ?? '',
-  };
-  showForm.value = true;
+    price: s.price ?? ''
+  }
+  showForm.value = true
 }
 
 function cancelForm() {
-  showForm.value = false;
-  editingIndex.value = null;
+  showForm.value = false
+  editingIndex.value = null
 }
 
 async function saveService() {
-  if (!form.value.name.trim()) return;
-  saving.value = true;
+  if (!form.value.name.trim()) return
+  saving.value = true
   try {
-    const updated = [...services.value];
+    const updated = [...services.value]
     const entry = {
       id: editingIndex.value !== null ? updated[editingIndex.value].id : Date.now(),
       name: form.value.name.trim(),
       description: form.value.description.trim(),
-      price: form.value.price !== '' && form.value.price !== null ? Number(form.value.price) : null,
-    };
-
-    if (editingIndex.value !== null) {
-      updated[editingIndex.value] = entry;
-    } else {
-      updated.push(entry);
+      price: form.value.price !== '' && form.value.price !== null ? Number(form.value.price) : null
     }
 
-    await axios.post(`${BASE}/api/pms/services`, updated);
-    services.value = updated;
-    cancelForm();
+    if (editingIndex.value !== null) {
+      updated[editingIndex.value] = entry
+    } else {
+      updated.push(entry)
+    }
+
+    await axios.post(`${BASE}/api/pms/services`, updated)
+    services.value = updated
+    cancelForm()
   } catch (e) {
-    console.error('Errore salvataggio servizio:', e);
-    alert('Errore durante il salvataggio.');
+    console.error('Errore salvataggio servizio:', e)
+    alert('Errore durante il salvataggio.')
   } finally {
-    saving.value = false;
+    saving.value = false
   }
 }
 
 async function deleteService(idx) {
-  if (!confirm(`Eliminare il servizio "${services.value[idx].name}"?`)) return;
+  if (!confirm(`Eliminare il servizio "${services.value[idx].name}"?`)) return
   try {
-    const updated = services.value.filter((_, i) => i !== idx);
-    await axios.post(`${BASE}/api/pms/services`, updated);
-    services.value = updated;
+    const updated = services.value.filter((_, i) => i !== idx)
+    await axios.post(`${BASE}/api/pms/services`, updated)
+    services.value = updated
   } catch (e) {
-    console.error('Errore eliminazione servizio:', e);
-    alert('Errore durante l\'eliminazione.');
+    console.error('Errore eliminazione servizio:', e)
+    alert('Errore durante l\'eliminazione.')
   }
 }
-
-
 </script>
 
 <style scoped>
 .services-config {
-  padding: 2rem;
-  max-width: 860px;
+  padding: 6px;
+  max-width: 980px;
   margin: 0 auto;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
 }
 
 .page-header {
@@ -184,53 +182,63 @@ async function deleteService(idx) {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 2rem;
+  gap: 16px;
 }
 
 .page-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1f2937;
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--ds-text);
   margin: 0 0 0.25rem;
+  letter-spacing: -0.05em;
 }
 
 .page-subtitle {
-  color: #6b7280;
-  font-size: 0.875rem;
+  color: var(--ds-text-soft);
+  font-size: 0.95rem;
   margin: 0;
 }
 
-.loading-state, .empty-state {
+.loading-state,
+.empty-state {
   text-align: center;
   padding: 3rem;
-  color: #6b7280;
+  color: var(--ds-text-soft);
+  border-radius: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .services-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .service-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 24px;
+  padding: 1.2rem 1.35rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .service-name {
-  font-weight: 600;
-  color: #111827;
-  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ds-text);
+  font-size: 1rem;
 }
 
 .service-desc {
-  color: #6b7280;
-  font-size: 0.82rem;
+  color: var(--ds-text-soft);
+  font-size: 0.88rem;
   margin-top: 0.15rem;
 }
 
@@ -242,14 +250,14 @@ async function deleteService(idx) {
 }
 
 .service-price {
-  font-size: 0.88rem;
+  font-size: 0.92rem;
   font-weight: 700;
-  color: #374151;
+  color: var(--ds-text);
 }
 
 .service-price.free {
-  font-weight: 400;
-  color: #9ca3af;
+  font-weight: 500;
+  color: var(--ds-text-muted);
 }
 
 .service-actions {
@@ -258,30 +266,64 @@ async function deleteService(idx) {
   flex-shrink: 0;
 }
 
-/* ---- BUTTONS ---- */
 .btn {
-  padding: 0.55rem 1.1rem;
-  border-radius: 6px;
-  border: none;
+  padding: 0.75rem 1.2rem;
+  border-radius: 16px;
+  border: 1px solid transparent;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s, background-color 0.15s;
 }
 
-.btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.btn-primary  { background: #2563eb; color: white; }
-.btn-secondary{ background: #f3f4f6; color: #374151; }
-.btn-danger   { background: #fee2e2; color: #dc2626; }
-.btn-save     { background: #2563eb; color: white; }
-.btn-cancel   { background: #f3f4f6; color: #374151; }
-.btn-sm       { padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
-/* ---- MODAL ---- */
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
+  color: white;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ds-text);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.btn-danger {
+  background: rgba(220, 77, 77, 0.1);
+  color: var(--ds-danger);
+  border-color: rgba(220, 77, 77, 0.16);
+}
+
+.btn-save {
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
+  color: white;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
+}
+
+.btn-cancel {
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ds-text);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.btn-sm {
+  padding: 0.45rem 0.8rem;
+  font-size: 0.8rem;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(36, 49, 66, 0.24);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -289,12 +331,14 @@ async function deleteService(idx) {
 }
 
 .modal-box {
-  background: white;
+  background: rgba(255, 255, 255, 0.9);
   width: 90%;
   max-width: 540px;
-  border-radius: 12px;
+  border-radius: 28px;
   padding: 24px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--ds-shadow-soft);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(24px);
 }
 
 .modal-header {
@@ -303,24 +347,27 @@ async function deleteService(idx) {
   align-items: center;
   margin-bottom: 1.2rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  font-weight: 700;
-  color: #111827;
+  font-weight: 800;
+  color: var(--ds-text);
 }
 
 .close-btn {
-  background: none;
-  border: none;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   font-size: 1.4rem;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--ds-text-soft);
   line-height: 1;
   padding: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
 }
 
 .form-row {
@@ -340,37 +387,55 @@ async function deleteService(idx) {
 }
 
 .form-section label {
-  font-size: 0.75rem;
+  color: var(--ds-text-soft);
   font-weight: 700;
-  color: #4b5563;
-  margin-bottom: 0.3rem;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+  margin-bottom: 6px;
 }
 
-.form-section input,
-.form-section select {
-  padding: 0.55rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  color: #111827;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.form-section input:focus,
-.form-section select:focus {
-  border-color: #2563eb;
+.form-section input {
+  min-height: 48px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0 14px;
+  font: inherit;
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
+  gap: 12px;
+  margin-top: 20px;
 }
 
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 720px) {
+  .services-config {
+    padding: 0;
+  }
+
+  .page-header,
+  .service-card,
+  .form-row,
+  .modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .form-section--narrow {
+    flex: 1 1 auto;
+  }
+}
 </style>

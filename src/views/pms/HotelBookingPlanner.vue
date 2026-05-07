@@ -1984,23 +1984,41 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
+:global(:root) {
+  --planner-surface: rgba(255, 255, 255, 0.8);
+  --planner-surface-strong: rgba(255, 255, 255, 0.9);
+  --planner-muted-surface: #f2f7fc;
+  --planner-border: rgba(148, 163, 184, 0.18);
+  --planner-border-strong: rgba(148, 163, 184, 0.28);
+  --planner-text: #243142;
+  --planner-text-soft: #6b7b8f;
+  --planner-primary: #1d8cf2;
+  --planner-primary-strong: #0d6fd1;
+  --planner-danger: #dc4d4d;
+  --planner-shadow: 0 18px 34px rgba(148, 163, 184, 0.16);
+  --planner-shadow-lg: 0 28px 56px rgba(148, 163, 184, 0.24);
+}
+
 .planner-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  background: #f9fafb;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  height: 100%;
+  background: transparent;
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
 }
 
 .header {
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 1rem;
+  background: var(--planner-surface);
+  border: 1px solid var(--planner-border);
+  border-radius: 28px;
+  padding: 1.25rem 1.35rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--planner-shadow);
+  backdrop-filter: blur(22px);
   gap: 1rem;
+  margin-bottom: 18px;
 }
 
 .header-controls {
@@ -2013,44 +2031,43 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #f9fafb;
+  background: var(--planner-muted-surface);
   padding: 0.5rem;
-  border-radius: 0.5rem;
-  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  border: 1px solid var(--planner-border);
 }
 
 .date-range {
   font-size: 0.875rem;
-  font-weight: 600;
-  color: #374151;
+  font-weight: 700;
+  color: var(--planner-text);
   min-width: 150px;
   text-align: center;
 }
 
 .btn-nav {
   padding: 0.5rem 0.75rem;
-  border: none;
-  background: white;
+  border: 1px solid var(--planner-border);
+  background: var(--planner-surface-strong);
   cursor: pointer;
-  border-radius: 0.375rem;
+  border-radius: 0.9rem;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  border: 1px solid #e5e7eb;
-  color: #6b7280;
+  color: var(--planner-text-soft);
   font-weight: bold;
   font-size: 1rem;
 }
 
 .btn-nav:hover {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: var(--planner-primary);
+  border-color: var(--planner-primary);
   color: white;
 }
 
 .btn-sync {
-  background: #f3f4f6;
+  background: var(--planner-muted-surface);
 }
 
 .btn-sync:disabled {
@@ -2072,28 +2089,30 @@ onUnmounted(() => {
 }
 
 .title {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #1f2937;
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--planner-text);
   margin: 0;
+  letter-spacing: -0.05em;
 }
 
 .btn {
-  padding: 0.5rem 1rem;
+  padding: 0.75rem 1.15rem;
   border: none;
-  border-radius: 0.5rem;
-  font-weight: 500;
+  border-radius: 1rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: linear-gradient(180deg, var(--planner-primary), var(--planner-primary-strong));
   color: white;
+  box-shadow: 0 18px 30px rgba(29, 140, 242, 0.22);
 }
 
 .btn-primary:hover {
-  background: #2563eb;
+  background: linear-gradient(180deg, var(--planner-primary-strong), #0b63bb);
 }
 
 .kids-ages-grid {
@@ -2110,22 +2129,27 @@ onUnmounted(() => {
 
 .kid-age-item span {
   font-size: 0.8rem;
-  color: #4b5563;
+  color: var(--planner-text-soft);
 }
 
 .btn-danger {
-  background: #ef4444;
+  background: var(--planner-danger);
   color: white;
   margin-top: 1.5rem;
 }
 
 .btn-danger:hover {
-  background: #dc2626;
+  background: #bf3c3c;
 }
 
 .content {
   flex: 1;
   overflow: auto;
+  background: var(--planner-surface);
+  border: 1px solid var(--planner-border);
+  border-radius: 30px;
+  box-shadow: var(--planner-shadow);
+  backdrop-filter: blur(18px);
 }
 
 .grid-wrapper {
@@ -2136,22 +2160,22 @@ onUnmounted(() => {
 .grid-header {
   position: sticky;
   top: 0;
-  background: white;
+  background: rgba(255, 255, 255, 0.94);
   z-index: 20;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 20px rgba(148, 163, 184, 0.12);
 }
 
 .header-row {
   display: flex;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--planner-border);
 }
 
 .room-label {
   width: 200px;
   flex-shrink: 0;
-  border-right: 1px solid #e5e7eb;
-  background: #f9fafb;
-  font-weight: 600;
+  border-right: 1px solid var(--planner-border);
+  background: var(--planner-muted-surface);
+  font-weight: 700;
   padding: 0.75rem;
   display: flex;
   align-items: center;
@@ -2159,20 +2183,21 @@ onUnmounted(() => {
 
 .date-cell {
   flex-shrink: 0;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--planner-border);
   text-align: center;
   padding: 0.5rem;
 }
 
 .date-day {
   font-size: 0.75rem;
-  font-weight: 600;
-  color: #6b7280;
+  font-weight: 700;
+  color: var(--planner-text-soft);
 }
 
 .date-num {
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 700;
+  color: var(--planner-text);
 }
 
 .grid-body {
@@ -2181,16 +2206,16 @@ onUnmounted(() => {
 
 .room-row {
   display: flex;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--planner-border);
 }
 
 /* Altezza ridotta per la cella con il nome della camera */
 .room-cell {
   width: 200px;
   flex-shrink: 0;
-  border-right: 1px solid #e5e7eb;
-  background: white;
-  font-weight: 500;
+  border-right: 1px solid var(--planner-border);
+  background: rgba(255, 255, 255, 0.82);
+  font-weight: 700;
   padding: 0 0.75rem; /* Ridotto il padding verticale a 0 */
   display: flex;
   align-items: center;
@@ -2209,15 +2234,15 @@ onUnmounted(() => {
 
 .day-slot {
   flex-shrink: 0;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--planner-border);
 }
 
 /* Riduciamo anche i margini verticali della barra prenotazione */
 .booking {
   position: absolute;
   cursor: move;
-  border-radius: 0.3rem; /* Angoli meno arrotondati per altezze piccole */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 0.7rem;
+  box-shadow: 0 12px 20px rgba(36, 49, 66, 0.16);
   border: 1px solid; /* Bordo più sottile */
   transition: all 0.1s;
   top: 3px !important;    /* Margine superiore minimo */
@@ -2225,8 +2250,8 @@ onUnmounted(() => {
 }
 
 .booking-conflict {
-  border-color: #ef4444 !important;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
+  border-color: var(--planner-danger) !important;
+  box-shadow: 0 0 0 4px rgba(220, 77, 77, 0.22);
 }
 
 
@@ -2263,8 +2288,8 @@ onUnmounted(() => {
 
 .booking-status-badge-pending {
   background: #ffffff;
-  color: #424242;
-  border: 1px solid #9e9e9e;
+  color: var(--planner-text-soft);
+  border: 1px solid var(--planner-border-strong);
 }
 
 .booking-form-fieldset {
@@ -2319,7 +2344,7 @@ onUnmounted(() => {
 .today-line {
   position: absolute;
   width: 2px;
-  background-color: #ef4444;
+  background-color: var(--planner-danger);
   pointer-events: none; /* Importante: non deve bloccare il mouse */
 }
 
@@ -2342,7 +2367,7 @@ onUnmounted(() => {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  background: #1e293b;
+  background: #243142;
   color: white;
   border-radius: 6px;
   white-space: nowrap;
@@ -2377,22 +2402,22 @@ onUnmounted(() => {
 
 /* Stile per la riga evidenziata al passaggio del mouse */
 .room-row:hover {
-  background-color: rgba(59, 130, 246, 0.03);
+  background-color: rgba(29, 140, 242, 0.04);
 }
 .vertical-column-highlight {
   pointer-events: none;
-  background-color: rgba(59, 130, 246, 0.05);
+  background-color: rgba(29, 140, 242, 0.05);
 }
 
 /* Opzionale: illumina leggermente l'header del giorno corrispondente */
 .date-cell.highlighted {
-  background-color: #eff6ff;
-  color: #3b82f6;
+  background-color: rgba(29, 140, 242, 0.08);
+  color: var(--planner-primary);
 }
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(36, 49, 66, 0.24);
   backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
@@ -2404,10 +2429,11 @@ onUnmounted(() => {
   position: fixed;
   z-index: 2200;
   min-width: 180px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--planner-border);
+  border-radius: 18px;
+  box-shadow: var(--planner-shadow-lg);
+  backdrop-filter: blur(24px);
   padding: 6px;
   display: flex;
   flex-direction: column;
@@ -2420,18 +2446,18 @@ onUnmounted(() => {
   border-radius: 8px;
   padding: 10px 12px;
   text-align: left;
-  color: #111827;
+  color: var(--planner-text);
   cursor: pointer;
   font-size: 0.95rem;
   font-weight: 500;
 }
 
 .booking-action-item:hover {
-  background: #f3f4f6;
+  background: var(--planner-muted-surface);
 }
 
 .booking-action-item--danger {
-  color: #dc2626;
+  color: var(--planner-danger);
 }
 
 .booking-action-item--danger:hover {
@@ -2440,12 +2466,13 @@ onUnmounted(() => {
 
 /* Modale servizi */
 .modal-card {
-  background: white;
+  background: rgba(255, 255, 255, 0.86);
   width: 90%;
   max-width: 480px;
-  border-radius: 12px;
+  border-radius: 24px;
   padding: 24px;
-  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+  box-shadow: var(--planner-shadow-lg);
+  border: 1px solid var(--planner-border);
 }
 .modal-header-row {
   display: flex;
@@ -2453,20 +2480,20 @@ onUnmounted(() => {
   align-items: center;
   margin-bottom: 0.75rem;
   padding-bottom: 0.65rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--planner-border);
 }
-.modal-title { margin: 0; font-size: 1.1rem; font-weight: 700; color: #111827; }
-.modal-sub { font-size: 0.85rem; color: #6b7280; margin: 0 0 0.75rem; }
+.modal-title { margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--planner-text); }
+.modal-sub { font-size: 0.85rem; color: var(--planner-text-soft); margin: 0 0 0.75rem; }
 .form-row-inline { display: flex; gap: 1rem; margin-bottom: 1rem; }
 .modal-footer-row { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; }
-.btn-save { background: #2563eb; color: white; border: none; padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.875rem; }
+.btn-save { background: linear-gradient(180deg, var(--planner-primary), var(--planner-primary-strong)); color: white; border: none; padding: 0.5rem 1.1rem; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 0.875rem; box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18); }
 .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
-.btn-cancel { background: #f3f4f6; color: #374151; border: none; padding: 0.5rem 1.1rem; border-radius: 6px; cursor: pointer; font-size: 0.875rem; }
+.btn-cancel { background: rgba(255, 255, 255, 0.88); color: var(--planner-text); border: 1px solid var(--planner-border); padding: 0.5rem 1.1rem; border-radius: 12px; cursor: pointer; font-size: 0.875rem; }
 
 .existing-services {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  background: var(--planner-muted-surface);
+  border: 1px solid var(--planner-border);
+  border-radius: 16px;
   padding: 10px 12px;
   margin-bottom: 1rem;
   max-height: 180px;
@@ -2477,7 +2504,7 @@ onUnmounted(() => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  color: #64748b;
+  color: var(--planner-text-soft);
   margin-bottom: 6px;
 }
 .existing-service-row {
@@ -2491,27 +2518,28 @@ onUnmounted(() => {
 }
 .existing-service-row:last-child { border-bottom: none; }
 .existing-service-info { display: flex; flex-direction: column; gap: 1px; }
-.existing-service-name { font-weight: 600; color: #1e293b; }
-.existing-service-note { color: #6b7280; font-size: 0.78rem; font-style: italic; }
+.existing-service-name { font-weight: 700; color: var(--planner-text); }
+.existing-service-note { color: var(--planner-text-soft); font-size: 0.78rem; font-style: italic; }
 .existing-service-date { color: #94a3b8; font-size: 0.72rem; }
-.existing-service-price { font-weight: 700; color: #374151; white-space: nowrap; flex-shrink: 0; }
+.existing-service-price { font-weight: 700; color: var(--planner-text); white-space: nowrap; flex-shrink: 0; }
 .add-service-form { margin-top: 0.25rem; }
 .add-service-form-title {
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  color: #64748b;
+  color: var(--planner-text-soft);
   margin-bottom: 8px;
 }
 
 .modal-content {
-  background: white;
+  background: rgba(255, 255, 255, 0.9);
   width: 90%;
   max-width: 980px;
-  border-radius: 12px;
+  border-radius: 28px;
   padding: 24px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--planner-shadow-lg);
+  border: 1px solid var(--planner-border);
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -2523,10 +2551,10 @@ onUnmounted(() => {
 }
 
 .dialog-section {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border: 1px solid var(--planner-border);
+  border-radius: 18px;
   padding: 14px;
-  background: #fafafa;
+  background: var(--planner-muted-surface);
 }
 
 .dialog-section-full {
@@ -2536,8 +2564,8 @@ onUnmounted(() => {
 .section-title {
   margin: 0 0 10px 0;
   font-size: 0.95rem;
-  font-weight: 700;
-  color: #111827;
+  font-weight: 800;
+  color: var(--planner-text);
 }
 
 .modal-header {
@@ -2545,7 +2573,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--planner-border);
   padding-bottom: 10px;
 }
 
@@ -2565,16 +2593,17 @@ onUnmounted(() => {
 .form-section label {
   font-size: 12px;
   font-weight: 700;
-  color: #4b5563;
+  color: var(--planner-text-soft);
   margin-bottom: 5px;
   text-transform: uppercase;
 }
 
 .form-section input, .form-section select, .form-section textarea {
-  padding: 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--planner-border-strong);
+  border-radius: 14px;
   font-size: 14px;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .form-section textarea {
@@ -2597,24 +2626,24 @@ onUnmounted(() => {
 .deposit-summary {
   margin-top: 8px;
   margin-bottom: 8px;
-  color: #374151;
+  color: var(--planner-text);
   font-size: 0.92rem;
 }
 
 .deposit-empty {
   padding: 10px;
-  border: 1px dashed #cbd5e1;
-  border-radius: 8px;
-  color: #64748b;
+  border: 1px dashed var(--planner-border-strong);
+  border-radius: 14px;
+  color: var(--planner-text-soft);
   font-size: 0.9rem;
 }
 
 .deposit-list {
   max-height: 150px;
   overflow-y: auto;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--planner-border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .deposit-item {
@@ -2634,15 +2663,15 @@ onUnmounted(() => {
   display: flex;
   gap: 10px;
   align-items: center;
-  color: #334155;
+  color: var(--planner-text);
   font-size: 0.88rem;
 }
 
 .deposit-remove {
-  border: 1px solid #fecaca;
+  border: 1px solid rgba(220, 77, 77, 0.2);
   color: #b91c1c;
-  background: #fff5f5;
-  border-radius: 6px;
+  background: rgba(220, 77, 77, 0.08);
+  border-radius: 10px;
   padding: 6px 10px;
   cursor: pointer;
   font-size: 0.82rem;
@@ -2674,15 +2703,15 @@ onUnmounted(() => {
   gap: 12px;
   margin-top: 20px;
   padding-top: 12px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--planner-border);
 }
 
 .modal-footer .btn {
   margin-top: 0;
 }
 
-.btn-save { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; }
-.btn-cancel { background: #f3f4f6; color: #374151; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; }
+.btn-save { background: linear-gradient(180deg, var(--planner-primary), var(--planner-primary-strong)); color: white; border: none; padding: 10px 20px; border-radius: 14px; cursor: pointer; font-weight: 700; box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18); }
+.btn-cancel { background: rgba(255, 255, 255, 0.88); color: var(--planner-text); border: 1px solid var(--planner-border); padding: 10px 20px; border-radius: 14px; cursor: pointer; }
 
 /* Animazione */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
@@ -2690,17 +2719,17 @@ onUnmounted(() => {
 
 .quote-summary {
   margin-top: 20px;
-  padding: 15px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  padding: 16px;
+  background: rgba(248, 250, 252, 0.86);
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .quote-scroll {
   max-height: 120px;
   overflow-y: auto;
   margin: 10px 0;
-  border-bottom: 1px solid #cbd5e1;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .quote-row {
@@ -2708,7 +2737,7 @@ onUnmounted(() => {
   justify-content: space-between;
   font-size: 0.85rem;
   padding: 4px 0;
-  color: #475569;
+  color: var(--planner-text-soft);
 }
 
 .quote-total {
@@ -2716,15 +2745,16 @@ onUnmounted(() => {
   justify-content: space-between;
   font-weight: 800;
   font-size: 1.1rem;
-  color: #1e293b;
+  color: var(--planner-text);
   padding-top: 10px;
 }
 
 .quote-summary h4 {
   margin: 0;
   font-size: 0.9rem;
-  color: #334155;
+  color: var(--planner-text-soft);
   text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 /* Radio Buttons come Card */
@@ -2736,21 +2766,23 @@ onUnmounted(() => {
 
 .board-radio-card {
   flex: 1;
-  padding: 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
-  background: white;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--planner-text-soft);
+  font-weight: 700;
 }
 
 .board-radio-card.is-selected {
-  background: #3b82f6;
+  background: linear-gradient(180deg, var(--planner-primary), var(--planner-primary-strong));
   color: white;
-  border-color: #2563eb;
-  font-weight: bold;
-  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+  border-color: rgba(29, 140, 242, 0.28);
+  font-weight: 800;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.2);
 }
 
 .hidden-radio {
@@ -2759,15 +2791,15 @@ onUnmounted(() => {
 
 /* Prezzo Manuale */
 .input-manual-highlight {
-  border: 2px solid #ef4444 !important; /* Rosso per indicare "attenzione/manuale" */
-  background: #fef2f2;
+  border: 2px solid rgba(220, 77, 77, 0.55) !important;
+  background: rgba(254, 242, 242, 0.96);
   font-weight: 800;
   font-size: 1.1rem;
 }
 
 .quote-box.manual-active {
-  border-left: 4px solid #ef4444;
-  background: #fff5f5;
+  border-left: 4px solid var(--planner-danger);
+  background: rgba(255, 245, 245, 0.92);
 }
 
 .price-strikethrough {
@@ -2779,7 +2811,7 @@ onUnmounted(() => {
 .final-price-display {
   font-size: 1.3rem;
   font-weight: 800;
-  color: #1e293b;
+  color: var(--planner-text);
 }
 
 .checkbox-label {
@@ -2789,14 +2821,15 @@ onUnmounted(() => {
   font-size: 0.9rem;
   cursor: pointer;
   margin-top: 10px;
+  color: var(--planner-text-soft);
 }
 
 .quote-preview {
   margin-top: 15px;
-  background: #f8fafc;
-  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.88);
+  border-radius: 16px;
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 .quote-list { max-height: 100px; overflow-y: auto; margin: 8px 0; }
 .quote-item {
@@ -2804,47 +2837,51 @@ onUnmounted(() => {
   justify-content: space-between;
   font-size: 0.8rem;
   padding: 4px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 .quote-footer {
   display: flex;
   justify-content: space-between;
-  font-weight: bold;
+  font-weight: 800;
   font-size: 1rem;
   padding-top: 8px;
-  border-top: 2px solid #cbd5e1;
+  border-top: 2px solid rgba(148, 163, 184, 0.2);
+  color: var(--planner-text);
 }
 .manual-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px;
-  background: #f8fafc;
-  border-radius: 6px;
+  padding: 10px 12px;
+  background: rgba(248, 250, 252, 0.88);
+  border-radius: 14px;
   font-size: 0.85rem;
   cursor: pointer;
+  color: var(--planner-text-soft);
+  border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .manual-input {
-  border: 2px solid #3b82f6 !important;
-  background: #eff6ff;
-  font-weight: bold;
+  border: 2px solid rgba(29, 140, 242, 0.48) !important;
+  background: rgba(231, 242, 255, 0.92);
+  font-weight: 800;
   font-size: 1.1rem;
 }
 
 .quote-container {
   margin-top: 15px;
-  background: #f1f5f9;
-  border-radius: 8px;
+  background: rgba(241, 245, 249, 0.9);
+  border-radius: 16px;
   padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .quote-item {
   display: flex;
   justify-content: space-between;
   font-size: 0.75rem;
-  color: #475569;
-  border-bottom: 1px solid #e2e8f0;
+  color: var(--planner-text-soft);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   padding: 4px 0;
 }
 
@@ -2857,7 +2894,7 @@ onUnmounted(() => {
 .final-price {
   font-weight: 800;
   font-size: 1.2rem;
-  color: #1e293b;
+  color: var(--planner-text);
 }
 
 .animate-fade {
@@ -2872,17 +2909,17 @@ onUnmounted(() => {
 /* Contenitore principale del preventivo */
 .quote-box {
   margin-top: 20px;
-  background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  background: rgba(248, 250, 252, 0.88);
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   overflow: hidden;
   transition: all 0.3s ease;
 }
 
 /* Evidenziazione quando il prezzo è manuale */
 .quote-box.manual-active {
-  border-left: 5px solid #ef4444;
-  background: #fff5f5;
+  border-left: 5px solid var(--planner-danger);
+  background: rgba(255, 245, 245, 0.92);
 }
 
 /* Area scrollabile con l'elenco delle notti */
@@ -2890,10 +2927,10 @@ onUnmounted(() => {
   max-height: 150px;
   overflow-y: auto;
   padding: 12px;
-  background: white;
+  background: rgba(255, 255, 255, 0.94);
   margin: 10px;
-  border-radius: 6px;
-  border: 1px solid #edf2f7;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 /* Singola riga del giorno */
@@ -2902,9 +2939,9 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 6px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   font-size: 0.85rem;
-  color: #475569;
+  color: var(--planner-text-soft);
 }
 
 .quote-line:last-child {
@@ -2918,15 +2955,15 @@ onUnmounted(() => {
 /* Footer con il calcolo finale */
 .quote-summary-footer {
   padding: 15px;
-  background: #f1f5f9;
-  border-top: 1px solid #e2e8f0;
+  background: rgba(241, 245, 249, 0.92);
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
 }
 
 .quote-box.manual-active .quote-summary-footer {
-  background: #fee2e2;
+  background: rgba(254, 226, 226, 0.92);
 }
 
 /* Prezzo originale barrato (quando c'è il manuale) */
@@ -2941,7 +2978,7 @@ onUnmounted(() => {
 .final-price-display {
   font-size: 1.4rem;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--planner-text);
 }
 
 .quote-box.manual-active .final-price-display {

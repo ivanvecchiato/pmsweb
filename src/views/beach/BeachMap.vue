@@ -123,11 +123,19 @@ watch(() => props.selectedDate, fetchData);
 </template>
 
 <style scoped>
-.map-container { background: #fef3c7; padding: 40px; border-radius: 20px; overflow-x: auto; }
+.map-container {
+  background: linear-gradient(180deg, rgba(255, 251, 235, 0.92), rgba(254, 242, 242, 0.78));
+  padding: 28px;
+  border-radius: 28px;
+  overflow-x: auto;
+  border: 1px solid rgba(245, 158, 11, 0.16);
+  box-shadow: var(--ds-shadow-card);
+}
 
 .sea-line { 
-  text-align: center; padding: 20px; background: #0ea5e9; color: white; 
-  font-weight: 800; border-radius: 50px; margin-bottom: 50px; letter-spacing: 5px;
+  text-align: center; padding: 18px; background: linear-gradient(180deg, #38bdf8, #0284c7); color: white; 
+  font-weight: 800; border-radius: 999px; margin-bottom: 36px; letter-spacing: 0.3em;
+  box-shadow: 0 18px 28px rgba(2, 132, 199, 0.2);
 }
 
 .map-legend { display: flex; gap: 20px; margin-bottom: 20px; justify-content: center; }
@@ -136,8 +144,8 @@ watch(() => props.selectedDate, fetchData);
 .box.occupied { background: #ef4444; }
 .box.premium { background: #fbbf24; }
 
-.sector-block { margin-bottom: 40px; }
-.sector-title { font-size: 0.8rem; color: #92400e; text-transform: uppercase; margin-bottom: 15px; }
+.sector-block { margin-bottom: 32px; }
+.sector-title { font-size: 0.8rem; color: #92400e; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 15px; }
 
 .grid-rows { display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .map-row { display: flex; align-items: center; gap: 15px; }
@@ -146,13 +154,14 @@ watch(() => props.selectedDate, fetchData);
 .umbrellas-list { display: flex; gap: 8px; }
 
 .umbrella-spot {
-  width: 35px; height: 35px; background: white; border-radius: 50%;
+  width: 38px; height: 38px; background: rgba(255, 255, 255, 0.94); border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 0.7rem; font-weight: 700; cursor: pointer;
   border: 2px solid #fbbf24; transition: all 0.2s;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
 }
 
-.umbrella-spot:hover { transform: scale(1.2); box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+.umbrella-spot:hover { transform: scale(1.1); box-shadow: 0 16px 24px rgba(15, 23, 42, 0.12); }
 .umbrella-spot.is-occupied { background: #ef4444; border-color: #991b1b; color: white; cursor: not-allowed; }
 .umbrella-spot.is-premium { background: #fffbeb; border-width: 3px; }
 
@@ -182,5 +191,15 @@ watch(() => props.selectedDate, fetchData);
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+@media (max-width: 720px) {
+  .map-container {
+    padding: 18px;
+  }
+
+  .map-legend {
+    flex-wrap: wrap;
+  }
 }
 </style>

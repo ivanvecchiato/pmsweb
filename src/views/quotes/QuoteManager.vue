@@ -624,24 +624,27 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 
 <style scoped>
 .quote-manager {
-  padding: 2rem;
-  max-width: 1200px;
+  padding: 6px;
+  max-width: 1240px;
   margin: 0 auto;
 }
 
 .loading {
   text-align: center;
   padding: 3rem;
-  color: #6b7280;
+  color: var(--ds-text-soft);
   font-size: 1.1rem;
 }
 
 .empty-state {
   text-align: center;
   padding: 3rem;
-  background: #f9fafb;
-  border-radius: 12px;
-  color: #6b7280;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 28px;
+  color: var(--ds-text-soft);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .empty-state p {
@@ -660,8 +663,9 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 
 .header h1 {
   margin: 0;
-  font-size: 2rem;
-  color: #1f2937;
+  font-size: 2.1rem;
+  color: var(--ds-text);
+  letter-spacing: -0.05em;
 }
 
 .filters {
@@ -673,24 +677,24 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 
 .filter-btn {
   padding: 0.5rem 1rem;
-  border: 1px solid #cbd5e1;
-  background: white;
-  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.84);
+  border-radius: 16px;
   cursor: pointer;
   transition: all 0.2s;
-  font-weight: 500;
+  font-weight: 700;
   font-size: 0.9rem;
 }
 
 .filter-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
+  border-color: rgba(29, 140, 242, 0.26);
+  color: var(--ds-primary);
 }
 
 .filter-btn.active {
-  background: #667eea;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: white;
-  border-color: #667eea;
+  border-color: transparent;
 }
 
 /* Quote Cards Grid */
@@ -701,26 +705,28 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 }
 
 .quote-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 28px;
   overflow: hidden;
   cursor: pointer;
   transition: all 0.3s;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .quote-card:hover {
-  border-color: #667eea;
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.15);
+  border-color: rgba(29, 140, 242, 0.22);
+  box-shadow: 0 22px 38px rgba(148, 163, 184, 0.22);
   transform: translateY(-4px);
 }
 
 .quote-header {
   padding: 1.5rem;
-  background: linear-gradient(135deg, #f3f4f6 0%, #f9fafb 100%);
-  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(180deg, rgba(244, 249, 255, 0.95) 0%, rgba(255, 255, 255, 0.82) 100%);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -728,19 +734,19 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 
 .quote-header h3 {
   margin: 0 0 0.5rem 0;
-  color: #1f2937;
+  color: var(--ds-text);
   font-size: 1.1rem;
 }
 
 .quote-type {
   margin: 0;
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--ds-text-soft);
 }
 
 .quote-date {
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--ds-text-muted);
   white-space: nowrap;
 }
 
@@ -757,19 +763,19 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 }
 
 .detail-row .label {
-  color: #6b7280;
-  font-weight: 500;
+  color: var(--ds-text-soft);
+  font-weight: 600;
 }
 
 .detail-row .value {
-  color: #1f2937;
+  color: var(--ds-text);
   font-weight: 600;
 }
 
 .quote-footer {
   padding: 1rem 1.5rem;
-  background: #f9fafb;
-  border-top: 1px solid #e5e7eb;
+  background: rgba(243, 247, 251, 0.86);
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -777,39 +783,46 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 }
 
 .status {
-  background: #fef3c7;
-  color: #92400e;
+  background: rgba(217, 134, 29, 0.12);
+  color: #9a650a;
   padding: 0.25rem 0.75rem;
-  border-radius: 6px;
-  font-weight: 600;
+  border-radius: 999px;
+  font-weight: 700;
   font-size: 0.8rem;
 }
 
 .arrow {
-  color: #d1d5db;
+  color: var(--ds-text-muted);
   font-size: 1.25rem;
 }
 
 /* Detail View */
 .quote-detail {
-  background: white;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 30px;
   padding: 2rem;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .btn-back {
-  background: none;
-  border: none;
-  color: #667eea;
-  font-weight: 600;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: var(--ds-primary);
+  font-weight: 700;
   cursor: pointer;
   font-size: 1rem;
   margin-bottom: 1.5rem;
-  transition: color 0.2s;
+  transition: color 0.2s, transform 0.2s, box-shadow 0.2s;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 16px;
 }
 
 .btn-back:hover {
-  color: #764ba2;
+  color: var(--ds-primary-strong);
+  transform: translateY(-1px);
 }
 
 .detail-header {
@@ -818,22 +831,22 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
   align-items: flex-start;
   margin-bottom: 2rem;
   padding-bottom: 1.5rem;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .detail-header h2 {
   margin: 0 0 0.5rem 0;
-  color: #1f2937;
+  color: var(--ds-text);
 }
 
 .subtext {
   margin: 0;
-  color: #6b7280;
+  color: var(--ds-text-soft);
   font-size: 0.9rem;
 }
 
 .date {
-  color: #9ca3af;
+  color: var(--ds-text-muted);
   font-size: 0.95rem;
 }
 
@@ -844,13 +857,14 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 .detail-section {
   margin-bottom: 2rem;
   padding: 1.5rem;
-  background: #f9fafb;
-  border-radius: 8px;
+  background: rgba(245, 249, 253, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 24px;
 }
 
 .detail-section h3 {
   margin: 0 0 1rem 0;
-  color: #1f2937;
+  color: var(--ds-text);
   font-size: 1rem;
 }
 
@@ -867,20 +881,20 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 
 .info-label {
   font-weight: 600;
-  color: #6b7280;
+  color: var(--ds-text-soft);
   font-size: 0.85rem;
   margin-bottom: 0.25rem;
 }
 
 .info-value {
-  color: #1f2937;
-  font-weight: 500;
+  color: var(--ds-text);
+  font-weight: 600;
 }
 
 .info-box {
-  background: #dcfce7;
-  border-left: 4px solid #16a34a;
-  color: #15803d;
+  background: rgba(39, 179, 106, 0.12);
+  border: 1px solid rgba(39, 179, 106, 0.18);
+  color: #1f8a53;
 }
 
 .info-box ul {
@@ -899,32 +913,34 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 }
 
 .btn {
-  padding: 0.75rem 1.5rem;
+  padding: 0.85rem 1.5rem;
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
+  border-radius: 18px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
   font-size: 0.95rem;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: white;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 22px 30px rgba(29, 140, 242, 0.22);
 }
 
 .btn-secondary {
-  background: #e5e7eb;
-  color: #374151;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ds-text);
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .btn-secondary:hover {
-  background: #d1d5db;
+  background: rgba(243, 247, 251, 1);
 }
 
 .btn-danger {
@@ -938,7 +954,7 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 }
 
 .btn-success {
-  background: #10b981;
+  background: linear-gradient(180deg, #27b36a, #189857);
   color: white;
   flex: 1;
 }
@@ -954,33 +970,33 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 
 /* Room Options Grid */
 .room-options-section {
-  background: #f9fafb;
-  border-left: 4px solid #3b82f6;
+  background: rgba(29, 140, 242, 0.08);
+  border: 1px solid rgba(29, 140, 242, 0.16);
 }
 
 .beach-place-section {
-  background: #eff6ff;
-  border-left: 4px solid #2563eb;
+  background: rgba(29, 140, 242, 0.08);
+  border: 1px solid rgba(29, 140, 242, 0.16);
 }
 
 .place-hint {
   margin: 0 0 0.75rem;
   font-size: 0.9rem;
-  color: #1e40af;
+  color: var(--ds-primary-strong);
 }
 
 .place-select-row select {
   width: 100%;
   padding: 0.7rem;
-  border-radius: 8px;
-  border: 1px solid #93c5fd;
-  background: white;
+  border-radius: 16px;
+  border: 1px solid rgba(29, 140, 242, 0.2);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .place-meta {
   display: block;
   margin-top: 0.5rem;
-  color: #64748b;
+  color: var(--ds-text-soft);
 }
 
 .availability-status {
@@ -990,7 +1006,7 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 }
 
 .availability-checking {
-  color: #1d4ed8;
+  color: var(--ds-primary-strong);
 }
 
 .availability-ok {
@@ -1002,7 +1018,7 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 }
 
 .availability-unknown {
-  color: #64748b;
+  color: var(--ds-text-soft);
 }
 
 .room-options-grid {
@@ -1018,30 +1034,31 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
   align-items: center;
   justify-content: center;
   padding: 1.5rem 1rem;
-  border: 2px solid #cbd5e1;
-  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 22px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: white;
+  background: rgba(255, 255, 255, 0.86);
   text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .room-option-card:hover {
-  border-color: #3b82f6;
-  background: #f8f9ff;
+  border-color: rgba(29, 140, 242, 0.24);
+  background: rgba(255, 255, 255, 0.94);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 18px 24px rgba(148, 163, 184, 0.16);
 }
 
 .room-option-card.is-selected {
-  border-color: #3b82f6;
-  background: linear-gradient(135deg, #3b82f615 0%, #1e40af15 100%);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  border-color: rgba(29, 140, 242, 0.3);
+  background: linear-gradient(180deg, rgba(29, 140, 242, 0.12) 0%, rgba(255, 255, 255, 0.92) 100%);
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.16);
 }
 
 .room-opt-type {
   font-weight: 700;
-  color: #1f2937;
+  color: var(--ds-text);
   font-size: 1.1rem;
   margin-bottom: 0.75rem;
 }
@@ -1049,20 +1066,20 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 .room-opt-price {
   font-size: 1.4rem;
   font-weight: 900;
-  color: #10b981;
+  color: var(--ds-success);
   margin-bottom: 0.25rem;
 }
 
 .room-opt-per-night {
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--ds-text-soft);
   font-weight: 500;
 }
 
 /* Expiry Section */
 .expiry-section {
-  background: #fef3c7;
-  border-left: 4px solid #f59e0b;
+  background: rgba(217, 134, 29, 0.1);
+  border: 1px solid rgba(217, 134, 29, 0.18);
 }
 
 .is-expired {
@@ -1072,7 +1089,7 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 
 .expiry-badge {
   display: inline-block;
-  background: #dc2626;
+  background: var(--ds-danger);
   color: white;
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
@@ -1083,12 +1100,12 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 
 /* Pricing Section */
 .pricing-section {
-  background: #f0fdf4;
-  border-left: 4px solid #10b981;
+  background: rgba(39, 179, 106, 0.1);
+  border: 1px solid rgba(39, 179, 106, 0.18);
 }
 
 .price-highlight {
-  color: #10b981;
+  color: var(--ds-success);
   font-size: 1.5rem;
   font-weight: 900;
 }
@@ -1097,30 +1114,30 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
   grid-column: 1 / -1;
   padding-top: 1rem;
   margin-top: 1rem;
-  border-top: 2px solid #d1fae5;
+  border-top: 1px solid rgba(39, 179, 106, 0.18);
 }
 
 /* Daily Prices Table */
 .daily-prices {
   margin-top: 1.5rem;
   padding-top: 1.5rem;
-  border-top: 2px solid #d1fae5;
+  border-top: 1px solid rgba(39, 179, 106, 0.18);
 }
 
 .section-subtitle {
   margin: 0 0 1rem 0;
   font-weight: 700;
-  color: #065f46;
+  color: #177a4b;
   font-size: 1rem;
   letter-spacing: 0.025em;
 }
 
 .prices-table {
-  background: white;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 18px;
   overflow: hidden;
-  border: 1px solid #d1fae5;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(39, 179, 106, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .price-row {
@@ -1128,7 +1145,7 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
   justify-content: space-between;
   align-items: center;
   padding: 0.875rem 1.25rem;
-  border-bottom: 1px solid #f0fdf4;
+  border-bottom: 1px solid rgba(39, 179, 106, 0.1);
   transition: background-color 0.15s ease;
 }
 
@@ -1137,15 +1154,15 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
 }
 
 .price-row:nth-child(even) {
-  background: #f9fafb;
+  background: rgba(245, 249, 253, 0.72);
 }
 
 .price-row:hover {
-  background: #ecfdf5;
+  background: rgba(39, 179, 106, 0.08);
 }
 
 .price-row .date {
-  color: #374151;
+  color: var(--ds-text);
   font-weight: 600;
   font-size: 0.95rem;
 }
@@ -1154,14 +1171,31 @@ watch([selectedBeachPlaceId, currentQuote], async () => {
   margin-left: auto;
   margin-right: 1rem;
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--ds-text-soft);
   text-transform: uppercase;
 }
 
 .price-row .price {
-  color: #10b981;
+  color: var(--ds-success);
   font-weight: 800;
   font-size: 1.1rem;
   font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .quote-manager {
+    padding: 0;
+  }
+
+  .quote-detail {
+    padding: 1.25rem;
+    border-radius: 24px;
+  }
+
+  .detail-actions,
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

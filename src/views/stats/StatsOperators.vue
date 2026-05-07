@@ -193,19 +193,23 @@ const fetchStats = async () => {
 
 <style scoped>
 .stats-operators {
-  padding: 24px;
-  min-height: 100vh;
-  background: #f8fafc;
+  padding: 8px;
+  min-height: calc(100vh - 120px);
 }
 
 h1 {
   margin: 0 0 20px;
-  color: #0f172a;
+  color: var(--ds-text);
+  font-size: clamp(1.8rem, 2vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
 }
 
 h3 {
   margin: 0 0 12px;
-  color: #1e293b;
+  color: var(--ds-text);
+  font-size: 1.05rem;
+  font-weight: 800;
 }
 
 .controls {
@@ -214,36 +218,51 @@ h3 {
   flex-wrap: wrap;
   align-items: center;
   margin-bottom: 20px;
-  padding: 14px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 24px;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .controls input {
   min-width: 170px;
-  padding: 8px 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
 }
 
 .loading {
   margin-top: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ds-text-soft);
+  border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .error {
-  color: #ef4444;
+  color: var(--ds-danger);
   margin-top: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(220, 77, 77, 0.08);
+  border: 1px solid rgba(220, 77, 77, 0.16);
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: white;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 11px 16px;
+  border-radius: 16px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .summary-card {
@@ -251,33 +270,36 @@ h3 {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(239, 248, 255, 0.84));
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 24px;
+  padding: 18px 20px;
   margin-bottom: 16px;
+  box-shadow: var(--ds-shadow-card);
 }
 
 .summary-label {
-  color: #64748b;
+  color: var(--ds-text-soft);
   font-size: 0.85rem;
   text-transform: uppercase;
-  font-weight: 700;
-  letter-spacing: 0.4px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
 .summary-value {
   color: #047857;
   font-weight: 800;
-  font-size: 1.15rem;
+  font-size: 1.25rem;
 }
 
 .section-container {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 24px;
+  padding: 20px;
   margin-bottom: 16px;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .cards-list {
@@ -291,10 +313,16 @@ h3 {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: rgba(248, 250, 252, 0.86);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.result-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.08);
 }
 
 .card-main {
@@ -305,7 +333,7 @@ h3 {
 }
 
 .rank-pill {
-  background: #0f172a;
+  background: linear-gradient(180deg, #1e293b, #0f172a);
   color: white;
   font-size: 0.75rem;
   font-weight: 700;
@@ -337,7 +365,7 @@ h3 {
   color: #047857;
   border: 1px solid #86efac;
   border-radius: 999px;
-  padding: 5px 10px;
+  padding: 6px 12px;
   font-weight: 800;
   font-size: 0.86rem;
 }

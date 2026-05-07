@@ -389,25 +389,28 @@ const deleteCustomer = () => {
 .planner-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  background: #f9fafb;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  min-height: calc(100vh - 120px);
+  gap: 18px;
 }
 
 .header {
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 1rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  gap: 16px;
+  padding: 24px 28px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .title {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #1f2937;
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--ds-text);
   margin: 0;
 }
 
@@ -415,85 +418,83 @@ const deleteCustomer = () => {
   display: flex;
   align-items: center;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .view-toggle {
   display: flex;
-  background: #f3f4f6;
-  border-radius: 0.5rem;
-  padding: 0.25rem;
+  background: rgba(248, 250, 252, 0.92);
+  border-radius: 16px;
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .toggle-btn {
-  padding: 0.5rem;
-  border: none;
+  padding: 0.6rem;
+  border: 1px solid transparent;
   background: transparent;
   cursor: pointer;
-  border-radius: 0.375rem;
-  transition: all 0.2s;
+  border-radius: 12px;
+  transition: transform 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .toggle-btn svg {
-  stroke: #6b7280;
+  stroke: var(--ds-text-soft);
 }
 
 .toggle-btn.active {
-  background: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
 }
 
 .toggle-btn.active svg {
-  stroke: #3b82f6;
+  stroke: var(--ds-primary);
 }
 
 .toggle-btn:hover:not(.active) {
-  background: #e5e7eb;
+  background: rgba(226, 232, 240, 0.68);
 }
 
 .btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 500;
+  padding: 0.8rem 1.15rem;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  font: inherit;
+  font-weight: 700;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
   font-size: 0.875rem;
 }
 
-.btn-primary {
-  background: #3b82f6;
-  color: white;
+.btn:hover {
+  transform: translateY(-1px);
 }
 
-.btn-primary:hover {
-  background: #2563eb;
+.btn-primary {
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
+  color: white;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-secondary {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.btn-secondary:hover {
-  background: #d1d5db;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ds-text);
+  border-color: rgba(148, 163, 184, 0.18);
 }
 
 .btn-danger {
-  background: #ef4444;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
+  background: rgba(220, 77, 77, 0.12);
+  color: var(--ds-danger);
+  border-color: rgba(220, 77, 77, 0.18);
 }
 
 .content {
   flex: 1;
   overflow: auto;
-  padding: 1.5rem;
+  padding: 0 8px 8px;
 }
 
 .dashboard-container {
@@ -511,20 +512,23 @@ const deleteCustomer = () => {
 
 .search-input {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 18px;
   font-size: 1rem;
-  background: white;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ds-text);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: rgba(29, 140, 242, 0.45);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
 }
 
-/* Grid View Styles */
 .customers-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
@@ -532,18 +536,19 @@ const deleteCustomer = () => {
 }
 
 .customer-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 24px;
   padding: 1.5rem;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .customer-card:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border-color: #3b82f6;
+  box-shadow: 0 18px 30px rgba(15, 23, 42, 0.1);
+  border-color: rgba(29, 140, 242, 0.28);
   transform: translateY(-2px);
 }
 
@@ -553,21 +558,22 @@ const deleteCustomer = () => {
   gap: 1rem;
   margin-bottom: 1rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .customer-avatar {
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
+  font-weight: 800;
   font-size: 1.125rem;
   flex-shrink: 0;
+  box-shadow: 0 14px 24px rgba(29, 140, 242, 0.18);
 }
 
 .customer-info {
@@ -577,14 +583,14 @@ const deleteCustomer = () => {
 
 .customer-name {
   font-size: 1.125rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: 700;
+  color: var(--ds-text);
   margin: 0 0 0.25rem 0;
 }
 
 .customer-email {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--ds-text-soft);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -605,41 +611,42 @@ const deleteCustomer = () => {
 }
 
 .detail-label {
-  color: #6b7280;
-  font-weight: 500;
+  color: var(--ds-text-soft);
+  font-weight: 600;
 }
 
 .detail-value {
-  color: #1f2937;
-  font-weight: 500;
+  color: var(--ds-text);
+  font-weight: 600;
 }
 
-/* List View Styles */
 .customers-list {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 24px;
   overflow: hidden;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .list-header {
   display: flex;
   align-items: center;
   padding: 1rem 1.5rem;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
-  font-weight: 600;
+  background: rgba(248, 250, 252, 0.9);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  font-weight: 700;
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--ds-text-soft);
 }
 
 .list-row {
   display: flex;
   align-items: center;
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.16s ease;
 }
 
 .list-row:last-child {
@@ -647,7 +654,7 @@ const deleteCustomer = () => {
 }
 
 .list-row:hover {
-  background: #f9fafb;
+  background: rgba(248, 250, 252, 0.72);
 }
 
 .list-col {
@@ -689,42 +696,44 @@ const deleteCustomer = () => {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
+  font-weight: 800;
   font-size: 0.875rem;
 }
 
 .list-name {
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: 700;
+  color: var(--ds-text);
 }
 
 .list-email {
-  color: #6b7280;
+  color: var(--ds-text-soft);
   font-size: 0.875rem;
 }
 
 .list-phone {
-  color: #374151;
+  color: var(--ds-text);
   font-size: 0.875rem;
 }
 
 .list-city {
-  color: #374151;
+  color: var(--ds-text);
   font-size: 0.875rem;
 }
 
 .badge {
-  background: #3b82f6;
+  background: rgba(231, 242, 255, 0.95);
+  border: 1px solid rgba(29, 140, 242, 0.18);
+  color: var(--ds-primary-strong);
   color: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   display: inline-block;
 }
 
@@ -732,18 +741,17 @@ const deleteCustomer = () => {
   grid-column: 1 / -1;
   text-align: center;
   padding: 3rem;
-  color: #6b7280;
+  color: var(--ds-text-soft);
   font-size: 1.125rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  border-radius: 24px;
 }
 
-/* Modal Styles */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: rgba(36, 49, 66, 0.24);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -752,14 +760,16 @@ const deleteCustomer = () => {
 }
 
 .modal-content {
-  background: white;
-  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 28px;
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--ds-shadow-soft);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(24px);
 }
 
 .modal-header {
@@ -767,35 +777,35 @@ const deleteCustomer = () => {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .modal-title {
   font-size: 1.25rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: 800;
+  color: var(--ds-text);
   margin: 0;
 }
 
 .btn-close {
-  background: none;
-  border: none;
-  font-size: 2rem;
-  color: #6b7280;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  font-size: 1.8rem;
+  color: var(--ds-text-soft);
   cursor: pointer;
   line-height: 1;
   padding: 0;
-  width: 2rem;
-  height: 2rem;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.25rem;
-  transition: background-color 0.2s;
+  border-radius: 14px;
+  transition: background-color 0.16s ease;
 }
 
 .btn-close:hover {
-  background: #f3f4f6;
+  background: rgba(248, 250, 252, 0.92);
 }
 
 .modal-body {
@@ -810,40 +820,47 @@ const deleteCustomer = () => {
 
 .input-label {
   display: block;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #374151;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--ds-text-soft);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   margin-bottom: 0.5rem;
 }
 
 .input-field {
   width: 100%;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
   font-size: 1rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
 }
 
 .input-field:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: rgba(29, 140, 242, 0.45);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
 }
 
 .textarea-field {
   width: 100%;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
   font-size: 1rem;
   font-family: inherit;
   resize: vertical;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
 }
 
 .textarea-field:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: rgba(29, 140, 242, 0.45);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
 }
 
 .modal-footer {
@@ -851,7 +868,7 @@ const deleteCustomer = () => {
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 @media (max-width: 1024px) {
@@ -866,6 +883,13 @@ const deleteCustomer = () => {
 }
 
 @media (max-width: 768px) {
+  .header,
+  .header-actions,
+  .modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .customers-grid {
     grid-template-columns: 1fr;
   }

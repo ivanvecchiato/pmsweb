@@ -964,130 +964,132 @@ onMounted(fetchVariantFamilies)
       <p v-else class="empty">Nessuna famiglia varianti configurata.</p>
     </section>
 
-    <div v-if="isDialogOpen" class="dialog-backdrop" @click.self="closeDialog">
-      <div class="dialog">
-        <h3>{{ dialogTitle }}</h3>
+    <Teleport to="body">
+      <div v-if="isDialogOpen" class="dialog-backdrop" @click.self="closeDialog">
+        <div class="dialog">
+          <h3>{{ dialogTitle }}</h3>
 
-        <div class="dialog-grid">
-          <section class="dialog-col dialog-col-main">
-            <div v-if="!isCreatingProduct" class="form-row">
-              <label>ID</label>
-              <input :value="form.id" disabled />
-            </div>
-
-            <div class="form-row">
-              <label>Categoria</label>
-              <select v-model="form.category" :disabled="!availableCategoryNames.length || saving">
-                <option v-for="categoryName in availableCategoryNames" :key="categoryName" :value="categoryName">
-                  {{ categoryName }}
-                </option>
-              </select>
-            </div>
-
-            <div class="form-row">
-              <label>Nome</label>
-              <input v-model="form.name" type="text" />
-              <small v-if="isCreatingProduct && isDuplicateCreateName" class="field-error">Esiste già un prodotto con questo nome.</small>
-            </div>
-
-            <div class="form-row">
-              <label>Prezzo</label>
-              <input v-model.number="form.price" type="number" step="0.01" min="0" />
-            </div>
-
-            <div class="form-row">
-              <label>Prezzo di acquisto</label>
-              <input v-model.number="form.purchase_price" type="number" step="0.01" min="0" />
-            </div>
-
-            <div class="form-row">
-              <label>Immagine URL</label>
-              <input v-model="form.imageUrl" type="text" />
-            </div>
-
-            <div v-if="isCreatingProduct" class="form-row">
-              <label>Upload immagine</label>
-              <input type="file" accept="image/*" @change="handleImageUpload" />
-              <small v-if="selectedImageName" class="upload-info">File selezionato: {{ selectedImageName }}</small>
-            </div>
-
-            <div class="form-row">
-              <label>Colore</label>
-              <div class="color-row">
-                <input v-model="form.color" type="color" class="color-input" />
-                <input v-model="form.color" type="text" placeholder="#1976d2" />
+          <div class="dialog-grid">
+            <section class="dialog-col dialog-col-main">
+              <div v-if="!isCreatingProduct" class="form-row">
+                <label>ID</label>
+                <input :value="form.id" disabled />
               </div>
-            </div>
-          </section>
 
-          <section class="dialog-col dialog-col-variants">
-            <h4>Associazione Varianti</h4>
+              <div class="form-row">
+                <label>Categoria</label>
+                <select v-model="form.category" :disabled="!availableCategoryNames.length || saving">
+                  <option v-for="categoryName in availableCategoryNames" :key="categoryName" :value="categoryName">
+                    {{ categoryName }}
+                  </option>
+                </select>
+              </div>
 
-            <div class="form-row">
-              <label>Famiglia varianti</label>
-              <select v-model="form.variantFamilyId" :disabled="saving || loadingVariants || !variantFamilies.length">
-                <option value="" disabled>
-                  {{ loadingVariants ? 'Caricamento famiglie...' : 'Seleziona famiglia' }}
-                </option>
-                <option v-for="family in variantFamilies" :key="family.id" :value="family.id">
-                  {{ family.name }}
-                </option>
-              </select>
-            </div>
+              <div class="form-row">
+                <label>Nome</label>
+                <input v-model="form.name" type="text" />
+                <small v-if="isCreatingProduct && isDuplicateCreateName" class="field-error">Esiste già un prodotto con questo nome.</small>
+              </div>
 
-            <div class="form-row compact-row">
-              <label>Automatica</label>
-              <label class="switch-field" :class="{ disabled: saving }">
-                <input v-model="form.auto" type="checkbox" :disabled="saving" class="switch-input" />
-                <span class="switch-slider" aria-hidden="true"></span>
-                <span class="switch-text">{{ form.auto ? 'Si' : 'No' }}</span>
-              </label>
-            </div>
+              <div class="form-row">
+                <label>Prezzo</label>
+                <input v-model.number="form.price" type="number" step="0.01" min="0" />
+              </div>
 
-            <div class="variants-list" v-if="selectedVariantFamily && visibleFamilyVariants.length">
-              <div v-for="variant in visibleFamilyVariants" :key="variant.id" class="variant-item">
-                <label class="variant-name">
-                  <input
-                    type="checkbox"
-                    :checked="isVariantSelected(variant.id)"
-                    :disabled="saving"
-                    @change="toggleVariantSelection(selectedVariantFamily, variant, $event.target.checked)"
-                  />
-                  <span>{{ variant.name }}</span>
-                </label>
+              <div class="form-row">
+                <label>Prezzo di acquisto</label>
+                <input v-model.number="form.purchase_price" type="number" step="0.01" min="0" />
+              </div>
 
-                <div class="variant-price">
-                  <span>Prezzo</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    :disabled="!isVariantSelected(variant.id) || saving"
-                    :value="findVariantInForm(variant.id)?.price ?? variant.price"
-                    @input="updateVariantPrice(variant.id, $event.target.value)"
-                  />
+              <div class="form-row">
+                <label>Immagine URL</label>
+                <input v-model="form.imageUrl" type="text" />
+              </div>
+
+              <div v-if="isCreatingProduct" class="form-row">
+                <label>Upload immagine</label>
+                <input type="file" accept="image/*" @change="handleImageUpload" />
+                <small v-if="selectedImageName" class="upload-info">File selezionato: {{ selectedImageName }}</small>
+              </div>
+
+              <div class="form-row">
+                <label>Colore</label>
+                <div class="color-row">
+                  <input v-model="form.color" type="color" class="color-input" />
+                  <input v-model="form.color" type="text" placeholder="#1976d2" />
                 </div>
               </div>
-            </div>
+            </section>
 
-            <p v-else class="variants-empty">Nessuna variante disponibile per la famiglia selezionata.</p>
-          </section>
-        </div>
+            <section class="dialog-col dialog-col-variants">
+              <h4>Associazione Varianti</h4>
 
-        <div class="dialog-actions">
-          <button class="btn-secondary" :disabled="saving" @click="closeDialog">Annulla</button>
-          <button class="btn-primary" :disabled="saving || !form.name.trim() || !form.category || (isCreatingProduct && isDuplicateCreateName)" @click="saveProduct">
-            {{ saveButtonLabel }}
-          </button>
+              <div class="form-row">
+                <label>Famiglia varianti</label>
+                <select v-model="form.variantFamilyId" :disabled="saving || loadingVariants || !variantFamilies.length">
+                  <option value="" disabled>
+                    {{ loadingVariants ? 'Caricamento famiglie...' : 'Seleziona famiglia' }}
+                  </option>
+                  <option v-for="family in variantFamilies" :key="family.id" :value="family.id">
+                    {{ family.name }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="form-row compact-row">
+                <label>Automatica</label>
+                <label class="switch-field" :class="{ disabled: saving }">
+                  <input v-model="form.auto" type="checkbox" :disabled="saving" class="switch-input" />
+                  <span class="switch-slider" aria-hidden="true"></span>
+                  <span class="switch-text">{{ form.auto ? 'Si' : 'No' }}</span>
+                </label>
+              </div>
+
+              <div class="variants-list" v-if="selectedVariantFamily && visibleFamilyVariants.length">
+                <div v-for="variant in visibleFamilyVariants" :key="variant.id" class="variant-item">
+                  <label class="variant-name">
+                    <input
+                      type="checkbox"
+                      :checked="isVariantSelected(variant.id)"
+                      :disabled="saving"
+                      @change="toggleVariantSelection(selectedVariantFamily, variant, $event.target.checked)"
+                    />
+                    <span>{{ variant.name }}</span>
+                  </label>
+
+                  <div class="variant-price">
+                    <span>Prezzo</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      :disabled="!isVariantSelected(variant.id) || saving"
+                      :value="findVariantInForm(variant.id)?.price ?? variant.price"
+                      @input="updateVariantPrice(variant.id, $event.target.value)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <p v-else class="variants-empty">Nessuna variante disponibile per la famiglia selezionata.</p>
+            </section>
+          </div>
+
+          <div class="dialog-actions">
+            <button class="btn-secondary" :disabled="saving" @click="closeDialog">Annulla</button>
+            <button class="btn-primary" :disabled="saving || !form.name.trim() || !form.category || (isCreatingProduct && isDuplicateCreateName)" @click="saveProduct">
+              {{ saveButtonLabel }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
 <style scoped>
 .catalog-page {
-  padding: 16px;
+  padding: 6px;
 }
 
 .page-header {
@@ -1095,7 +1097,7 @@ onMounted(fetchVariantFamilies)
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .header-actions {
@@ -1107,11 +1109,13 @@ onMounted(fetchVariantFamilies)
   display: flex;
   width: fit-content;
   gap: 6px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 20px;
   padding: 4px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.72);
   margin-bottom: 12px;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .tab-btn {
@@ -1126,29 +1130,32 @@ onMounted(fetchVariantFamilies)
 }
 
 .tab-btn.active {
-  background: #1976d2;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: #fff;
 }
 
 .page-header h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 2rem;
+  color: var(--ds-text);
+  letter-spacing: -0.05em;
 }
 
 .subtitle {
   margin: 4px 0 0;
-  color: #64748b;
+  color: var(--ds-text-soft);
 }
 
 .filters-card {
   display: block;
   clear: both;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 28px;
+  padding: 14px 16px;
   margin-bottom: 12px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
   max-width: 100%;
 }
 
@@ -1177,11 +1184,11 @@ onMounted(fetchVariantFamilies)
 .form-row input,
 .form-row select {
   box-sizing: border-box;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  height: 48px;
   padding: 0 12px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.88);
   line-height: 40px;
   font: inherit;
 }
@@ -1211,8 +1218,8 @@ onMounted(fetchVariantFamilies)
 .form-row input:focus,
 .form-row select:focus {
   outline: none;
-  border-color: #1976d2;
-  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.12);
+  border-color: rgba(29, 140, 242, 0.34);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
 }
 
 .color-row {
@@ -1229,7 +1236,7 @@ onMounted(fetchVariantFamilies)
 .status {
   margin: 8px 0;
   padding: 10px;
-  border-radius: 8px;
+  border-radius: 18px;
 }
 
 .status.error {
@@ -1243,9 +1250,12 @@ onMounted(fetchVariantFamilies)
 }
 
 .table-wrap {
-  background: #fff;
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 28px;
   overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .products-table {
@@ -1301,13 +1311,13 @@ onMounted(fetchVariantFamilies)
 }
 
 .products-table thead {
-  background: #f8fafc;
+  background: #f2f7fc;
 }
 
 .products-table tbody td {
-  background: #ffffff;
-  border-top: 1px solid #f1f5f9;
-  border-bottom: 1px solid #f1f5f9;
+  background: rgba(255, 255, 255, 0.9);
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .products-table tbody td:first-child {
@@ -1317,7 +1327,7 @@ onMounted(fetchVariantFamilies)
 }
 
 .products-table tbody td:last-child {
-  border-right: 1px solid #f1f5f9;
+  border-right: 1px solid rgba(148, 163, 184, 0.12);
   border-top-right-radius: 8px;
   border-bottom-right-radius: 8px;
 }
@@ -1327,7 +1337,7 @@ onMounted(fetchVariantFamilies)
 }
 
 .row:hover {
-  background: #f8fafc;
+  background: rgba(245, 249, 253, 0.72);
 }
 
 .price {
@@ -1343,8 +1353,8 @@ onMounted(fetchVariantFamilies)
   width: 44px;
   height: 44px;
   object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .thumb-fallback {
@@ -1361,10 +1371,12 @@ onMounted(fetchVariantFamilies)
 
 .variants-config-section {
   margin-top: 18px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 28px;
+  padding: 18px;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .variants-config-header {
@@ -1402,10 +1414,10 @@ onMounted(fetchVariantFamilies)
 }
 
 .variants-family-card {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 10px;
-  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 22px;
+  padding: 14px;
+  background: rgba(245, 249, 253, 0.78);
 }
 
 .variants-family-row {
@@ -1436,8 +1448,8 @@ onMounted(fetchVariantFamilies)
 
 .variants-inner-item input {
   box-sizing: border-box;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
   height: 38px;
   padding: 0 10px;
 }
@@ -1451,10 +1463,12 @@ onMounted(fetchVariantFamilies)
 .btn-primary,
 .btn-secondary {
   border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 8px 12px;
+  border-radius: 16px;
+  padding: 11px 14px;
   cursor: pointer;
   font: inherit;
+  font-weight: 700;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .btn-sm {
@@ -1464,19 +1478,27 @@ onMounted(fetchVariantFamilies)
 
 .btn-refresh,
 .btn-secondary {
-  background: #fff;
-  border-color: #d1d5db;
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(148, 163, 184, 0.18);
+  color: var(--ds-text);
 }
 
 .btn-primary {
-  background: #1976d2;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: #fff;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
+}
+
+.btn-refresh:hover,
+.btn-primary:hover,
+.btn-secondary:hover {
+  transform: translateY(-1px);
 }
 
 .dialog-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(36, 49, 66, 0.24);
   display: grid;
   place-items: center;
   z-index: 50;
@@ -1485,9 +1507,12 @@ onMounted(fetchVariantFamilies)
 
 .dialog {
   width: min(980px, 100%);
-  background: #fff;
-  border-radius: 12px;
-  padding: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 30px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(24px);
+  box-shadow: var(--ds-shadow-soft);
 }
 
 .dialog h3 {
@@ -1512,10 +1537,10 @@ onMounted(fetchVariantFamilies)
 }
 
 .dialog-col-variants {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 22px;
   padding: 12px;
-  background: #f8fafc;
+  background: rgba(245, 249, 253, 0.78);
 }
 
 .dialog-col-variants h4 {
@@ -1552,7 +1577,7 @@ onMounted(fetchVariantFamilies)
   width: 40px;
   height: 22px;
   border-radius: 999px;
-  background: #cbd5e1;
+  background: rgba(148, 163, 184, 0.36);
   transition: background-color 0.2s ease;
 }
 
@@ -1570,7 +1595,7 @@ onMounted(fetchVariantFamilies)
 }
 
 .switch-input:checked + .switch-slider {
-  background: #1976d2;
+  background: var(--ds-primary);
 }
 
 .switch-input:checked + .switch-slider::before {
@@ -1578,7 +1603,7 @@ onMounted(fetchVariantFamilies)
 }
 
 .switch-input:focus-visible + .switch-slider {
-  outline: 2px solid #1976d2;
+  outline: 2px solid var(--ds-primary);
   outline-offset: 2px;
 }
 
@@ -1601,9 +1626,9 @@ onMounted(fetchVariantFamilies)
   grid-template-columns: 1fr 136px;
   gap: 8px;
   align-items: center;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
   padding: 8px;
 }
 
@@ -1626,8 +1651,8 @@ onMounted(fetchVariantFamilies)
 
 .variant-price input {
   box-sizing: border-box;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
   height: 36px;
   padding: 0 8px;
 }
@@ -1653,7 +1678,7 @@ onMounted(fetchVariantFamilies)
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .sr-only {
