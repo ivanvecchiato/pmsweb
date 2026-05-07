@@ -319,31 +319,39 @@ const formatCurrency = (value) => {
 
 <style scoped>
 .stats-sales-container {
-  padding: 24px;
-  background: #f6f8fa;
-  min-height: 100vh;
+  padding: 8px;
+  min-height: calc(100vh - 120px);
 }
 
 .header {
-  margin-bottom: 32px;
+  margin-bottom: 20px;
+  padding: 24px 28px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .header h1 {
-  font-size: 28px;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--ds-text);
   margin: 0;
 }
 
 .filters-section {
   display: flex;
   gap: 16px;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
   align-items: flex-end;
-  background: white;
-  padding: 16px;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
   flex-wrap: wrap;
 }
 
@@ -356,51 +364,48 @@ const formatCurrency = (value) => {
 
 .date-range label,
 .view-mode label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--ds-text-soft);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
 }
 
 .date-range input,
 .view-mode select {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
   font-size: 14px;
   font-family: inherit;
-  background: white;
-  color: #1f2937;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
 }
 
 .date-range input:focus,
 .view-mode select:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: rgba(29, 140, 242, 0.45);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
 }
 
 .btn-fetch {
-  padding: 8px 20px;
-  background: #3b82f6;
+  padding: 12px 18px;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: white;
-  border: none;
-  border-radius: 6px;
+  border: 1px solid transparent;
+  border-radius: 16px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-fetch:hover {
-  background: #2563eb;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-
-.btn-fetch:active {
-  transform: translateY(0);
+  box-shadow: 0 22px 34px rgba(29, 140, 242, 0.22);
 }
 
 .total-section {
@@ -411,34 +416,36 @@ const formatCurrency = (value) => {
   display: inline-flex;
   align-items: baseline;
   gap: 10px;
-  background: white;
-  border: 1px solid #dbeafe;
-  border-left: 5px solid #2563eb;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(29, 140, 242, 0.18);
+  border-left: 5px solid var(--ds-primary);
+  border-radius: 20px;
   padding: 14px 18px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--ds-shadow-card);
 }
 
 .total-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--ds-text-soft);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.08em;
 }
 
 .total-value {
   font-size: 1.25rem;
   font-weight: 800;
-  color: #1d4ed8;
+  color: var(--ds-primary-strong);
 }
 
 .chart-section {
-  background: white;
+  background: rgba(255, 255, 255, 0.78);
   padding: 24px;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  margin-bottom: 32px;
+  border-radius: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
+  margin-bottom: 24px;
   height: 400px;
 }
 
@@ -447,10 +454,12 @@ const formatCurrency = (value) => {
 }
 
 .table-section {
-  background: white;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 28px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .sales-table {
@@ -459,52 +468,52 @@ const formatCurrency = (value) => {
 }
 
 .sales-table thead {
-  background: #f3f4f6;
-  border-bottom: 2px solid #e5e7eb;
+  background: rgba(242, 247, 252, 0.9);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .sales-table th {
   padding: 12px 16px;
   text-align: left;
-  font-weight: 600;
-  color: #374151;
-  font-size: 13px;
+  font-weight: 800;
+  color: var(--ds-text-soft);
+  font-size: 0.76rem;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
 }
 
 .sales-table tbody tr {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   transition: background 0.2s ease;
 }
 
 .sales-table tbody tr:hover {
-  background: #f9fafb;
+  background: rgba(248, 250, 252, 0.72);
 }
 
 .sales-table tbody tr.alt-row {
-  background: #f9fafb;
+  background: rgba(248, 250, 252, 0.52);
 }
 
 .sales-table td {
   padding: 12px 16px;
   font-size: 14px;
-  color: #1f2937;
+  color: var(--ds-text);
 }
 
 .sales-table td.amount {
-  font-weight: 600;
+  font-weight: 700;
   color: #059669;
 }
 
 .table-stats-section {
-  margin-top: 32px;
+  margin-top: 24px;
 }
 
 .section-title {
   font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: 800;
+  color: var(--ds-text);
   margin: 0 0 16px;
 }
 
@@ -515,20 +524,20 @@ const formatCurrency = (value) => {
 }
 
 .table-stat-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 22px;
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: var(--ds-shadow-card);
 }
 
 .table-stat-name {
   font-size: 15px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--ds-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -537,7 +546,7 @@ const formatCurrency = (value) => {
 .table-stat-guest {
   margin-top: 4px;
   font-size: 0.83rem;
-  color: #64748b;
+  color: var(--ds-text-soft);
   font-weight: 500;
 }
 
@@ -549,9 +558,9 @@ const formatCurrency = (value) => {
 }
 
 .badge-orders {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
+  background: rgba(231, 242, 255, 0.92);
+  color: var(--ds-primary-strong);
+  border: 1px solid rgba(29, 140, 242, 0.16);
   border-radius: 999px;
   padding: 3px 10px;
   font-size: 0.78rem;
@@ -559,9 +568,9 @@ const formatCurrency = (value) => {
 }
 
 .badge-sales {
-  background: #f0fdf4;
+  background: rgba(236, 253, 245, 0.92);
   color: #047857;
-  border: 1px solid #bbf7d0;
+  border: 1px solid rgba(34, 197, 94, 0.16);
   border-radius: 999px;
   padding: 3px 10px;
   font-size: 0.82rem;
@@ -575,10 +584,11 @@ const formatCurrency = (value) => {
 }
 
 .area-stat-card {
-  background: white;
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 22px;
   padding: 16px 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -587,7 +597,7 @@ const formatCurrency = (value) => {
 .area-stat-name {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #374151;
+  color: var(--ds-text);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -595,20 +605,27 @@ const formatCurrency = (value) => {
 .area-stat-amount {
   font-size: 1.3rem;
   font-weight: 800;
-  color: #1d4ed8;
+  color: var(--ds-primary-strong);
 }
 
 .area-stat-bar {
   height: 6px;
-  background: #e5e7eb;
+  background: rgba(148, 163, 184, 0.18);
   border-radius: 999px;
   overflow: hidden;
 }
 
 .area-stat-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  background: linear-gradient(90deg, var(--ds-primary), var(--ds-primary-strong));
   border-radius: 999px;
   transition: width 0.4s ease;
+}
+
+@media (max-width: 720px) {
+  .filters-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

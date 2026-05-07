@@ -364,38 +364,55 @@ onMounted(loadForm)
 
 <style scoped>
 .settings-page {
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
+  padding: 8px;
+}
+
+.header {
+  padding: 24px 28px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .header h1 {
   margin: 0;
-  color: #0f172a;
+  color: var(--ds-text);
+  font-size: clamp(1.8rem, 2vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
 }
 
 .header p {
   margin: 4px 0 0;
-  color: #475569;
+  color: var(--ds-text-soft);
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 28px;
+  padding: 20px;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .card h2 {
   margin: 0 0 8px;
-  color: #1e293b;
+  color: var(--ds-text);
+  font-size: 1.12rem;
+  font-weight: 800;
 }
 
 .hint {
   margin: 0 0 12px;
-  color: #64748b;
+  color: var(--ds-text-soft);
 }
 
 .mode-grid {
@@ -405,17 +422,33 @@ onMounted(loadForm)
 }
 
 .mode-card {
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  background: rgba(248, 250, 252, 0.86);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.mode-card span {
+  color: var(--ds-text);
+  font-weight: 800;
+}
+
+.mode-card small {
+  color: var(--ds-text-soft);
+}
+
+.mode-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.08);
 }
 
 .mode-card.active {
-  border-color: #2563eb;
-  background: #eff6ff;
+  border-color: rgba(29, 140, 242, 0.22);
+  background: rgba(231, 242, 255, 0.92);
 }
 
 .mode-card input {
@@ -432,18 +465,27 @@ onMounted(loadForm)
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1.2fr 1.4fr auto;
   gap: 8px;
+  align-items: center;
 }
 
 .bands-row input,
-.bands-row select {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 8px;
+.bands-row select,
+.params-grid input,
+.params-grid select {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  padding: 0 14px;
+  min-height: 44px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
 }
 
 .bands-head {
-  font-weight: 700;
-  color: #475569;
+  font-weight: 800;
+  color: var(--ds-text-soft);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .params-grid {
@@ -456,23 +498,16 @@ onMounted(loadForm)
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: #334155;
+  color: var(--ds-text-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .checkbox-stack input {
   align-self: flex-start;
-}
-
-.params-grid input {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 8px;
-}
-
-.params-grid select {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 8px;
+  min-height: auto;
 }
 
 .full-width {
@@ -491,32 +526,33 @@ onMounted(loadForm)
 
 .btn {
   border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 9px 14px;
-  font-weight: 600;
+  border-radius: 16px;
+  padding: 11px 16px;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .btn-primary {
-  background: #2563eb;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: #fff;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-secondary {
-  background: #f1f5f9;
-  color: #0f172a;
-  border-color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
+  border-color: rgba(148, 163, 184, 0.18);
 }
 
 .btn-danger {
-  background: #fee2e2;
+  background: rgba(220, 77, 77, 0.08);
   color: #991b1b;
-  border-color: #fecaca;
+  border-color: rgba(220, 77, 77, 0.16);
 }
 
 .beach-note p {
   margin: 0;
-  color: #334155;
+  color: var(--ds-text-soft);
 }
 
 .tax-hint {
@@ -526,6 +562,14 @@ onMounted(loadForm)
 @media (max-width: 800px) {
   .bands-row {
     grid-template-columns: 1fr;
+  }
+
+  .footer-actions {
+    justify-content: stretch;
+  }
+
+  .footer-actions .btn {
+    flex: 1;
   }
 }
 </style>

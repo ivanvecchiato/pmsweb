@@ -563,39 +563,58 @@ onMounted(async () => {
 .payment-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 8px;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: wrap;
+  padding: 24px 28px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .header h1 {
   margin: 0;
-  color: #0f172a;
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--ds-text);
 }
 
 .header-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 28px;
+  padding: 24px;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .state {
-  color: #64748b;
+  color: var(--ds-text-soft);
+}
+
+.detail-card h2 {
+  margin: 0 0 18px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--ds-text);
 }
 
 .info-grid {
@@ -611,25 +630,29 @@ onMounted(async () => {
 }
 
 .info-item .label {
-  color: #64748b;
-  font-size: 0.86rem;
+  color: var(--ds-text-soft);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
 }
 
 .info-item .value {
-  color: #0f172a;
-  font-weight: 600;
+  color: var(--ds-text);
+  font-weight: 700;
 }
 
 .lines-block {
-  margin-top: 16px;
-  border-top: 1px solid #e2e8f0;
-  padding-top: 12px;
+  margin-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  padding-top: 16px;
 }
 
 .lines-block h3 {
-  margin: 0 0 10px;
-  color: #1e293b;
+  margin: 0 0 12px;
+  color: var(--ds-text);
   font-size: 1rem;
+  font-weight: 800;
 }
 
 .line-row {
@@ -637,8 +660,8 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px dashed #e2e8f0;
-  color: #334155;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.24);
+  color: var(--ds-text);
 }
 
 .line-row:last-child {
@@ -646,25 +669,27 @@ onMounted(async () => {
 }
 
 .tax-row {
-  color: #1d4ed8;
+  color: var(--ds-primary-strong);
 }
 
 .total-row {
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ds-text);
 }
 
 .services-header-row {
-  font-weight: 600;
-  color: #047857;
-  background: #f0fdf4;
-  border-radius: 4px;
-  padding: 6px 0;
+  font-weight: 700;
+  color: #166534;
+  background: rgba(236, 253, 245, 0.92);
+  border: 1px solid rgba(34, 197, 94, 0.16);
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin: 6px 0;
 }
 
 .service-line {
   padding-left: 12px;
-  color: #374151;
+  color: var(--ds-text);
   font-size: 0.875rem;
 }
 
@@ -672,23 +697,33 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 0;
-  color: #334155;
+  padding: 8px 0;
+  color: var(--ds-text);
 }
 
 .payment-entry-form {
   margin-top: 12px;
   display: grid;
   grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .payment-entry-form input,
 .payment-entry-form select {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 8px;
+  min-height: 48px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  padding: 0 14px;
   min-width: 0;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ds-text);
+}
+
+.payment-entry-form input:focus,
+.payment-entry-form select:focus {
+  outline: none;
+  border-color: rgba(29, 140, 242, 0.45);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
 }
 
 .payment-actions-row {
@@ -700,34 +735,44 @@ onMounted(async () => {
 
 .btn {
   border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 9px 14px;
-  font-weight: 600;
+  border-radius: 16px;
+  padding: 12px 16px;
+  font: inherit;
+  font-weight: 700;
   cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
 }
 
 .btn-primary {
-  background: #2563eb;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: #fff;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-secondary {
-  background: #0f172a;
-  color: #fff;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ds-text);
+  border-color: rgba(148, 163, 184, 0.18);
 }
 
 .bar-section {
   margin-top: 12px;
-  padding: 12px;
-  background: #fffbeb;
+  padding: 16px;
+  background: rgba(255, 251, 235, 0.92);
+  border: 1px solid rgba(245, 158, 11, 0.2);
   border-left: 4px solid #f59e0b;
-  border-radius: 6px;
+  border-radius: 20px;
 }
 
 .bar-section h4 {
   margin: 0 0 10px 0;
   color: #92400e;
-  font-size: 0.95rem;
+  font-size: 0.98rem;
+  font-weight: 800;
 }
 
 .bar-loading,
@@ -747,7 +792,7 @@ onMounted(async () => {
   padding: 6px 0;
   font-size: 0.9rem;
   color: #92400e;
-  border-bottom: 1px solid #fef3c7;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.16);
 }
 
 .bar-name {
@@ -768,6 +813,12 @@ onMounted(async () => {
 }
 
 @media (max-width: 900px) {
+  .header,
+  .payment-actions-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .payment-entry-form {
     grid-template-columns: 1fr;
   }
@@ -791,6 +842,7 @@ onMounted(async () => {
     border: 0;
     box-shadow: none;
     padding: 0;
+    background: transparent;
   }
 }
 </style>

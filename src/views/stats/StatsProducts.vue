@@ -670,23 +670,23 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .stats-products {
-  padding: 24px;
-  background: #f9fafb;
-  min-height: 100vh;
+  padding: 8px;
+  min-height: calc(100vh - 120px);
 }
 
 h1 {
-  font-size: 28px;
-  font-weight: 700;
-  margin-bottom: 24px;
-  color: #111827;
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  margin: 0 0 20px;
+  color: var(--ds-text);
 }
 
 h3 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 800;
   margin-bottom: 12px;
-  color: #374151;
+  color: var(--ds-text);
 }
 
 .controls {
@@ -694,11 +694,13 @@ h3 {
   gap: 12px;
   flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 24px;
-  background: white;
-  padding: 16px;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .main-controls input {
@@ -710,82 +712,89 @@ h3 {
   display: flex;
   gap: 16px;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  padding: 14px 18px;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
 }
 
 .switch-option {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  color: #374151;
+  font-size: 0.9rem;
+  color: var(--ds-text);
+  font-weight: 600;
 }
 
 .controls input {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
   font-size: 14px;
   flex: 1;
   min-width: 150px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
 }
 
 .category-select {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
   font-size: 14px;
   min-width: 180px;
-  background: white;
-  color: #111827;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
 }
 
 .controls input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: rgba(29, 140, 242, 0.45);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
 }
 
 .category-select:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: rgba(29, 140, 242, 0.45);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
+}
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: 16px;
+  padding: 12px 18px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: white;
-  border: none;
-  padding: 8px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 14px;
-  transition: background 0.2s;
-}
-
-.btn-primary:hover {
-  background: #2563eb;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-secondary {
-  background: #0f766e;
+  background: rgba(236, 253, 245, 0.92);
   color: white;
-  border: none;
-  padding: 8px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 14px;
-  transition: background 0.2s;
-}
-
-.btn-secondary:hover {
-  background: #0d665f;
+  color: #166534;
+  border-color: rgba(34, 197, 94, 0.18);
 }
 
 .btn-secondary:disabled {
-  background: #9ca3af;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
@@ -799,20 +808,22 @@ h3 {
 
 .loading,
 .error {
-  padding: 16px;
-  border-radius: 6px;
+  padding: 16px 18px;
+  border-radius: 20px;
   margin-top: 12px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .loading {
-  background: #dbeafe;
-  color: #1e40af;
+  background: rgba(231, 242, 255, 0.92);
+  color: var(--ds-primary-strong);
+  border: 1px solid rgba(29, 140, 242, 0.16);
 }
 
 .error {
-  background: #fee2e2;
-  color: #991b1b;
+  background: rgba(254, 242, 242, 0.92);
+  color: var(--ds-danger);
+  border: 1px solid rgba(220, 77, 77, 0.16);
 }
 
 .stats-summary {
@@ -823,32 +834,35 @@ h3 {
 }
 
 .summary-card {
-  background: white;
+  background: rgba(255, 255, 255, 0.78);
   padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
 }
 
 .summary-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #6b7280;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--ds-text-soft);
   margin-bottom: 8px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
 }
 
 .summary-value {
   font-size: 24px;
-  font-weight: 700;
-  color: #111827;
+  font-weight: 800;
+  color: var(--ds-text);
 }
 
 .section-container {
-  background: white;
+  background: rgba(255, 255, 255, 0.78);
   padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
   margin-bottom: 20px;
 }
 
@@ -890,11 +904,11 @@ h3 {
 }
 
 .empty-state {
-  background: #f9fafb;
-  border: 1px dashed #d1d5db;
-  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.82);
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  border-radius: 20px;
   padding: 16px;
-  color: #4b5563;
+  color: var(--ds-text-soft);
   font-weight: 500;
 }
 
@@ -917,24 +931,27 @@ h3 {
 }
 
 .trend-controls label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #374151;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--ds-text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .trend-controls select {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
   font-size: 14px;
-  background: white;
-  color: #111827;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
 }
 
 .trend-controls select:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: rgba(29, 140, 242, 0.45);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
 }
 
 .data-table {
@@ -944,38 +961,40 @@ h3 {
 }
 
 .data-table thead {
-  background: #f3f4f6;
-  border-bottom: 2px solid #d1d5db;
+  background: rgba(242, 247, 252, 0.9);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .data-table th {
   padding: 12px 16px;
   text-align: left;
-  font-weight: 600;
-  color: #374151;
-  font-size: 13px;
+  font-weight: 800;
+  color: var(--ds-text-soft);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .data-table tbody tr {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   transition: background 0.15s;
 }
 
 .data-table tbody tr:hover {
-  background: #f9fafb;
+  background: rgba(248, 250, 252, 0.72);
 }
 
 .data-table tbody tr.even {
-  background: white;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .data-table tbody tr.odd {
-  background: #fafbfc;
+  background: rgba(248, 250, 252, 0.52);
 }
 
 .data-row td {
   padding: 14px 16px;
-  color: #374151;
+  color: var(--ds-text);
 }
 
 .result-row {
@@ -983,15 +1002,15 @@ h3 {
 }
 
 .result-row.selected {
-  background: #eff6ff !important;
+  background: rgba(231, 242, 255, 0.9) !important;
 }
 
 .product-cell {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 500;
-  color: #111827;
+  font-weight: 700;
+  color: var(--ds-text);
 }
 
 .rank-badge {
@@ -1010,8 +1029,8 @@ h3 {
 
 .numeric-cell {
   text-align: right;
-  font-weight: 500;
-  color: #374151;
+  font-weight: 600;
+  color: var(--ds-text);
 }
 
 .numeric-highlight {
@@ -1072,6 +1091,16 @@ h3 {
 
 .category-detail {
   margin-top: 24px;
-  border: 2px solid #dbeafe;
+  border: 1px solid rgba(29, 140, 242, 0.18);
+}
+
+@media (max-width: 720px) {
+  .search-switcher,
+  .controls,
+  .table-header-actions,
+  .trend-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

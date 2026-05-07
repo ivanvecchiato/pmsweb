@@ -434,26 +434,26 @@ onMounted(async () => {
 <style scoped>
 .quote-builder-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  inset: 0;
+  background: rgba(36, 49, 66, 0.24);
+  backdrop-filter: blur(10px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 2000;
+  padding: 18px;
 }
 
 .quote-builder-modal {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-soft);
   width: min(96vw, 1100px);
   max-width: 1100px;
   max-height: 90vh;
   overflow-y: auto;
+  backdrop-filter: blur(24px);
   animation: slideUp 0.3s ease;
 }
 
@@ -472,35 +472,39 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  gap: 16px;
+  padding: 1.5rem 1.6rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(248, 251, 255, 0.72));
+  color: var(--ds-text);
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 
 .close-btn {
-  background: none;
-  border: none;
-  color: white;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: var(--ds-text-soft);
   font-size: 1.5rem;
   cursor: pointer;
   padding: 0;
-  width: 32px;
-  height: 32px;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  transition: background 0.2s;
+  border-radius: 14px;
+  transition: background 0.16s ease, transform 0.16s ease;
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(248, 250, 252, 0.92);
+  transform: translateY(-1px);
 }
 
 .quote-form {
@@ -534,25 +538,34 @@ onMounted(async () => {
 }
 
 .form-section label {
-  font-weight: 600;
-  color: #374151;
-  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--ds-text-soft);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  display: block;
 }
 
 .form-section input,
 .form-section select {
-  padding: 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
   font-size: 1rem;
-  transition: border-color 0.2s;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .form-section input:focus,
 .form-section select:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: rgba(29, 140, 242, 0.45);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
 }
 
 .form-row {
@@ -571,19 +584,22 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.75rem;
-  border: 2px solid #cbd5e1;
-  border-radius: 8px;
+  padding: 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 18px;
   cursor: pointer;
-  transition: all 0.2s;
-  font-weight: 600;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+  font-weight: 700;
   font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ds-text-soft);
 }
 
 .board-radio-card.is-selected {
-  border-color: #667eea;
-  background: #f3f4f6;
-  color: #667eea;
+  border-color: rgba(29, 140, 242, 0.24);
+  background: rgba(231, 242, 255, 0.92);
+  color: var(--ds-primary-strong);
+  box-shadow: 0 12px 22px rgba(29, 140, 242, 0.12);
 }
 
 .hidden-radio {
@@ -604,16 +620,18 @@ onMounted(async () => {
 
 .kid-age-item span {
   font-size: 0.82rem;
-  color: #475569;
+  color: var(--ds-text-soft);
 }
 
 .info-box {
-  background: #f0f9ff;
-  border-left: 4px solid #0284c7;
-  padding: 1rem;
-  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.84);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-left: 4px solid var(--ds-primary);
+  padding: 1.1rem;
+  border-radius: 24px;
   font-size: 0.9rem;
-  color: #1e40af;
+  color: var(--ds-text);
+  box-shadow: var(--ds-shadow-card);
 }
 
 .info-box p {
@@ -627,23 +645,24 @@ onMounted(async () => {
 }
 
 .btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
+  padding: 0.85rem 1.4rem;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
   font-size: 0.95rem;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: white;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 22px 34px rgba(29, 140, 242, 0.22);
 }
 
 .btn-primary:disabled {
@@ -652,18 +671,19 @@ onMounted(async () => {
 }
 
 .btn-secondary {
-  background: #e5e7eb;
-  color: #374151;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ds-text);
+  border-color: rgba(148, 163, 184, 0.18);
 }
 
 .btn-secondary:hover {
-  background: #d1d5db;
+  background: rgba(248, 250, 252, 0.92);
 }
 
 .price-section {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 2px solid #667eea;
+  border-top: 1px solid rgba(29, 140, 242, 0.18);
 }
 
 .price-section p {
@@ -673,16 +693,17 @@ onMounted(async () => {
 
 .price-highlight {
   font-size: 1.2rem;
-  color: #10b981;
+  color: #047857;
   font-weight: 900;
-  background: #ecfdf5;
+  background: rgba(236, 253, 245, 0.92);
+  border: 1px solid rgba(34, 197, 94, 0.16);
   padding: 0.75rem;
-  border-radius: 6px;
+  border-radius: 16px;
   margin-top: 0.75rem !important;
 }
 
 .price-placeholder {
-  color: #9ca3af;
+  color: var(--ds-text-muted);
   font-style: italic;
   margin: 0 !important;
 }
@@ -694,7 +715,7 @@ onMounted(async () => {
 
 .section-hint {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--ds-text-soft);
   margin-top: -0.3rem;
   font-style: italic;
 }
@@ -716,32 +737,33 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  border: 2px solid #cbd5e1;
-  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: white;
+  background: rgba(255, 255, 255, 0.86);
   text-align: center;
   min-height: 140px;
   scroll-snap-align: start;
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.06);
 }
 
 .room-card:hover {
-  border-color: #667eea;
-  background: #f8f9ff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+  border-color: rgba(29, 140, 242, 0.24);
+  background: rgba(248, 251, 255, 0.92);
+  transform: translateY(-1px);
+  box-shadow: 0 18px 30px rgba(29, 140, 242, 0.12);
 }
 
 .room-card.is-selected {
-  border-color: #667eea;
-  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  border-color: rgba(29, 140, 242, 0.26);
+  background: rgba(231, 242, 255, 0.92);
+  box-shadow: 0 20px 32px rgba(29, 140, 242, 0.16);
 }
 
 .room-type {
   font-weight: 700;
-  color: #1f2937;
+  color: var(--ds-text);
   font-size: 1rem;
   margin-bottom: 0.5rem;
 }
@@ -749,13 +771,13 @@ onMounted(async () => {
 .room-price {
   font-size: 1.3rem;
   font-weight: 900;
-  color: #10b981;
+  color: #047857;
   margin-bottom: 0.25rem;
 }
 
 .room-per-night {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--ds-text-soft);
   font-weight: 500;
 }
 
@@ -778,6 +800,24 @@ onMounted(async () => {
     position: static;
     max-height: none;
     overflow-y: visible;
+  }
+}
+
+@media (max-width: 640px) {
+  .quote-builder-overlay {
+    padding: 10px;
+  }
+
+  .modal-header,
+  .button-row,
+  .form-row {
+    flex-direction: column;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .board-radio-group {
+    grid-template-columns: 1fr;
   }
 }
 </style>

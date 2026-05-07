@@ -117,9 +117,8 @@ const generateBeachMap = async () => {
 
 <style scoped>
 .layout-container {
-  padding: 30px;
-  background: #f8fafc;
-  min-height: 100vh;
+  padding: 8px;
+  min-height: calc(100vh - 120px);
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
@@ -130,7 +129,13 @@ const generateBeachMap = async () => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 30px;
+  margin-bottom: 24px;
+  padding: 24px 28px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
 }
 
 .layout-header > div {
@@ -142,6 +147,19 @@ const generateBeachMap = async () => {
   overflow-wrap: anywhere;
 }
 
+.layout-header h1 {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--ds-text);
+}
+
+.layout-header p {
+  margin: 8px 0 0;
+  color: var(--ds-text-soft);
+}
+
 .sectors-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
@@ -151,11 +169,12 @@ const generateBeachMap = async () => {
 
 .sector-card {
   min-width: 0;
-  background: white;
-  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 24px;
   padding: 20px;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-  border: 1px solid #e2e8f0;
+  box-shadow: var(--ds-shadow-card);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(18px);
 }
 
 .sector-header {
@@ -170,10 +189,12 @@ const generateBeachMap = async () => {
   min-width: 0;
   width: 100%;
   font-size: 1.2rem;
-  font-weight: 700;
-  border: none;
-  border-bottom: 2px solid #3b82f6;
+  font-weight: 800;
+  border: 0;
+  border-bottom: 2px solid rgba(29, 140, 242, 0.3);
   outline: none;
+  background: transparent;
+  color: var(--ds-text);
 }
 
 .sector-body {
@@ -189,51 +210,66 @@ const generateBeachMap = async () => {
 
 .field label {
   display: block;
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: 0.74rem;
+  color: var(--ds-text-soft);
   margin-bottom: 5px;
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
 .field input {
   width: calc(100% - 12px);
   max-width: 180px;
   min-width: 0;
-  padding: 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
 }
 
 .btn-primary {
   flex-shrink: 0;
-  background: #3b82f6;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: white;
-  border: none;
+  border: 1px solid transparent;
   padding: 12px 24px;
-  border-radius: 10px;
+  border-radius: 16px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-add-card {
   min-height: 180px;
   width: 100%;
-  border: 2px dashed #cbd5e1;
-  background: transparent;
-  border-radius: 15px;
-  color: #64748b;
-  font-weight: 600;
+  border: 2px dashed rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.48);
+  border-radius: 24px;
+  color: var(--ds-text-soft);
+  font-weight: 700;
   cursor: pointer;
 }
 
 .btn-delete {
   flex-shrink: 0;
-  color: #ef4444;
-  background: transparent;
-  border: none;
+  color: var(--ds-danger);
+  background: rgba(220, 77, 77, 0.08);
+  border: 1px solid rgba(220, 77, 77, 0.16);
   cursor: pointer;
   font-size: 0.8rem;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-weight: 700;
+}
+
+.sector-footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  color: var(--ds-text-soft);
 }
 
 @media (max-width: 900px) {
@@ -249,7 +285,7 @@ const generateBeachMap = async () => {
 
 @media (max-width: 640px) {
   .layout-container {
-    padding: 20px 16px;
+    padding: 0;
   }
 
   .sector-header {

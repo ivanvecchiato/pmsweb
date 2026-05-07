@@ -357,73 +357,140 @@ onMounted(fetchData);
 </template>
 
 <style scoped>
-.config-container { display: flex; height: 100vh; background: #f1f5f9; }
-.sidebar { width: 300px; background: white; border-right: 1px solid #e2e8f0; padding: 20px; }
+.config-container {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  gap: 24px;
+  padding: 8px;
+  min-height: calc(100vh - 120px);
+}
+
+.sidebar,
+.assignment-section,
+.row-config {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
+}
+
+.sidebar {
+  width: auto;
+  padding: 24px;
+  border-radius: 28px;
+  align-self: start;
+  position: sticky;
+  top: 24px;
+}
+
+.sidebar h2 {
+  margin: 0 0 18px;
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--ds-text);
+}
 
 .price-card { 
-  padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 10px; cursor: pointer;
+  padding: 15px; border-radius: 20px; border: 1px solid rgba(148, 163, 184, 0.18); margin-bottom: 10px; cursor: pointer;
   border-left: 5px solid #cbd5e1;
+  background: rgba(248, 250, 252, 0.88);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
 }
-.price-card.active { border-color: #3b82f6; background: #eff6ff; }
+
+.price-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.08);
+}
+
+.price-card.active { border-color: rgba(29, 140, 242, 0.22); background: rgba(231, 242, 255, 0.92); }
+
+.price-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.price-card-info strong {
+  color: var(--ds-text);
+}
+
+.price-card-info span {
+  color: var(--ds-text-soft);
+  font-size: 0.84rem;
+}
 
 .range-actions {
   margin-top: 16px;
-  padding: 12px;
-  background: #f8fafc;
-  border: 1px dashed #cbd5e1;
-  border-radius: 10px;
+  padding: 16px;
+  background: rgba(248, 250, 252, 0.88);
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 20px;
 }
 
 .selection-info {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--ds-text-soft);
   margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
 }
 
 .btn-save-range {
   width: 100%;
   margin-bottom: 8px;
-  border: none;
-  background: #2563eb;
+  border: 1px solid transparent;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: white;
-  border-radius: 8px;
-  padding: 8px;
+  border-radius: 16px;
+  padding: 11px 14px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-cancel {
   width: 100%;
-  border: 1px solid #cbd5e1;
-  background: white;
-  color: #334155;
-  border-radius: 8px;
-  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ds-text);
+  border-radius: 16px;
+  padding: 11px 14px;
   cursor: pointer;
+  font-weight: 700;
 }
 
-.main-content { flex: 1; padding: 30px; overflow-y: auto; }
+.main-content { flex: 1; padding: 8px 0 8px 0; overflow-y: auto; min-width: 0; }
 
 .view-switcher {
   display: flex;
   gap: 10px;
   margin-bottom: 16px;
+  padding: 4px;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
 }
 
 .switch-btn {
-  border: 1px solid #cbd5e1;
-  background: white;
-  color: #334155;
-  border-radius: 8px;
-  padding: 8px 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ds-text-soft);
+  border-radius: 14px;
+  padding: 10px 14px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .switch-btn.active {
-  background: #eff6ff;
-  border-color: #3b82f6;
-  color: #1d4ed8;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.9));
+  border-color: rgba(29, 140, 242, 0.18);
+  color: var(--ds-primary-strong);
+  box-shadow: 0 12px 24px rgba(29, 140, 242, 0.12);
 }
 
 .editor-header {
@@ -434,32 +501,48 @@ onMounted(fetchData);
   margin-bottom: 16px;
 }
 
+.editor-header h3,
+.assignment-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--ds-text);
+}
+
 /* Griglia Spiaggia */
 .beach-grid-editor { display: flex; flex-direction: column; gap: 30px; }
 
-.row-config { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.row-config { border-radius: 24px; padding: 20px; }
 
-.row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; }
-.default-setter { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
+.row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.16); padding-bottom: 10px; gap: 12px; }
+.row-header h4 { margin: 0; color: var(--ds-text); font-size: 1rem; font-weight: 800; }
+.default-setter { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: var(--ds-text-soft); }
 
 .umbrellas-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; }
 
 .umbrella-item { 
-  display: flex; flex-direction: column; align-items: center; background: #f8fafc; 
-  padding: 8px; border-radius: 8px; border: 1px solid #e2e8f0;
+  display: flex; flex-direction: column; align-items: center; background: rgba(248, 250, 252, 0.86); 
+  padding: 10px; border-radius: 16px; border: 1px solid rgba(148, 163, 184, 0.16);
 }
-.u-label { font-size: 0.7rem; font-weight: 700; color: #64748b; margin-bottom: 5px; }
-.input-u { width: 100%; text-align: center; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; }
-.input-mini { width: 80px; padding: 5px; border-radius: 4px; border: 1px solid #3b82f6; text-align: center; font-weight: 700; }
+.u-label { font-size: 0.7rem; font-weight: 800; color: var(--ds-text-soft); margin-bottom: 5px; text-transform: uppercase; }
+.input-u, .input-mini {
+  width: 100%;
+  min-height: 38px;
+  text-align: center;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
+}
+.input-mini { width: 88px; font-weight: 700; }
 
 .override-tag { font-size: 0.6rem; color: #ef4444; font-weight: 800; text-transform: uppercase; margin-top: 4px; }
 
-.btn-save { background: #1e293b; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.btn-save { background: linear-gradient(180deg, #22c55e, #16a34a); color: white; border: 1px solid transparent; padding: 12px 18px; border-radius: 16px; cursor: pointer; font-weight: 700; box-shadow: 0 18px 28px rgba(34, 197, 94, 0.18); }
 
 .assignment-section {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: 28px;
   padding: 16px;
 }
 
@@ -469,7 +552,7 @@ onMounted(fetchData);
 
 .assignment-header p {
   margin: 0 0 12px;
-  color: #64748b;
+  color: var(--ds-text-soft);
 }
 
 .calendar-grid {
@@ -479,15 +562,15 @@ onMounted(fetchData);
   max-height: 440px;
   overflow-y: auto;
   padding: 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: white;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .day-box {
   height: 60px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -495,17 +578,19 @@ onMounted(fetchData);
   cursor: pointer;
   font-size: 10px;
   user-select: none;
-  transition: transform 0.1s;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  color: var(--ds-text-soft);
 }
 
 .day-num {
   font-weight: 800;
   font-size: 14px;
+  color: var(--ds-text);
 }
 
 .in-selection {
   transform: scale(0.95);
-  box-shadow: inset 0 0 0 3px #3b82f6;
+  box-shadow: inset 0 0 0 3px rgba(29, 140, 242, 0.55);
 }
 
 .day-box.is-sunday {
@@ -519,5 +604,24 @@ onMounted(fetchData);
 
 .day-box.is-sunday small {
   color: #fb7185;
+}
+
+@media (max-width: 1080px) {
+  .config-container {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .view-switcher,
+  .row-header,
+  .editor-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

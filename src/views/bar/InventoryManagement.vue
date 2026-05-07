@@ -696,21 +696,21 @@ onMounted(() => {
 
 <style scoped>
 :global(:root) {
-  --inv-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --inv-bg: #f9fafb;
-  --inv-surface: #ffffff;
-  --inv-surface-soft: #f3f4f6;
-  --inv-border: #e5e7eb;
-  --inv-border-strong: #d1d5db;
-  --inv-text: #1f2937;
-  --inv-muted: #6b7280;
-  --inv-primary: #3b82f6;
-  --inv-primary-dark: #2563eb;
-  --inv-success: #10b981;
-  --inv-warning: #f59e0b;
-  --inv-danger: #ef4444;
-  --inv-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --inv-shadow-lg: 0 18px 50px rgba(15, 23, 42, 0.18);
+  --inv-font: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+  --inv-bg: transparent;
+  --inv-surface: rgba(255, 255, 255, 0.78);
+  --inv-surface-soft: #f2f6fb;
+  --inv-border: rgba(148, 163, 184, 0.18);
+  --inv-border-strong: rgba(148, 163, 184, 0.3);
+  --inv-text: #243142;
+  --inv-muted: #6b7b8f;
+  --inv-primary: #1d8cf2;
+  --inv-primary-dark: #0d6fd1;
+  --inv-success: #27b36a;
+  --inv-warning: #d9861d;
+  --inv-danger: #dc4d4d;
+  --inv-shadow: 0 18px 34px rgba(148, 163, 184, 0.16);
+  --inv-shadow-lg: 0 28px 60px rgba(148, 163, 184, 0.26);
 }
 
 * {
@@ -718,8 +718,8 @@ onMounted(() => {
 }
 
 .inventory-view {
-  min-height: 100vh;
-  padding: 24px;
+  min-height: 100%;
+  padding: 4px;
   background: var(--inv-bg);
   color: var(--inv-text);
   font-family: var(--inv-font);
@@ -739,9 +739,10 @@ textarea {
 .inv-header {
   background: var(--inv-surface);
   border: 1px solid var(--inv-border);
-  border-radius: 16px;
+  border-radius: 28px;
   box-shadow: var(--inv-shadow);
-  padding: 20px 22px;
+  backdrop-filter: blur(22px);
+  padding: 24px 26px;
   margin-bottom: 20px;
   display: flex;
   justify-content: space-between;
@@ -751,11 +752,11 @@ textarea {
 
 .title-group h1 {
   margin: 0;
-  font-size: 1.55rem;
+  font-size: 1.85rem;
   line-height: 1.15;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #111827;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  color: var(--inv-text);
 }
 
 .subtitle {
@@ -789,14 +790,14 @@ textarea {
   align-items: center;
   gap: 8px;
   border: none;
-  border-radius: 10px;
-  padding: 11px 16px;
-  background: var(--inv-primary);
+  border-radius: 18px;
+  padding: 13px 18px;
+  background: linear-gradient(180deg, var(--inv-primary), var(--inv-primary-dark));
   color: #fff;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.22);
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.22);
 }
 
 .btn-export {
@@ -804,10 +805,10 @@ textarea {
   align-items: center;
   gap: 8px;
   border: 1px solid var(--inv-border);
-  border-radius: 10px;
-  padding: 11px 14px;
-  background: var(--inv-surface);
-  color: #1f2937;
+  border-radius: 18px;
+  padding: 13px 16px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--inv-text);
   font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
@@ -849,9 +850,9 @@ textarea {
 
 .search-container {
   min-width: 260px;
-  background: var(--inv-surface);
+  background: rgba(255, 255, 255, 0.88);
   border: 1px solid var(--inv-border);
-  border-radius: 10px;
+  border-radius: 20px;
   display: flex;
   align-items: center;
   padding: 0 14px;
@@ -881,8 +882,8 @@ textarea {
 }
 
 .input-main {
-  padding: 10px 12px;
-  min-height: 42px;
+  padding: 12px 14px;
+  min-height: 48px;
 }
 
 .input-main:focus {
@@ -891,12 +892,12 @@ textarea {
 }
 
 .btn-refresh {
-  width: 42px;
-  height: 42px;
+  width: 48px;
+  height: 48px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 18px;
   border: 1px solid var(--inv-border);
   background: var(--inv-surface);
   cursor: pointer;
@@ -928,9 +929,10 @@ textarea {
 .stat-card {
   background: var(--inv-surface);
   border: 1px solid var(--inv-border);
-  border-radius: 14px;
+  border-radius: 24px;
   box-shadow: var(--inv-shadow);
-  padding: 18px 20px;
+  backdrop-filter: blur(18px);
+  padding: 20px 22px;
 }
 
 .stat-card.blue { border-top: 4px solid var(--inv-primary); }
@@ -957,9 +959,10 @@ textarea {
 .table-container {
   background: var(--inv-surface);
   border: 1px solid var(--inv-border);
-  border-radius: 16px;
+  border-radius: 28px;
   overflow: hidden;
   box-shadow: var(--inv-shadow);
+  backdrop-filter: blur(18px);
 }
 
 .styled-table {
@@ -969,8 +972,8 @@ textarea {
 }
 
 .styled-table thead th {
-  padding: 15px 18px;
-  background: #f8fafc;
+  padding: 17px 18px;
+  background: #f2f7fc;
   border-bottom: 1px solid var(--inv-border);
   font-size: 0.75rem;
   font-weight: 700;
@@ -984,7 +987,7 @@ textarea {
 }
 
 .styled-table tbody tr:hover {
-  background: #fbfdff;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .styled-table td {
@@ -1007,7 +1010,7 @@ textarea {
   width: 44px;
   height: 44px;
   flex-shrink: 0;
-  border-radius: 10px;
+  border-radius: 14px;
   border: 1px solid var(--inv-border);
   background: #fff;
   overflow: hidden;
@@ -1046,8 +1049,8 @@ textarea {
 .p-name {
   display: block;
   font-size: 1.02rem;
-  font-weight: 600;
-  color: #111827;
+  font-weight: 700;
+  color: var(--inv-text);
 }
 
 .p-supplier {
@@ -1132,9 +1135,9 @@ textarea {
   width: 34px;
   height: 34px;
   border: 1px solid var(--inv-border);
-  border-radius: 10px;
-  background: #fff;
-  color: #374151;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--inv-text);
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
@@ -1199,7 +1202,7 @@ textarea {
 .movements-history {
   margin-top: 0;
   border-top: 1px solid var(--inv-border);
-  background: #fbfcfe;
+  background: rgba(248, 251, 255, 0.55);
   padding: 24px;
 }
 
@@ -1222,7 +1225,7 @@ textarea {
 .timeline-group {
   background: var(--inv-surface);
   border: 1px solid var(--inv-border);
-  border-radius: 14px;
+  border-radius: 22px;
   overflow: hidden;
 }
 
@@ -1232,12 +1235,12 @@ textarea {
   align-items: center;
   gap: 12px;
   padding: 14px 18px;
-  background: #f8fafc;
+  background: #f2f7fc;
   border-bottom: 1px solid var(--inv-border);
 }
 
 .bulk-header {
-  background: #eff6ff;
+  background: rgba(29, 140, 242, 0.08);
 }
 
 .group-info {
@@ -1349,8 +1352,8 @@ textarea {
 
 .history-row {
   border: 1px solid var(--inv-border);
-  border-radius: 12px;
-  background: #fff;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
   padding: 12px;
 }
 
@@ -1386,7 +1389,7 @@ textarea {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(17, 24, 39, 0.45);
+  background: rgba(36, 49, 66, 0.26);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1397,9 +1400,10 @@ textarea {
 .modal-card {
   width: min(520px, 100%);
   background: var(--inv-surface, #ffffff);
-  border-radius: 16px;
+  border-radius: 30px;
   border: 1px solid var(--inv-border, #e5e7eb);
   box-shadow: var(--inv-shadow-lg);
+  backdrop-filter: blur(24px);
   overflow: hidden;
 }
 
@@ -1422,7 +1426,7 @@ textarea {
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  padding: 20px;
+  padding: 24px;
   background: var(--inv-surface, #ffffff);
   border-bottom: 1px solid var(--inv-border, #e5e7eb);
 }
@@ -1443,13 +1447,13 @@ textarea {
 }
 
 .btn-close {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   border: 1px solid var(--inv-border);
-  border-radius: 10px;
-  background: #fff;
-  color: #111827;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--inv-text);
   font-size: 1.25rem;
   line-height: 1;
   display: inline-flex;
@@ -1459,12 +1463,12 @@ textarea {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 24px;
   background: var(--inv-surface, #ffffff);
 }
 
 .scrollable-body {
-  padding: 20px;
+  padding: 24px;
   background: var(--inv-surface, #ffffff);
   overflow-y: auto;
   flex: 1;
@@ -1545,9 +1549,9 @@ textarea {
 .header-row {
   padding: 10px 12px;
   margin-bottom: 10px;
-  background: #f8fafc;
+  background: #f2f7fc;
   border: 1px solid var(--inv-border);
-  border-radius: 10px;
+  border-radius: 16px;
   font-size: 0.73rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1606,9 +1610,9 @@ textarea {
   margin-top: 16px;
   width: 100%;
   border: 1px dashed var(--inv-border-strong);
-  border-radius: 10px;
-  background: #fff;
-  color: #374151;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--inv-text);
   padding: 12px 14px;
   font-weight: 600;
   cursor: pointer;
@@ -1623,14 +1627,14 @@ textarea {
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 20px;
-  background: #f8fafc;
+  background: #f2f7fc;
   border-top: 1px solid var(--inv-border, #e5e7eb);
 }
 
 .btn-dark,
 .btn-ghost {
-  border-radius: 10px;
-  padding: 10px 16px;
+  border-radius: 16px;
+  padding: 12px 18px;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
@@ -1638,7 +1642,7 @@ textarea {
 
 .btn-dark {
   border: none;
-  background: var(--inv-primary);
+  background: linear-gradient(180deg, var(--inv-primary), var(--inv-primary-dark));
   color: white;
 }
 
@@ -1649,8 +1653,8 @@ textarea {
 
 .btn-ghost {
   border: 1px solid var(--inv-border);
-  background: #fff;
-  color: #374151;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--inv-text);
 }
 
 .text-center { text-align: center; }

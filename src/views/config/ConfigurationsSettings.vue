@@ -2,14 +2,25 @@
   <div class="settings-page">
     <div class="header">
       <h1>Configurazioni</h1>
-      <p>Impostazioni generali del PMS.</p>
+      <p>Impostazioni generali del PMS in una vista coerente con la nuova shell operativa.</p>
     </div>
 
     <section class="card">
-      <h2>PMS</h2>
+      <div class="card-heading">
+        <div>
+          <h2>PMS</h2>
+          <p>Attiva o disattiva il modulo centrale dell’applicazione.</p>
+        </div>
+        <span class="status-pill" :class="{ active: form.enabled }">
+          {{ form.enabled ? 'Attivo' : 'Disattivato' }}
+        </span>
+      </div>
       <div class="params-grid">
         <label class="checkbox-stack">
-          <span>PMS abilitato</span>
+          <div>
+            <strong>PMS abilitato</strong>
+            <small>Consente l’accesso alle viste operative principali.</small>
+          </div>
           <input v-model="form.enabled" type="checkbox" />
         </label>
       </div>
@@ -98,50 +109,94 @@ onMounted(loadForm)
 
 <style scoped>
 .settings-page {
-  max-width: 1100px;
+  max-width: 1160px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.header h1 {
-  margin: 0;
-  color: #0f172a;
+  gap: 20px;
 }
 
 .header p {
-  margin: 4px 0 0;
-  color: #475569;
+  margin: 8px 0 0;
 }
 
 .card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 28px;
+  padding: 24px;
+}
+
+.card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
 .card h2 {
-  margin: 0 0 12px;
-  color: #0f172a;
-  font-size: 1rem;
+  margin: 0;
+  color: var(--ds-text);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.card-heading p {
+  margin: 6px 0 0;
+  color: var(--ds-text-soft);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(220, 77, 77, 0.1);
+  color: var(--ds-danger);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status-pill.active {
+  background: rgba(39, 179, 106, 0.12);
+  color: var(--ds-success);
 }
 
 .params-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .checkbox-stack {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 12px;
-  background: #f8fafc;
+  gap: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.checkbox-stack strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.checkbox-stack small {
+  color: var(--ds-text-soft);
+  line-height: 1.5;
+}
+
+.checkbox-stack input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--ds-primary);
 }
 
 .footer-actions {
@@ -152,24 +207,39 @@ onMounted(loadForm)
 
 .btn {
   border: 0;
-  border-radius: 10px;
-  padding: 10px 14px;
+  border-radius: 18px;
+  min-height: 48px;
+  padding: 10px 18px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .btn-primary {
-  background: #0ea5e9;
+  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
   color: #ffffff;
+  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-secondary {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--ds-text);
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .card-heading,
+  .footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .checkbox-stack {
+    align-items: flex-start;
+  }
 }
 </style>
