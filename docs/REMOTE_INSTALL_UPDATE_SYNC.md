@@ -1,5 +1,20 @@
 # Aggiornamento Installazione Remota con Sincronizzazione Dati
 
+## Runbook Rapido
+
+```sh
+npm install
+npm run firebase:login
+npm run build
+npm run seed:firebase
+npm run backfill:documenti:dry
+npm run backfill:documenti
+npm run sync:documenti:raw:dry
+npm run sync:documenti:raw
+npm run build:deploy:firebase
+npm run build:deploy:vercel
+```
+
 Questa guida descrive come aggiornare un'installazione remota di `pmsweb` (Firebase Hosting / Vercel) quando esistono dati locali da sincronizzare.
 
 ## Obiettivo
