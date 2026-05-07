@@ -261,20 +261,6 @@
           <div class="toolbar-heading">
             <span class="toolbar-eyebrow">Control panel</span>
             <h1>{{ activeSection.title }}</h1>
-            <p>{{ activeSection.description }}</p>
-          </div>
-          <div class="toolbar-meta">
-            <div class="toolbar-search" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.7"/>
-                <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-              </svg>
-              <span>Navigazione e gestione operativa</span>
-            </div>
-            <div class="toolbar-chip">
-              <span class="chip-label">Ruolo</span>
-              <strong>{{ userRole }}</strong>
-            </div>
           </div>
         </header>
 
@@ -581,12 +567,6 @@ const handleLogout = () => {
   letter-spacing: -0.05em;
 }
 
-.toolbar-heading p {
-  margin: 8px 0 0;
-  color: var(--ds-text-soft);
-  max-width: 52ch;
-}
-
 .toolbar-eyebrow {
   display: inline-block;
   margin-bottom: 10px;
@@ -595,57 +575,6 @@ const handleLogout = () => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-}
-
-.toolbar-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.toolbar-search,
-.toolbar-chip {
-  min-height: 58px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
-}
-
-.toolbar-search {
-  min-width: min(100%, 360px);
-  padding: 0 18px;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--ds-text-muted);
-}
-
-.toolbar-search svg {
-  width: 18px;
-  height: 18px;
-}
-
-.toolbar-chip {
-  display: inline-flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0 18px;
-  min-width: 132px;
-}
-
-.chip-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--ds-text-muted);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.toolbar-chip strong {
-  font-size: 0.98rem;
 }
 
 .content-body {
@@ -671,15 +600,6 @@ const handleLogout = () => {
   .content-toolbar {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .toolbar-meta {
-    justify-content: stretch;
-  }
-
-  .toolbar-search,
-  .toolbar-chip {
-    width: 100%;
   }
 }
 
