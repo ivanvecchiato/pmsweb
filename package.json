@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy:mbar": "bash ./scripts/deploy-to-mbar.sh",
+    "deploy:mbar": "node ./scripts/deploy-to-mbar.mjs",
     "build:deploy:mbar": "npm run build && npm run deploy:mbar",
     "deploy:vercel": "npx vercel --prod",
     "deploy:firebase": "firebase deploy --only hosting",
