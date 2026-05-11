@@ -7,7 +7,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, '..');
 const distDir = path.resolve(process.env.DIST_DIR || path.join(projectRoot, 'dist'));
 const targetHtdocs = path.resolve(
-  process.env.MBAR_HTDOCS || 'C:\\work\\node\\mbar-server\\htdocs',
+  process.env.MBAR_HTDOCS || '/Users/ivanvecchiato/work/node/mbar-server/htdocs',
 );
 
 console.log(`[deploy] Dist dir: ${distDir}`);
