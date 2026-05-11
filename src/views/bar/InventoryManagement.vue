@@ -174,6 +174,20 @@ const onProductInput = (item) => {
   }
 };
 
+const updateBulkPurchasePrice = (item, event) => {
+  const rawValue = String(event?.target?.value ?? '').replace(',', '.').trim();
+
+  if (rawValue === '') {
+    item.purchase_price = 0;
+    return;
+  }
+
+  const parsedValue = Number(rawValue);
+  if (!Number.isNaN(parsedValue)) {
+    item.purchase_price = parsedValue;
+  }
+};
+
 const confirmBulkDelivery = async () => {
   const validItems = bulkDelivery.value.items.filter(i => i.productId);
   if (validItems.length === 0) return alert("Inserisci almeno un prodotto valido");
@@ -551,7 +565,13 @@ onMounted(() => {
               <div class="col-price">
                 <div class="price-field">
                   <span class="currency-prefix">€</span>
-                  <input type="number" step="0.01" v-model.number="item.purchase_price" class="input-main" />
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    :value="item.purchase_price"
+                    @input="updateBulkPurchasePrice(item, $event)"
+                    class="input-main"
+                  />
                 </div>
               </div>
 
