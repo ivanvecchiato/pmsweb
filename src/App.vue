@@ -1,7 +1,7 @@
 <template>
   <div id="app">
-    <div v-if="isAuthenticated" class="app-shell">
-      <aside class="sidebar" role="navigation" aria-label="Sidebar menu">
+    <div v-if="isAuthenticated" :class="['app-shell', { 'mobile-menu-open': isMobileViewport && isMobileMenuOpen }]">
+      <aside :class="['sidebar', { 'is-collapsed': isMobileViewport && !isMobileMenuOpen }]" role="navigation" aria-label="Sidebar menu">
         <div class="sidebar-brand">
           <div class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -13,9 +13,25 @@
             <strong>MBAR PMS</strong>
             <span>Operations Suite</span>
           </div>
+
+          <button
+            type="button"
+            class="mobile-menu-toggle"
+            :aria-expanded="isMobileMenuOpen ? 'true' : 'false'"
+            aria-controls="app-sidebar-menu"
+            :aria-label="isMobileMenuOpen ? 'Chiudi menu di navigazione' : 'Apri menu di navigazione'"
+            @click="isMobileMenuOpen = !isMobileMenuOpen"
+          >
+            <svg v-if="!isMobileMenuOpen" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </button>
         </div>
 
-        <nav class="menu">
+        <nav id="app-sidebar-menu" :class="['menu', { 'menu-hidden-mobile': isMobileViewport && !isMobileMenuOpen }]">
           <!-- AREA PMS -->
           <div v-if="canShowHotelBeachMenus && ((hasPermission('home') && isPmsTypeAllowed(['hotel'])) || hasPermission('customers') || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach'])))" class="menu-section">
             <div class="section-label">PMS</div>
@@ -275,7 +291,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from './composables/useAuth'
 
@@ -283,7 +299,10 @@ const route = useRoute()
 const router = useRouter()
 const { isAuthenticated, logout, hasPermission, userRole, userName, isPmsTypeAllowed, canShowHotelBeachMenus } = useAuth()
 
+const MOBILE_BREAKPOINT = 1080
 const isStatsOpen = ref(false)
+const isMobileViewport = ref(false)
+const isMobileMenuOpen = ref(false)
 
 const sectionContent = {
   '/': { title: 'Planner Hotel', description: 'Monitoraggio camere, prenotazioni e operativita giornaliera.' },
@@ -313,6 +332,47 @@ const activeSection = computed(() => {
     title: 'Dashboard',
     description: 'Ambiente operativo unificato per reception, bar e spiaggia.'
   }
+})
+
+const updateViewportState = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const isMobile = window.innerWidth <= MOBILE_BREAKPOINT
+  const hasViewportChanged = isMobile !== isMobileViewport.value
+
+  isMobileViewport.value = isMobile
+
+  if (!isMobile) {
+    isMobileMenuOpen.value = true
+    return
+  }
+
+  if (hasViewportChanged) {
+    isMobileMenuOpen.value = false
+  }
+}
+
+watch(
+  () => route.fullPath,
+  () => {
+    isStatsOpen.value = route.path.startsWith('/stats')
+
+    if (isMobileViewport.value) {
+      isMobileMenuOpen.value = false
+    }
+  },
+  { immediate: true }
+)
+
+onMounted(() => {
+  updateViewportState()
+  window.addEventListener('resize', updateViewportState, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateViewportState)
 })
 
 const handleLogout = () => {
@@ -350,6 +410,32 @@ const handleLogout = () => {
   gap: 14px;
   padding: 10px 8px 16px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.mobile-menu-toggle {
+  display: none;
+  margin-left: auto;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(29, 140, 242, 0.16);
+  border-radius: 14px;
+  background: rgba(29, 140, 242, 0.08);
+  color: var(--ds-primary);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.mobile-menu-toggle:hover {
+  transform: translateY(-1px);
+  background: rgba(29, 140, 242, 0.14);
+  border-color: rgba(29, 140, 242, 0.24);
+}
+
+.mobile-menu-toggle svg {
+  width: 18px;
+  height: 18px;
 }
 
 .brand-mark {
@@ -591,6 +677,29 @@ const handleLogout = () => {
     padding: 14px;
   }
 
+  .sidebar {
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .sidebar-brand {
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .mobile-menu-toggle {
+    display: inline-flex;
+  }
+
+  .menu {
+    padding-top: 14px;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+  }
+
+  .menu.menu-hidden-mobile {
+    display: none;
+  }
+
   .sidebar,
   .content-toolbar,
   .content-body {
@@ -620,6 +729,10 @@ const handleLogout = () => {
 
   .sidebar {
     padding: 14px;
+  }
+
+  .brand-copy strong {
+    font-size: 0.9rem;
   }
 
   .menu-item {
