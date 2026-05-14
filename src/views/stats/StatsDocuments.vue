@@ -76,6 +76,7 @@
       Nessun documento trovato per i filtri selezionati.
     </div>
 
+    <Teleport to="body">
     <div v-if="isDetailOpen" class="dialog-backdrop" @click.self="closeDetailDialog">
       <div class="dialog-card" role="dialog" aria-modal="true" aria-label="Dettaglio documento">
         <div class="dialog-header">
@@ -137,6 +138,7 @@
         </template>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>
 
@@ -428,17 +430,11 @@ onMounted(() => {
 .stats-documents {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 8px;
-  min-height: calc(100vh - 120px);
+  gap: 16px;
 }
 
 h1 {
   margin: 0;
-  font-size: 1.8rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  color: var(--ds-text);
 }
 
 .controls {
@@ -446,12 +442,6 @@ h1 {
   grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
   gap: 12px;
   align-items: end;
-  padding: 18px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: var(--ds-shadow-card);
-  backdrop-filter: blur(18px);
 }
 
 .control-field {
@@ -461,27 +451,21 @@ h1 {
 }
 
 .control-field label {
-  font-size: 0.74rem;
-  color: var(--ds-text-soft);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: 0.9rem;
+  color: #4b5563;
 }
 
 .control-field input {
-  min-height: 48px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 16px;
-  padding: 0 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 12px;
   font-size: 0.95rem;
   outline: none;
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--ds-text);
 }
 
 .control-field input:focus {
-  border-color: rgba(29, 140, 242, 0.45);
-  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
 .control-search {
@@ -489,23 +473,16 @@ h1 {
 }
 
 .btn {
-  border: 1px solid transparent;
-  border-radius: 16px;
-  padding: 12px 16px;
-  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 600;
   cursor: pointer;
-  font: inherit;
-  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
-}
-
-.btn:hover {
-  transform: translateY(-1px);
 }
 
 .btn-primary {
-  background: linear-gradient(180deg, var(--ds-primary), var(--ds-primary-strong));
+  background: #2563eb;
   color: #ffffff;
-  box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18);
 }
 
 .btn-primary:disabled {
@@ -520,45 +497,38 @@ h1 {
 }
 
 .summary-card {
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 22px;
-  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  box-shadow: var(--ds-shadow-card);
 }
 
 .summary-label {
-  color: var(--ds-text-soft);
-  font-size: 0.74rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: #6b7280;
+  font-size: 0.9rem;
 }
 
 .summary-value {
-  color: var(--ds-text);
+  color: #111827;
   font-size: 1.2rem;
-  font-weight: 800;
 }
 
 .error {
-  color: var(--ds-danger);
-  background: rgba(254, 242, 242, 0.92);
-  border: 1px solid rgba(220, 77, 77, 0.16);
-  padding: 14px 16px;
-  border-radius: 20px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 10px 12px;
+  border-radius: 10px;
 }
 
 .table-wrapper {
-  background: rgba(255, 255, 255, 0.78);
-  border-radius: 28px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
   overflow: auto;
-  box-shadow: var(--ds-shadow-card);
-  backdrop-filter: blur(18px);
 }
 
 .documents-table {
@@ -575,16 +545,13 @@ h1 {
 }
 
 .documents-table thead th {
-  background: rgba(242, 247, 252, 0.9);
-  color: var(--ds-text-soft);
-  font-size: 0.76rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.85rem;
 }
 
 .documents-table tbody tr:hover {
-  background: rgba(248, 250, 252, 0.72);
+  background: #f8fafc;
 }
 
 .document-row {
@@ -599,7 +566,7 @@ h1 {
 .dialog-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(36, 49, 66, 0.24);
+  background: rgba(15, 23, 42, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -610,16 +577,14 @@ h1 {
 .dialog-card {
   width: min(980px, 100%);
   max-height: 85vh;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 28px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 20px;
+  padding: 16px;
   overflow: hidden;
-  box-shadow: var(--ds-shadow-soft);
-  backdrop-filter: blur(24px);
 }
 
 .dialog-header {
@@ -638,37 +603,31 @@ h1 {
 .dialog-header h2 {
   margin: 0;
   font-size: 1.2rem;
-  font-weight: 800;
-  color: var(--ds-text);
 }
 
 .dialog-subtitle {
   margin: 4px 0 0;
-  color: var(--ds-text-soft);
+  color: #6b7280;
 }
 
 .btn-close {
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  background: transparent;
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
-  color: var(--ds-text-soft);
-  padding: 0;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  color: #475569;
+  padding: 2px 6px;
+  border-radius: 8px;
 }
 
 .btn-close:hover {
-  background: rgba(248, 250, 252, 0.92);
+  background: #f1f5f9;
 }
 
 .btn-secondary {
-  background: rgba(236, 253, 245, 0.92);
+  background: #0f766e;
   color: #ffffff;
-  color: #166534;
-  border-color: rgba(34, 197, 94, 0.18);
 }
 
 .btn-secondary:disabled {
@@ -677,14 +636,14 @@ h1 {
 }
 
 .dialog-loading {
-  color: var(--ds-text);
+  color: #334155;
 }
 
 .dialog-info-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px 12px;
-  color: var(--ds-text);
+  color: #1f2937;
 }
 
 .dialog-table-wrapper {
@@ -692,10 +651,10 @@ h1 {
 }
 
 .empty-state {
-  color: var(--ds-text-soft);
-  background: rgba(248, 250, 252, 0.82);
-  border: 1px dashed rgba(148, 163, 184, 0.28);
-  border-radius: 20px;
+  color: #6b7280;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
   padding: 14px;
 }
 
