@@ -1061,8 +1061,9 @@ watch(selectedBooking, (id) => {
     </div>
 
     <transition name="fade">
-      <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
-        <div class="modal-content">
+      <Teleport to="body">
+        <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
+          <div class="modal-content">
           <div class="modal-header">
             <h3>{{ editingBooking ? 'Modifica Prenotazione' : 'Nuova Prenotazione Spiaggia' }}</h3>
             <button @click="showModal = false" class="close-btn">&times;</button>
@@ -1141,13 +1142,15 @@ watch(selectedBooking, (id) => {
               <button type="submit" class="btn btn-save">{{ editingBooking ? 'Salva' : 'Conferma Prenotazione' }}</button>
             </div>
           </form>
+          </div>
         </div>
-      </div>
+      </Teleport>
     </transition>
 
     <transition name="fade">
-      <div v-if="showCancelDialog" class="modal-overlay" @click.self="showCancelDialog = false">
-        <div class="modal-content modal-content--narrow">
+      <Teleport to="body">
+        <div v-if="showCancelDialog" class="modal-overlay" @click.self="showCancelDialog = false">
+          <div class="modal-content modal-content--narrow">
           <div class="modal-header">
             <h3>Cancella Prenotazione</h3>
             <button @click="showCancelDialog = false" class="close-btn">&times;</button>
@@ -1179,8 +1182,9 @@ watch(selectedBooking, (id) => {
               {{ isCancelling ? 'Attendere...' : 'Conferma Cancellazione' }}
             </button>
           </div>
+          </div>
         </div>
-      </div>
+      </Teleport>
     </transition>
 
     <!-- Context menu spiaggia -->
@@ -1200,8 +1204,9 @@ watch(selectedBooking, (id) => {
 
     <!-- Modale Aggiungi Servizio (beach) -->
     <transition name="fade">
-      <div v-if="showAddServiceModal" class="modal-overlay" @click.self="closeAddServiceModal">
-        <div class="modal-card">
+      <Teleport to="body">
+        <div v-if="showAddServiceModal" class="modal-overlay" @click.self="closeAddServiceModal">
+          <div class="modal-card">
           <div class="modal-header-row">
             <h3 class="modal-title">Servizi Prenotazione</h3>
             <button class="close-btn" @click="closeAddServiceModal">&times;</button>
@@ -1261,8 +1266,9 @@ watch(selectedBooking, (id) => {
               {{ addingService ? 'Aggiunta...' : 'Aggiungi' }}
             </button>
           </div>
+          </div>
         </div>
-      </div>
+      </Teleport>
     </transition>
 
     <!-- Quote Builder Modal -->

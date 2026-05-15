@@ -1,6 +1,7 @@
 <template>
-  <div class="quote-builder-overlay" @click.self="close">
-    <div class="quote-builder-modal">
+  <Teleport to="body">
+    <div class="quote-builder-overlay" @click.self="close">
+      <div class="quote-builder-modal">
       <div class="modal-header">
         <h3>Crea Preventivo{{ type === 'beach' ? ' Spiaggia' : ' Hotel' }}</h3>
         <button @click="close" class="close-btn">&times;</button>
@@ -161,8 +162,9 @@
           </button>
         </div>
       </form>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup>

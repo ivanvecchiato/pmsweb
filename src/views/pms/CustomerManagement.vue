@@ -138,8 +138,9 @@
     </div>
 
     <!-- Modal for Add/Edit Customer -->
-    <div v-if="showModal" class="modal-overlay" @click="closeModal">
-      <div class="modal-content" @click.stop>
+    <Teleport to="body">
+      <div v-if="showModal" class="modal-overlay" @click="closeModal">
+        <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h2 class="modal-title">
             {{ isEditMode ? 'Modifica Cliente' : 'Nuovo Cliente' }}
@@ -224,8 +225,9 @@
             {{ isEditMode ? 'Salva Modifiche' : 'Aggiungi Cliente' }}
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 

@@ -86,8 +86,9 @@
 
     <!-- modal for new/edit booking -->
     <transition name="fade">
-      <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
-        <div class="modal-content">
+      <Teleport to="body">
+        <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
+          <div class="modal-content">
           <div class="modal-header">
             <h3>{{ editingBookingId ? 'Dettagli Prenotazione' : 'Nuova Prenotazione' }}</h3>
             <button @click="showModal = false" class="close-btn">&times;</button>
@@ -126,8 +127,9 @@
               </button>
             </div>
           </form>
+          </div>
         </div>
-      </div>
+      </Teleport>
     </transition>
   </div>
 </template>

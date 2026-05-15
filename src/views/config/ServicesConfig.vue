@@ -39,8 +39,9 @@
 
     <!-- Form aggiunta / modifica -->
     <transition name="fade">
-      <div v-if="showForm" class="modal-overlay" @click.self="cancelForm">
-        <div class="modal-box">
+      <Teleport to="body">
+        <div v-if="showForm" class="modal-overlay" @click.self="cancelForm">
+          <div class="modal-box">
           <div class="modal-header">
             <h3>{{ editingIndex !== null ? 'Modifica Servizio' : 'Nuovo Servizio' }}</h3>
             <button class="close-btn" @click="cancelForm">&times;</button>
@@ -69,8 +70,9 @@
               </button>
             </div>
           </form>
+          </div>
         </div>
-      </div>
+      </Teleport>
     </transition>
   </div>
 </template>
