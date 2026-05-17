@@ -103,7 +103,7 @@ const handleLogin = async () => {
 
   await new Promise(resolve => setTimeout(resolve, 500))
 
-  if (login(username.value, password.value)) {
+  if (await login(username.value, password.value)) {
     router.push('/')
   } else {
     errorMessage.value = 'Username o password non validi'

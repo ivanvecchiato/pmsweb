@@ -715,7 +715,7 @@ const reloadAll = async () => {
   const results = await Promise.allSettled([fetchPlaces(), fetchBookings(), loadPricingData()]);
   const failed = results.find(r => r.status === 'rejected');
   if (failed) {
-    loadError.value = 'Errore caricamento dati. Verifica che il backend PMS sia attivo su 8081.';
+    loadError.value = 'Errore caricamento dati. Verifica che il backend unificato sia attivo e raggiungibile.';
   }
   isLoading.value = false;
 };

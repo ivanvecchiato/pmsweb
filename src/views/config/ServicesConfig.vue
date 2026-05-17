@@ -81,7 +81,7 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
-const BASE = 'http://localhost:8081'
+const SERVICES_ENDPOINT = '/api/pms/services'
 
 const services = ref([])
 const loading = ref(true)
@@ -97,7 +97,7 @@ onMounted(loadServices)
 async function loadServices() {
   loading.value = true
   try {
-    const { data } = await axios.get(`${BASE}/api/pms/services`)
+    const { data } = await axios.get(SERVICES_ENDPOINT)
     services.value = Array.isArray(data) ? data : []
   } catch (e) {
     console.error('Errore caricamento servizi:', e)
@@ -147,7 +147,7 @@ async function saveService() {
       updated.push(entry)
     }
 
-    await axios.post(`${BASE}/api/pms/services`, updated)
+    await axios.post(SERVICES_ENDPOINT, updated)
     services.value = updated
     cancelForm()
   } catch (e) {
@@ -162,7 +162,7 @@ async function deleteService(idx) {
   if (!confirm(`Eliminare il servizio "${services.value[idx].name}"?`)) return
   try {
     const updated = services.value.filter((_, i) => i !== idx)
-    await axios.post(`${BASE}/api/pms/services`, updated)
+    await axios.post(SERVICES_ENDPOINT, updated)
     services.value = updated
   } catch (e) {
     console.error('Errore eliminazione servizio:', e)

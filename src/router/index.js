@@ -1,6 +1,16 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 
+const getAuthorizedFallbackRoute = ({ hasPermission, pmsType, canShowHotelBeachMenus }) => {
+  if (canShowHotelBeachMenus.value && hasPermission('home') && pmsType.value === 'hotel') return '/'
+  if (canShowHotelBeachMenus.value && hasPermission('beach-bookings') && pmsType.value === 'beach') return '/beach-bookings'
+  if (hasPermission('inventory')) return '/listino-prodotti'
+  if (hasPermission('stats')) return '/stats/sales'
+  if (hasPermission('listino')) return '/settings/configurations'
+  if (hasPermission('onda_push_products')) return '/onda-push-products'
+  return '/login'
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -14,19 +24,19 @@ const router = createRouter({
       path: '/',
       name: 'Planner',
       component: () => import('@/views/pms/HotelBookingPlanner.vue'),
-      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'] }
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {
       path: '/customers',
       name: 'CustomerManagement',
       component: () => import('@/views/pms/CustomerManagement.vue'),
-      meta: { requiresAuth: true, permission: 'customers' }
+      meta: { requiresAuth: true, permission: 'customers', requiresHospitalityStudioPms: true }
     },
     {
       path: '/listino',
       name: 'PriceManagement',
       component: () => import('@/views/config/PriceManagement.vue'),
-      meta: { requiresAuth: true, permission: 'listino', pmsTypes: ['hotel'] }
+      meta: { requiresAuth: true, permission: 'listino', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {
       path: '/settings/configurations',
@@ -38,13 +48,13 @@ const router = createRouter({
       path: '/settings/hotel-pricing',
       name: 'HotelPricingPolicySettings',
       component: () => import('@/views/config/HotelPricingPolicySettings.vue'),
-      meta: { requiresAuth: true, permission: 'listino', pmsTypes: ['hotel'] }
+      meta: { requiresAuth: true, permission: 'listino', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {
       path: '/listino_beach',
       name: 'BeachManagementDashboard',
       component: () => import('@/views/beach/BeachManagementDashboard.vue'),
-      meta: { requiresAuth: true, permission: 'listino_beach', pmsTypes: ['beach'] }
+      meta: { requiresAuth: true, permission: 'listino_beach', pmsTypes: ['beach'], requiresHospitalityStudioPms: true }
     },
     {
       path: '/onda-push-products',
@@ -56,7 +66,7 @@ const router = createRouter({
       path: '/beach-bookings',
       name: 'BeachBookingPlanner',
       component: () => import('@/views/beach/BeachBookingPlanner.vue'),
-      meta: { requiresAuth: true, permission: 'beach-bookings', pmsTypes: ['beach'] }
+      meta: { requiresAuth: true, permission: 'beach-bookings', pmsTypes: ['beach'], requiresHospitalityStudioPms: true }
     },
     {
       path: '/inventory',
@@ -98,32 +108,32 @@ const router = createRouter({
       path: '/quotes',
       name: 'QuoteManager',
       component: () => import('@/views/quotes/QuoteManager.vue'),
-      meta: { requiresAuth: true, permission: 'home' }
+      meta: { requiresAuth: true, permission: 'home', requiresHospitalityStudioPms: true }
     },
     {
       path: '/accounts',
       name: 'GuestAccount',
       component: () => import('@/views/pms/GuestAccount.vue'),
-      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'] }
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {
       path: '/services',
       name: 'ServicesConfig',
       component: () => import('@/views/config/ServicesConfig.vue'),
-      meta: { requiresAuth: true, permission: 'listino' }
+      meta: { requiresAuth: true, permission: 'listino', requiresHospitalityStudioPms: true }
     },
     {
       path: '/payments/checkout/:reservationId',
       name: 'CheckoutPayment',
       component: () => import('@/views/payments/CheckoutPaymentStub.vue'),
-      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'] }
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     }
   ]
 })
 
 // Navigation guard per proteggere le rotte
 router.beforeEach(async (to, from, next) => {
-  const { isAuthenticated, hasPermission, isPmsTypeAllowed, loadPmsType, pmsType } = useAuth()
+  const { isAuthenticated, hasPermission, isPmsTypeAllowed, loadPmsType, pmsType, canShowHotelBeachMenus } = useAuth()
 
   if (isAuthenticated.value) {
     await loadPmsType()
@@ -137,11 +147,11 @@ router.beforeEach(async (to, from, next) => {
       // Non autenticato, redirect a login
       next('/login')
     } else if (to.meta.permission && !hasPermission(to.meta.permission)) {
-      // Autenticato ma senza permessi, redirect a home
-      next('/')
+      next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
+    } else if (to.meta.requiresHospitalityStudioPms && !canShowHotelBeachMenus.value) {
+      next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
     } else if (to.meta.pmsTypes && !isPmsTypeAllowed(to.meta.pmsTypes)) {
-      const fallbackRoute = pmsType.value === 'beach' ? '/beach-bookings' : '/'
-      next(fallbackRoute)
+      next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
     } else {
       // Autenticato e con permessi
       next()

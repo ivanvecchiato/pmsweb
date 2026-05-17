@@ -11,6 +11,36 @@ const currentUser = ref(null)
 const pmsType = ref(null)
 const pmsEnabled = ref(false)
 const pmsIntegrationType = ref(null)
+let pmsTypeRequest = null
+
+const PMS_ENABLED_CANDIDATE_PATHS = ['pmsEnabled', 'enabled', 'active', 'isActive', 'pms.enabled']
+const INTEGRATION_TYPE_CANDIDATE_PATHS = [
+  'pmsIntegrationType',
+  'providerType',
+  'integrationType',
+  'type_',
+  'pmsTypeName',
+  'pmsName',
+  'provider',
+  'pms.providerType',
+  'pms.type_',
+  'pms.type'
+]
+
+const getByPath = (obj, path) => {
+  if (!obj || !path) return undefined
+  return path.split('.').reduce((acc, key) => (acc == null ? undefined : acc[key]), obj)
+}
+
+const getFirstDefined = (obj, paths) => {
+  for (const path of paths) {
+    const value = getByPath(obj, path)
+    if (value !== undefined && value !== null) {
+      return value
+    }
+  }
+  return undefined
+}
 
 const normalizePmsType = (type) => {
   if (!type || typeof type !== 'string') return null
@@ -38,7 +68,7 @@ const parseBooleanLike = (value) => {
 }
 
 const parsePmsEnabled = (payload) => {
-  const value = payload?.pmsEnabled ?? payload?.enabled ?? payload?.active ?? payload?.isActive ?? payload?.pms?.enabled
+  const value = getFirstDefined(payload, PMS_ENABLED_CANDIDATE_PATHS)
   const parsed = parseBooleanLike(value)
   if (parsed !== null) return parsed
 
@@ -47,16 +77,8 @@ const parsePmsEnabled = (payload) => {
 }
 
 const parseIntegrationType = (payload) => {
-  return normalizeIntegrationType(
-    payload?.pmsIntegrationType ||
-      payload?.integrationType ||
-      payload?.type_ ||
-      payload?.pmsTypeName ||
-      payload?.pmsName ||
-      payload?.provider ||
-      payload?.pms?.type_ ||
-      payload?.pms?.type
-  )
+  const rawIntegrationType = getFirstDefined(payload, INTEGRATION_TYPE_CANDIDATE_PATHS)
+  return normalizeIntegrationType(rawIntegrationType)
 }
 
 const fetchJson = async (url) => {
@@ -86,33 +108,50 @@ const loadUser = () => {
 }
 
 const loadPmsType = async (forceRefresh = false) => {
-  try {
-    let data
-    try {
-      data = await fetchJson(`${PMS_API_BASE_URL}/api/pms/getpmstype`)
-    } catch (primaryError) {
-      const configs = await fetchJson(`${PMS_API_BASE_URL}/api/configs`)
-      data = configs?.pms ? { ...configs.pms, pms: configs.pms } : configs
-    }
-
-    const backendType = normalizePmsType(data?.type || data?.pmsType || data?.pms?.mode)
-    pmsEnabled.value = parsePmsEnabled(data)
-    pmsIntegrationType.value = parseIntegrationType(data)
-    pmsType.value = backendType || 'hotel'
-  } catch (error) {
-    pmsType.value = pmsType.value || 'hotel'
-    pmsEnabled.value = false
-    pmsIntegrationType.value = null
-    console.warn('Unable to load PMS type from backend:', error)
+  if (!forceRefresh && pmsTypeRequest) {
+    return pmsTypeRequest
   }
 
-  localStorage.setItem('pms_type', pmsType.value)
-  localStorage.setItem('pms_enabled', String(pmsEnabled.value))
-  localStorage.setItem('pms_integration_type', pmsIntegrationType.value || '')
-  return pmsType.value
+  pmsTypeRequest = (async () => {
+    try {
+      let data
+      try {
+        data = await fetchJson(`${PMS_API_BASE_URL}/api/pms/getpmstype`)
+      } catch (primaryError) {
+        const configs = await fetchJson(`${PMS_API_BASE_URL}/api/configs`)
+        data = configs?.pms ? { ...configs.pms, pms: configs.pms } : configs
+      }
+
+      const backendType = normalizePmsType(data?.type || data?.pmsType || data?.pms?.mode)
+      pmsEnabled.value = parsePmsEnabled(data)
+      pmsIntegrationType.value = parseIntegrationType(data)
+      pmsType.value = backendType
+    } catch (error) {
+      pmsType.value = null
+      pmsEnabled.value = false
+      pmsIntegrationType.value = null
+      console.warn('Unable to load PMS type from backend:', error)
+    }
+
+    if (pmsType.value) {
+      localStorage.setItem('pms_type', pmsType.value)
+    } else {
+      localStorage.removeItem('pms_type')
+    }
+
+    localStorage.setItem('pms_enabled', String(pmsEnabled.value))
+    localStorage.setItem('pms_integration_type', pmsIntegrationType.value || '')
+    return pmsType.value
+  })()
+
+  try {
+    return await pmsTypeRequest
+  } finally {
+    pmsTypeRequest = null
+  }
 }
 
-const login = (username, password) => {
+const login = async (username, password) => {
   const validUsers = {
     admin: { role: 'admin', name: 'Amministratore' },
     staff: { role: 'staff', name: 'Staff' }
@@ -126,7 +165,7 @@ const login = (username, password) => {
       loginTime: new Date()
     }
     localStorage.setItem('pms_user', JSON.stringify(currentUser.value))
-    loadPmsType(true)
+    await loadPmsType(true)
     return true
   }
   return false
