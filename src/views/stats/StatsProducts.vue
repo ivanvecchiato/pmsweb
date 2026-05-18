@@ -87,6 +87,10 @@
         </div>
 
         <template v-else>
+          <div class="product-period-summary">
+            <span class="product-period-summary-label">Totale venduto nel periodo</span>
+            <strong class="product-period-summary-value">{{ selectedProductTotals.quantity }} pezzi</strong>
+          </div>
           <div class="trend-controls">
             <label>Visualizza:</label>
             <select v-model="productTrendViewMode">
@@ -265,6 +269,17 @@ const productTrendAggregatedData = computed(() => {
     quantity: values.quantity,
     sales: values.sales
   }));
+});
+
+const selectedProductTotals = computed(() => {
+  return productTrendData.value.reduce(
+    (acc, point) => {
+      acc.quantity += Number(point.quantity) || 0;
+      acc.sales += Number(point.sales) || 0;
+      return acc;
+    },
+    { quantity: 0, sales: 0 }
+  );
 });
 
 const escapeCsvValue = (value) => {
@@ -928,6 +943,32 @@ h3 {
   align-items: center;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.product-period-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  background: rgba(236, 253, 245, 0.82);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.product-period-summary-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #166534;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.product-period-summary-value {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #065f46;
 }
 
 .trend-controls label {
