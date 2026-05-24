@@ -49,6 +49,7 @@
         <thead>
           <tr>
             <th>Data/Ora</th>
+            <th>Tipo</th>
             <th>Prenotazione</th>
             <th>Camera/Tavolo</th>
             <th>Progressivo</th>
@@ -63,6 +64,11 @@
             @click="openDocumentDetail(doc)"
           >
             <td>{{ formatDateTime(doc.timestamp) }}</td>
+            <td>
+              <span class="doc-type-pill" :class="getDocTypeClass(doc.docType)">
+                {{ getDocTypeLabel(doc.docType) }}
+              </span>
+            </td>
             <td>{{ doc.reservationName || '-' }}</td>
             <td>{{ doc.room || doc.tableName || '-' }}</td>
             <td>{{ doc.progressivo || '-' }}</td>
@@ -103,6 +109,12 @@
 
         <template v-else-if="selectedDocumentDetail">
           <div class="dialog-info-grid">
+            <div>
+              <strong>Tipo:</strong>
+              <span class="doc-type-pill" :class="getDocTypeClass(selectedDocumentDetail.docType)">
+                {{ getDocTypeLabel(selectedDocumentDetail.docType) }}
+              </span>
+            </div>
             <div><strong>Prenotazione:</strong> {{ selectedDocumentDetail.reservationName || '-' }}</div>
             <div><strong>Camera/Tavolo:</strong> {{ selectedDocumentDetail.room || selectedDocumentDetail.tableName || '-' }}</div>
             <div><strong>Righe:</strong> {{ selectedDocumentDetail.rows?.length || 0 }}</div>
@@ -170,6 +182,11 @@ const totalAmount = computed(() => {
   return documents.value.reduce((sum, item) => sum + (Number(item?.totale) || 0), 0)
 })
 
+const DOC_TYPE_LABELS = {
+  1: 'Scontrino',
+  2: 'Hotel'
+}
+
 const formatEuro = (value) => {
   return new Intl.NumberFormat('it-IT', {
     style: 'currency',
@@ -189,6 +206,20 @@ const formatDateTime = (timestamp) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+const getDocTypeLabel = (docType) => {
+  const normalizedDocType = Number(docType)
+  return DOC_TYPE_LABELS[normalizedDocType] || 'Altro'
+}
+
+const getDocTypeClass = (docType) => {
+  const normalizedDocType = Number(docType)
+
+  if (normalizedDocType === 1) return 'doc-type-pill--receipt'
+  if (normalizedDocType === 2) return 'doc-type-pill--hotel'
+
+  return 'doc-type-pill--default'
 }
 
 const escapeHtml = (value) => {
@@ -561,6 +592,34 @@ h1 {
 .amount {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.doc-type-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.doc-type-pill--receipt {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.doc-type-pill--hotel {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.doc-type-pill--default {
+  background: #e5e7eb;
+  color: #374151;
 }
 
 .dialog-backdrop {
