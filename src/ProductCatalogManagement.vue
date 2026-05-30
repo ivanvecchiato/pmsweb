@@ -34,6 +34,7 @@ const form = ref({
   color: '#1976d2',
   category: '',
   variantFamilyId: '',
+  inventoryEnabled: false,
   auto: false,
   variants: {
     auto: false,
@@ -60,6 +61,15 @@ const emptyVariants = () => ({
   auto: false,
   vars: []
 })
+
+const normalizeInventoryPayload = (rawInventory, fallbackEnabled = false) => {
+  const source = rawInventory && typeof rawInventory === 'object' ? rawInventory : {}
+  return {
+    enabled: toBoolean(source.enabled ?? source.enable ?? source.active ?? source.inventoryEnabled ?? fallbackEnabled),
+    stock: toSafeNumber(source.stock, 0),
+    alarm: toSafeNumber(source.alarm, 0)
+  }
+}
 
 const normalizeVariantsPayload = (rawVariants, fallbackAuto = false) => {
   const source = rawVariants && typeof rawVariants === 'object' ? rawVariants : {}
@@ -317,6 +327,7 @@ const normalizeProduct = (product, categoryName) => {
   })()
 
   const normalizedVariants = normalizeVariantsPayload(product?.variants, product?.auto ?? product?.audo)
+  const normalizedInventory = normalizeInventoryPayload(product?.inventory, product?.inventoryEnabled)
 
   return {
     id,
@@ -326,6 +337,8 @@ const normalizeProduct = (product, categoryName) => {
     imageUrl,
     color,
     category: categoryName,
+    inventory: normalizedInventory,
+    inventoryEnabled: normalizedInventory.enabled,
     auto: normalizedVariants.auto,
     variants: normalizedVariants
   }
@@ -585,6 +598,7 @@ const openCreateDialog = () => {
     color: '#1976d2',
     category: selectedCategory.value || availableCategoryNames.value[0] || '',
     variantFamilyId: firstFamilyId,
+    inventoryEnabled: false,
     auto: false,
     variants: emptyVariants()
   }
@@ -611,6 +625,7 @@ const duplicateProduct = (product) => {
     color: product.color || '#1976d2',
     category: product.category || selectedCategory.value || availableCategoryNames.value[0] || '',
     variantFamilyId: firstVariantFamilyId,
+    inventoryEnabled: toBoolean(product?.inventory?.enabled ?? product?.inventoryEnabled),
     auto: toBoolean(normalizedVariants.auto),
     variants: normalizedVariants
   }
@@ -636,6 +651,7 @@ const openEditDialog = (product) => {
     color: product.color || '#1976d2',
     category: product.category,
     variantFamilyId: firstVariantFamilyId,
+    inventoryEnabled: toBoolean(product?.inventory?.enabled ?? product?.inventoryEnabled),
     auto: toBoolean(normalizedVariants.auto),
     variants: normalizedVariants
   }
@@ -706,6 +722,7 @@ const saveProduct = async () => {
     imgUrl: form.value.imageUrl.trim(),
     color: form.value.color,
     category: form.value.category,
+    inventoryEnabled: toBoolean(form.value.inventoryEnabled),
     auto: toBoolean(form.value.auto),
     variants: {
       auto: toBoolean(form.value.auto),
@@ -723,6 +740,7 @@ const saveProduct = async () => {
         color: payload.color,
         category: payload.category,
         category_name: payload.category,
+        inventoryEnabled: payload.inventoryEnabled,
         auto: payload.auto,
         variants: payload.variants
       }
@@ -730,6 +748,7 @@ const saveProduct = async () => {
       const res = await axios.post(PRODUCTS_ENDPOINT, createPayload)
       const createdRaw = res?.data && typeof res.data === 'object' ? res.data : {}
       const createdId = createdRaw.id ?? createdRaw._id ?? null
+      const normalizedInventory = normalizeInventoryPayload(createdRaw.inventory, payload.inventoryEnabled)
       const category = ensureCategoryExists(payload.category)
       if (category && createdId !== null && createdId !== undefined) {
         await persistVariantsFallback(createdId, payload.category, payload)
@@ -742,6 +761,8 @@ const saveProduct = async () => {
           imageUrl: payload.imgUrl,
           color: payload.color,
           category: payload.category,
+          inventory: normalizedInventory,
+          inventoryEnabled: normalizedInventory.enabled,
           auto: payload.auto,
           variants: payload.variants
         })
@@ -758,6 +779,7 @@ const saveProduct = async () => {
       if (category) {
         const index = category.products.findIndex((item) => String(item.id) === String(form.value.id))
         if (index >= 0) {
+          const currentInventory = normalizeInventoryPayload(category.products[index]?.inventory, payload.inventoryEnabled)
           category.products[index] = {
             ...category.products[index],
             name: payload.name,
@@ -765,6 +787,11 @@ const saveProduct = async () => {
             purchase_price: payload.purchase_price,
             imageUrl: payload.imgUrl,
             color: payload.color,
+            inventory: {
+              ...currentInventory,
+              enabled: payload.inventoryEnabled
+            },
+            inventoryEnabled: payload.inventoryEnabled,
             auto: payload.auto,
             variants: payload.variants
           }
@@ -1018,6 +1045,15 @@ onMounted(fetchVariantFamilies)
                   <input v-model="form.color" type="color" class="color-input" />
                   <input v-model="form.color" type="text" placeholder="#1976d2" />
                 </div>
+              </div>
+
+              <div class="form-row compact-row">
+                <label>Abilita magazzino</label>
+                <label class="switch-field" :class="{ disabled: saving }">
+                  <input v-model="form.inventoryEnabled" type="checkbox" :disabled="saving" class="switch-input" />
+                  <span class="switch-slider" aria-hidden="true"></span>
+                  <span class="switch-text">{{ form.inventoryEnabled ? 'Si' : 'No' }}</span>
+                </label>
               </div>
             </section>
 
