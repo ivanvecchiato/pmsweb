@@ -3,9 +3,6 @@
     <div class="composer-header">
       <div>
         <h2 class="composer-title">Composizione menu del giorno</h2>
-        <p class="composer-subtitle">
-          Compila fino a 6 primi e 6 secondi. Le righe incomplete non verranno incluse nell'HTML finale.
-        </p>
       </div>
 
       <div class="header-actions">
@@ -89,7 +86,6 @@
       <div class="card-heading card-heading-preview">
         <div>
           <h3>Anteprima</h3>
-          <p>Il template A5 viene adattato su foglio A4 in fase di stampa.</p>
         </div>
         <span v-if="hasMenuItems">{{ totalCompiledRows }} piatti pronti</span>
       </div>
