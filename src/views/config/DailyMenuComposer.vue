@@ -431,13 +431,14 @@ function createRenderFrame(srcdoc) {
     iframe.addEventListener('load', async () => {
       try {
         const frameDocument = iframe.contentDocument
+        const frameWindow = iframe.contentWindow
 
-        if (!frameDocument) {
+        if (!frameDocument || !frameWindow) {
           throw new Error('Documento di esportazione non disponibile.')
         }
 
         await waitForFrameAssets(frameDocument)
-        resolve({ iframe, frameDocument, cleanup })
+        resolve({ iframe, frameDocument, frameWindow, cleanup })
       } catch (error) {
         cleanup()
         reject(error)
@@ -520,15 +521,8 @@ async function exportPdf() {
   }
 }
 
-function printMenu() {
+async function printMenu() {
   if (!hasMenuItems.value) {
-    return
-  }
-
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1120,height=1400')
-
-  if (!printWindow) {
-    window.alert('Impossibile aprire la finestra di stampa. Verifica se il browser blocca i popup.')
     return
   }
 
@@ -536,12 +530,30 @@ function printMenu() {
     primi: compiledPrimi.value,
     secondi: compiledSecondi.value,
     forPrint: true,
-    autoPrint: true
+    autoPrint: false
   })
 
-  printWindow.document.open()
-  printWindow.document.write(printHtml)
-  printWindow.document.close()
+  try {
+    const { frameWindow, cleanup } = await createRenderFrame(printHtml)
+    let hasCleanedUp = false
+
+    const safeCleanup = () => {
+      if (hasCleanedUp) {
+        return
+      }
+
+      hasCleanedUp = true
+      cleanup()
+    }
+
+    frameWindow.addEventListener('afterprint', safeCleanup, { once: true })
+    window.setTimeout(safeCleanup, 1500)
+    frameWindow.focus()
+    frameWindow.print()
+  } catch (error) {
+    console.error('Errore apertura stampa menu del giorno:', error)
+    window.alert('Impossibile avviare la stampa del menu.')
+  }
 }
 </script>
 
