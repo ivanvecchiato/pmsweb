@@ -182,7 +182,7 @@
           </div>
 
           <!-- AREA CONFIGURAZIONE -->
-          <div v-if="(canShowHotelBeachMenus && (hasPermission('listino') || hasPermission('listino_beach'))) || hasPermission('onda_push_products')" class="menu-section">
+          <div v-if="hasPermission('listino') || (canShowHotelBeachMenus && hasPermission('listino_beach')) || hasPermission('onda_push_products')" class="menu-section">
             <div class="section-label">CONFIGURAZIONE</div>
             
             <router-link
@@ -197,6 +197,20 @@
                 </svg>
               </span>
               <span class="label">Listino Hotel</span>
+            </router-link>
+
+            <router-link
+              v-if="hasPermission('listino')"
+              to="/menu-del-giorno"
+              :class="['menu-item', { active: route.path === '/menu-del-giorno' }]"
+              aria-label="Composizione Menu del giorno"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M7 4h10M5 8h14M7 12h10M7 16h6M5 20h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Menu del giorno</span>
             </router-link>
 
             <router-link
@@ -314,6 +328,7 @@ const sectionContent = {
   '/inventory': { title: 'Magazzino', description: 'Stock, movimenti e carichi fornitori in un’unica vista.' },
   '/settings/configurations': { title: 'Configurazioni', description: 'Impostazioni globali e attivazione moduli del PMS.' },
   '/listino': { title: 'Listino Hotel', description: 'Tariffe, fasce e struttura dei prezzi hotel.' },
+  '/menu-del-giorno': { title: 'Menu del Giorno', description: 'Composizione del menu stampabile per il servizio hotel.' },
   '/settings/hotel-pricing': { title: 'Policy Prezzi', description: 'Regole tariffarie per camere, ospiti e stagionalita.' },
   '/listino_beach': { title: 'Gestione Spiaggia', description: 'Configurazione posti, settori e prezzi stabilimento.' },
   '/onda-push-products': { title: 'Promo Onda', description: 'Selezione prodotti e slot promozionali pubblicati.' },

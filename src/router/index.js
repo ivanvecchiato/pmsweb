@@ -51,6 +51,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'listino', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {
+      path: '/menu-del-giorno',
+      name: 'DailyMenuComposer',
+      component: () => import('@/views/config/DailyMenuComposer.vue'),
+      meta: { requiresAuth: true, permission: 'listino' }
+    },
+    {
       path: '/listino_beach',
       name: 'BeachManagementDashboard',
       component: () => import('@/views/beach/BeachManagementDashboard.vue'),
