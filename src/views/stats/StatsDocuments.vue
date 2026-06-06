@@ -24,6 +24,15 @@
         />
       </div>
 
+      <div class="control-field">
+        <label for="doc-type">Tipo documento</label>
+        <select id="doc-type" v-model.number="selectedDocType">
+          <option :value="0">Tutti</option>
+          <option :value="1">Scontrino</option>
+          <option :value="2">Hotel</option>
+        </select>
+      </div>
+
       <button class="btn btn-primary" @click="fetchDocuments" :disabled="loading">
         {{ loading ? 'Caricamento...' : 'Cerca' }}
       </button>
@@ -36,7 +45,7 @@
     <div v-if="!loading && !error" class="summary">
       <div class="summary-card">
         <span class="summary-label">Documenti</span>
-        <strong class="summary-value">{{ documents.length }}</strong>
+        <strong class="summary-value">{{ filteredDocuments.length }}</strong>
       </div>
       <div class="summary-card">
         <span class="summary-label">Totale periodo</span>
@@ -44,7 +53,7 @@
       </div>
     </div>
 
-    <div class="table-wrapper" v-if="!loading && !error && documents.length">
+    <div class="table-wrapper" v-if="!loading && !error && filteredDocuments.length">
       <table class="documents-table">
         <thead>
           <tr>
@@ -58,7 +67,7 @@
         </thead>
         <tbody>
           <tr
-            v-for="doc in documents"
+            v-for="doc in filteredDocuments"
             :key="doc.firestore_id || `${doc.progressivo}-${doc.timestamp}`"
             class="document-row"
             @click="openDocumentDetail(doc)"
@@ -78,7 +87,7 @@
       </table>
     </div>
 
-    <div v-if="!loading && !error && !documents.length" class="empty-state">
+    <div v-if="!loading && !error && !filteredDocuments.length" class="empty-state">
       Nessun documento trovato per i filtri selezionati.
     </div>
 
@@ -171,6 +180,7 @@ const fromDate = ref(today)
 const toDate = ref(today)
 const reservationName = ref('')
 const documents = ref([])
+const selectedDocType = ref(0)
 const loading = ref(false)
 const error = ref('')
 const isDetailOpen = ref(false)
@@ -178,8 +188,16 @@ const detailLoading = ref(false)
 const detailError = ref('')
 const selectedDocumentDetail = ref(null)
 
+const filteredDocuments = computed(() => {
+  if (selectedDocType.value === 0) {
+    return documents.value
+  }
+
+  return documents.value.filter((item) => Number(item?.docType) === Number(selectedDocType.value))
+})
+
 const totalAmount = computed(() => {
-  return documents.value.reduce((sum, item) => sum + (Number(item?.totale) || 0), 0)
+  return filteredDocuments.value.reduce((sum, item) => sum + (Number(item?.totale) || 0), 0)
 })
 
 const DOC_TYPE_LABELS = {
@@ -402,7 +420,8 @@ const fetchDocuments = async () => {
       params: {
         from: fromDate.value,
         to: toDate.value,
-        reservationName: reservationName.value
+        reservationName: reservationName.value,
+        docType: selectedDocType.value || undefined
       }
     })
 
@@ -470,7 +489,7 @@ h1 {
 
 .controls {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
   gap: 12px;
   align-items: end;
 }
@@ -486,15 +505,18 @@ h1 {
   color: #4b5563;
 }
 
-.control-field input {
+.control-field input,
+.control-field select {
   border: 1px solid #d1d5db;
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 0.95rem;
   outline: none;
+  background: #ffffff;
 }
 
-.control-field input:focus {
+.control-field input:focus,
+.control-field select:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
@@ -719,7 +741,7 @@ h1 {
 
 @media (max-width: 1024px) {
   .controls {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .control-search {
