@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import axios from 'axios'
 
 const PRODUCTS_ENDPOINT = '/api/products'
@@ -39,7 +39,8 @@ const form = ref({
   variants: {
     auto: false,
     vars: []
-  }
+  },
+  labels: []
 })
 
 const toBoolean = (value) => {
@@ -61,6 +62,25 @@ const emptyVariants = () => ({
   auto: false,
   vars: []
 })
+
+const normalizeLabelValue = (value) => String(value ?? '').trim().replace(/\s+/g, ' ')
+
+const normalizeLabelsPayload = (rawLabels) => {
+  const labelsRaw = Array.isArray(rawLabels) ? rawLabels : []
+
+  const deduped = []
+  const seen = new Set()
+
+  labelsRaw.forEach((entry) => {
+    const normalized = normalizeLabelValue(entry)
+    const dedupeKey = normalized.toLowerCase()
+    if (!normalized || seen.has(dedupeKey)) return
+    seen.add(dedupeKey)
+    deduped.push(normalized)
+  })
+
+  return deduped
+}
 
 const normalizeInventoryPayload = (rawInventory, fallbackEnabled = false) => {
   const source = rawInventory && typeof rawInventory === 'object' ? rawInventory : {}
@@ -328,6 +348,7 @@ const normalizeProduct = (product, categoryName) => {
 
   const normalizedVariants = normalizeVariantsPayload(product?.variants, product?.auto ?? product?.audo)
   const normalizedInventory = normalizeInventoryPayload(product?.inventory, product?.inventoryEnabled)
+  const normalizedLabels = normalizeLabelsPayload(product?.labels)
 
   return {
     id,
@@ -340,7 +361,8 @@ const normalizeProduct = (product, categoryName) => {
     inventory: normalizedInventory,
     inventoryEnabled: normalizedInventory.enabled,
     auto: normalizedVariants.auto,
-    variants: normalizedVariants
+    variants: normalizedVariants,
+    labels: normalizedLabels
   }
 }
 
@@ -470,6 +492,7 @@ const isDuplicateCreateName = computed(() => {
 })
 
 const selectedImageName = ref('')
+const newLabelText = ref('')
 
 const selectedVariantFamily = computed(() => {
   return variantFamilies.value.find((family) => String(family.id) === String(form.value.variantFamilyId)) || null
@@ -547,6 +570,34 @@ const updateVariantPrice = (variantId, value) => {
   }
 }
 
+const addLabelToForm = () => {
+  const candidate = normalizeLabelValue(newLabelText.value)
+  if (!candidate) return
+
+  const existing = Array.isArray(form.value.labels) ? form.value.labels : []
+  const candidateKey = candidate.toLowerCase()
+  const hasDuplicate = existing.some((label) => normalizeLabelValue(label).toLowerCase() === candidateKey)
+  if (hasDuplicate) {
+    newLabelText.value = ''
+    return
+  }
+
+  form.value.labels = [...existing, candidate]
+  newLabelText.value = ''
+}
+
+const removeLabelFromForm = (labelToRemove) => {
+  const labels = Array.isArray(form.value.labels) ? form.value.labels : []
+  form.value.labels = labels.filter((label) => normalizeLabelValue(label).toLowerCase() !== normalizeLabelValue(labelToRemove).toLowerCase())
+}
+
+const handleLabelInputKeydown = (event) => {
+  if (!event) return
+  if (event.key !== 'Enter' && event.key !== ',') return
+  event.preventDefault()
+  addLabelToForm()
+}
+
 const ensureCategoryExists = (categoryName) => {
   if (!categoryName) return null
   let category = categories.value.find((item) => item.name === categoryName)
@@ -584,6 +635,7 @@ const persistVariantsFallback = async (productId, categoryName, payload) => {
 
   await setProp('auto', String(toBoolean(payload.auto)))
   await setProp('variants', JSON.stringify(payload.variants || emptyVariants()))
+  await setProp('labels', JSON.stringify(payload.labels || []))
 }
 
 const openCreateDialog = () => {
@@ -600,11 +652,13 @@ const openCreateDialog = () => {
     variantFamilyId: firstFamilyId,
     inventoryEnabled: false,
     auto: false,
-    variants: emptyVariants()
+    variants: emptyVariants(),
+    labels: []
   }
   editingProduct.value = null
   isCreatingProduct.value = true
   selectedImageName.value = ''
+  newLabelText.value = ''
   saveMessage.value = ''
   errorMessage.value = ''
   isDialogOpen.value = true
@@ -612,6 +666,7 @@ const openCreateDialog = () => {
 
 const duplicateProduct = (product) => {
   const normalizedVariants = normalizeVariantsPayload(product?.variants, product?.auto ?? product?.audo)
+  const normalizedLabels = normalizeLabelsPayload(product?.labels)
   const firstVariantFamilyId = normalizedVariants.vars[0]?.family?.id
     ?? variantFamilies.value[0]?.id
     ?? ''
@@ -627,10 +682,13 @@ const duplicateProduct = (product) => {
     variantFamilyId: firstVariantFamilyId,
     inventoryEnabled: toBoolean(product?.inventory?.enabled ?? product?.inventoryEnabled),
     auto: toBoolean(normalizedVariants.auto),
-    variants: normalizedVariants
+    variants: normalizedVariants,
+    labels: normalizedLabels
   }
   editingProduct.value = null
   isCreatingProduct.value = true
+  selectedImageName.value = ''
+  newLabelText.value = ''
   saveMessage.value = ''
   errorMessage.value = ''
   isDialogOpen.value = true
@@ -638,6 +696,7 @@ const duplicateProduct = (product) => {
 
 const openEditDialog = (product) => {
   const normalizedVariants = normalizeVariantsPayload(product?.variants, product?.auto ?? product?.audo)
+  const normalizedLabels = normalizeLabelsPayload(product?.labels)
   const firstVariantFamilyId = normalizedVariants.vars[0]?.family?.id
     ?? variantFamilies.value[0]?.id
     ?? ''
@@ -653,11 +712,13 @@ const openEditDialog = (product) => {
     variantFamilyId: firstVariantFamilyId,
     inventoryEnabled: toBoolean(product?.inventory?.enabled ?? product?.inventoryEnabled),
     auto: toBoolean(normalizedVariants.auto),
-    variants: normalizedVariants
+    variants: normalizedVariants,
+    labels: normalizedLabels
   }
   editingProduct.value = product
   isCreatingProduct.value = false
   selectedImageName.value = ''
+  newLabelText.value = ''
   saveMessage.value = ''
   errorMessage.value = ''
   isDialogOpen.value = true
@@ -668,7 +729,26 @@ const closeDialog = () => {
   editingProduct.value = null
   isCreatingProduct.value = false
   selectedImageName.value = ''
+  newLabelText.value = ''
 }
+
+let previousBodyOverflow = ''
+watch(isDialogOpen, (open) => {
+  if (typeof document === 'undefined') return
+
+  if (open) {
+    previousBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return
+  }
+
+  document.body.style.overflow = previousBodyOverflow
+})
+
+onBeforeUnmount(() => {
+  if (typeof document === 'undefined') return
+  document.body.style.overflow = previousBodyOverflow
+})
 
 const handleImageUpload = (event) => {
   const file = event?.target?.files?.[0]
@@ -713,6 +793,7 @@ const saveProduct = async () => {
   errorMessage.value = ''
 
   const normalizedVariants = normalizeVariantsPayload(form.value.variants, form.value.auto)
+  const normalizedLabels = normalizeLabelsPayload(form.value.labels)
 
   const payload = {
     id: form.value.id,
@@ -727,7 +808,8 @@ const saveProduct = async () => {
     variants: {
       auto: toBoolean(form.value.auto),
       vars: normalizedVariants.vars
-    }
+    },
+    labels: normalizedLabels
   }
 
   try {
@@ -742,7 +824,8 @@ const saveProduct = async () => {
         category_name: payload.category,
         inventoryEnabled: payload.inventoryEnabled,
         auto: payload.auto,
-        variants: payload.variants
+        variants: payload.variants,
+        labels: payload.labels
       }
 
       const res = await axios.post(PRODUCTS_ENDPOINT, createPayload)
@@ -764,7 +847,8 @@ const saveProduct = async () => {
           inventory: normalizedInventory,
           inventoryEnabled: normalizedInventory.enabled,
           auto: payload.auto,
-          variants: payload.variants
+          variants: payload.variants,
+          labels: normalizedLabels
         })
         selectedCategory.value = payload.category
       } else {
@@ -793,7 +877,8 @@ const saveProduct = async () => {
             },
             inventoryEnabled: payload.inventoryEnabled,
             auto: payload.auto,
-            variants: payload.variants
+            variants: payload.variants,
+            labels: normalizedLabels
           }
         }
       }
@@ -1016,6 +1101,25 @@ onMounted(fetchVariantFamilies)
                 <label>Nome</label>
                 <input v-model="form.name" type="text" />
                 <small v-if="isCreatingProduct && isDuplicateCreateName" class="field-error">Esiste già un prodotto con questo nome.</small>
+              </div>
+
+              <div class="form-row">
+                <label>Etichette</label>
+                <div class="labels-input-row">
+                  <input
+                    v-model="newLabelText"
+                    type="text"
+                    placeholder="Aggiungi etichetta e premi Enter"
+                    @keydown="handleLabelInputKeydown"
+                  />
+                  <button class="btn-secondary btn-sm" type="button" :disabled="saving" @click="addLabelToForm">Aggiungi</button>
+                </div>
+                <div v-if="Array.isArray(form.labels) && form.labels.length" class="labels-pills">
+                  <span v-for="label in form.labels" :key="label" class="label-pill">
+                    <span>{{ label }}</span>
+                    <button type="button" class="label-pill-remove" :disabled="saving" @click="removeLabelFromForm(label)">X</button>
+                  </span>
+                </div>
               </div>
 
               <div class="form-row">
@@ -1535,14 +1639,19 @@ onMounted(fetchVariantFamilies)
   position: fixed;
   inset: 0;
   background: rgba(36, 49, 66, 0.24);
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 50;
   padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .dialog {
   width: min(980px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 30px;
   padding: 20px;
@@ -1696,6 +1805,54 @@ onMounted(fetchVariantFamilies)
 .variants-empty {
   margin: 10px 0 0;
   color: #64748b;
+}
+
+.labels-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.labels-input-row input {
+  flex: 1;
+}
+
+.labels-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.label-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: rgba(29, 140, 242, 0.12);
+  color: #0f172a;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.label-pill-remove {
+  border: 0;
+  background: rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  line-height: 1;
+  font-weight: 700;
+  padding: 0;
+}
+
+.label-pill-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .form-row label {
