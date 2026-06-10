@@ -1,11 +1,18 @@
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import axios from 'axios'
+import { collection, deleteDoc, doc, getDocs, query as buildFsQuery, serverTimestamp, setDoc, where } from 'firebase/firestore'
+import { getFirebaseDb, isFirebaseRemoteMode } from './services/firebaseClient'
 
 const PRODUCTS_ENDPOINT = '/api/products'
 const VARIANTS_ENDPOINT = '/api/variants'
+const CONFIGS_ENDPOINT = '/api/configs'
+const FAVORITES_ENDPOINT = '/api/favorites'
+const FIREBASE_FAVORITES_COLLECTION = import.meta.env.VITE_FIREBASE_FAVORITES_COLLECTION || 'preferiti'
+const FIREBASE_DEVICES_COLLECTION = import.meta.env.VITE_FIREBASE_DEVICES_COLLECTION || import.meta.env.VITE_FIREBASE_STATS_DEVICES_COLLECTION || 'devices'
 const DEFAULT_PRODUCTS_ORIGIN = import.meta.env.DEV ? 'http://localhost:8088' : window.location.origin
 const PRODUCTS_ORIGIN = (import.meta.env.VITE_API_TARGET_ORIGIN || DEFAULT_PRODUCTS_ORIGIN).replace(/\/+$/, '')
+const USE_FIREBASE_DIRECT_SYNC = isFirebaseRemoteMode()
 
 const categories = ref([])
 const variantFamilies = ref([])
@@ -14,11 +21,15 @@ const selectedCategory = ref('')
 const searchQuery = ref('')
 const loading = ref(false)
 const loadingVariants = ref(false)
+const loadingFavorites = ref(false)
 const savingVariantsConfig = ref(false)
+const savingFavoritesConfig = ref(false)
 const errorMessage = ref('')
 const saveMessage = ref('')
 const variantsConfigMessage = ref('')
 const variantsConfigError = ref('')
+const favoritesConfigMessage = ref('')
+const favoritesConfigError = ref('')
 const brokenImages = ref({})
 
 const isDialogOpen = ref(false)
@@ -170,6 +181,11 @@ const normalizeVariantFamilies = (payload) => {
 
 const variantsConfigFamilies = ref([])
 const newFamilyName = ref('')
+const devices = ref([])
+const favoritesByDevice = ref({})
+const originalFavoritesByDevice = ref({})
+const selectedFavoritesDeviceId = ref('')
+const favoritesProductSearch = ref('')
 
 const cloneVariantFamilies = (families) => families.map((family) => ({
   id: family.id,
@@ -446,6 +462,347 @@ const fetchVariantFamilies = async () => {
   }
 }
 
+const normalizeDevice = (device) => {
+  if (!device || typeof device !== 'object') return null
+  const id = device.id ?? device.device ?? device.deviceId
+  if (id === null || id === undefined || id === '') return null
+
+  return {
+    id,
+    name: String(device.name ?? device.description ?? `Device ${id}`).trim() || `Device ${id}`,
+    area: String(device.area ?? '').trim(),
+    type: String(device.type ?? '').trim(),
+    address: String(device.address ?? '').trim()
+  }
+}
+
+const normalizeDevicesPayload = (payload) => {
+  const rawDevices = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.devices)
+      ? payload.devices
+      : Array.isArray(payload?.printers)
+        ? payload.printers
+        : []
+
+  return rawDevices
+    .map(normalizeDevice)
+    .filter(Boolean)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'it'))
+}
+
+const normalizeFavoriteProducts = (products) => {
+  const ids = Array.isArray(products) ? products : []
+  const normalized = []
+  const seen = new Set()
+
+  ids.forEach((entry) => {
+    const id = toSafeNumber(entry, entry)
+    const key = String(id)
+    if (!key || seen.has(key)) return
+    seen.add(key)
+    normalized.push(id)
+  })
+
+  return normalized
+}
+
+const normalizeFavoritesPayload = (payload) => {
+  const rawFavorites = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.favorites)
+      ? payload.favorites
+      : Array.isArray(payload?.preferiti)
+        ? payload.preferiti
+        : []
+
+  return rawFavorites.reduce((acc, entry) => {
+    if (!entry || typeof entry !== 'object') return acc
+    const deviceId = entry.device ?? entry.agent ?? entry.deviceId
+    if (deviceId === null || deviceId === undefined || deviceId === '') return acc
+    acc[String(deviceId)] = normalizeFavoriteProducts(entry.products ?? entry.favorites)
+    return acc
+  }, {})
+}
+
+const allProducts = computed(() => {
+  const byId = new Map()
+
+  categories.value.forEach((category) => {
+    const products = Array.isArray(category.products) ? category.products : []
+    products.forEach((product) => {
+      const key = String(product.id)
+      if (!key || byId.has(key)) return
+      byId.set(key, product)
+    })
+  })
+
+  return Array.from(byId.values())
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'it'))
+})
+
+const productById = computed(() => {
+  const map = new Map()
+  allProducts.value.forEach((product) => {
+    map.set(String(product.id), product)
+  })
+  return map
+})
+
+const selectedFavoritesDevice = computed(() => {
+  return devices.value.find((device) => String(device.id) === String(selectedFavoritesDeviceId.value)) || null
+})
+
+const selectedFavorites = computed(() => {
+  return favoritesByDevice.value[String(selectedFavoritesDeviceId.value)] || []
+})
+
+const selectedFavoritesSet = computed(() => {
+  return new Set(selectedFavorites.value.map((id) => String(id)))
+})
+
+const favoriteProductsForSelectedDevice = computed(() => {
+  return selectedFavorites.value.map((productId) => {
+    const product = productById.value.get(String(productId))
+    return product || {
+      id: productId,
+      name: `Prodotto #${productId}`,
+      category: 'Non trovato',
+      price: 0,
+      color: '#e2e8f0'
+    }
+  })
+})
+
+const filteredFavoriteProducts = computed(() => {
+  const query = favoritesProductSearch.value.trim().toLowerCase()
+  const products = allProducts.value
+
+  if (!query) return products
+
+  return products.filter((product) => {
+    const haystack = `${product.id} ${product.name} ${product.category}`.toLowerCase()
+    return haystack.includes(query)
+  })
+})
+
+const hasFavoritesChanges = computed(() => {
+  const deviceIds = new Set([
+    ...Object.keys(favoritesByDevice.value),
+    ...Object.keys(originalFavoritesByDevice.value)
+  ])
+
+  for (const deviceId of deviceIds) {
+    const current = normalizeFavoriteProducts(favoritesByDevice.value[deviceId]).map(String).sort()
+    const original = normalizeFavoriteProducts(originalFavoritesByDevice.value[deviceId]).map(String).sort()
+    if (current.length !== original.length) return true
+    if (current.some((item, index) => item !== original[index])) return true
+  }
+
+  return false
+})
+
+const setDeviceFavorites = (deviceId, products) => {
+  favoritesByDevice.value = {
+    ...favoritesByDevice.value,
+    [String(deviceId)]: normalizeFavoriteProducts(products)
+  }
+}
+
+const syncLocalFavoriteAdd = async (deviceId, productId) => {
+  if (USE_FIREBASE_DIRECT_SYNC) return
+
+  try {
+    await axios.get('/api/addfavorite', {
+      params: {
+        agent: deviceId,
+        product: productId
+      }
+    })
+
+    originalFavoritesByDevice.value = {
+      ...originalFavoritesByDevice.value,
+      [String(deviceId)]: normalizeFavoriteProducts(favoritesByDevice.value[String(deviceId)])
+    }
+    favoritesConfigMessage.value = 'Preferito salvato sul backend locale.'
+    favoritesConfigError.value = ''
+  } catch (error) {
+    console.error('Errore salvataggio preferito locale', error)
+    favoritesConfigMessage.value = ''
+    favoritesConfigError.value = 'Preferito aggiunto in vista, ma non salvato sul backend locale.'
+  }
+}
+
+const toggleFavoriteProduct = (productId, enabled) => {
+  if (!selectedFavoritesDeviceId.value) return
+  const deviceId = selectedFavoritesDeviceId.value
+  const current = selectedFavorites.value
+  const key = String(productId)
+
+  if (enabled) {
+    if (current.some((id) => String(id) === key)) return
+    setDeviceFavorites(deviceId, [...current, productId])
+    syncLocalFavoriteAdd(deviceId, productId)
+    return
+  }
+
+  setDeviceFavorites(
+    deviceId,
+    current.filter((id) => String(id) !== key)
+  )
+}
+
+const addFavoriteFromProduct = (product) => {
+  if (!product) return
+  toggleFavoriteProduct(product.id, true)
+}
+
+const removeFavoriteFromSelectedDevice = (productId) => {
+  toggleFavoriteProduct(productId, false)
+}
+
+const fetchDevicesFromFirestore = async () => {
+  const db = getFirebaseDb()
+  const snapshot = await getDocs(collection(db, FIREBASE_DEVICES_COLLECTION))
+  const rows = []
+
+  snapshot.forEach((entry) => {
+    rows.push(entry.data())
+  })
+
+  return normalizeDevicesPayload(rows)
+}
+
+const fetchDevices = async () => {
+  if (USE_FIREBASE_DIRECT_SYNC) {
+    devices.value = await fetchDevicesFromFirestore()
+  } else {
+    const res = await axios.get(CONFIGS_ENDPOINT)
+    devices.value = normalizeDevicesPayload(res.data)
+  }
+
+  if (!devices.value.length) {
+    selectedFavoritesDeviceId.value = ''
+    return
+  }
+
+  const exists = devices.value.some((device) => String(device.id) === String(selectedFavoritesDeviceId.value))
+  if (!exists) {
+    selectedFavoritesDeviceId.value = String(devices.value[0].id)
+  }
+}
+
+const fetchFavoritesFromFirestore = async () => {
+  const db = getFirebaseDb()
+  const snapshot = await getDocs(collection(db, FIREBASE_FAVORITES_COLLECTION))
+  const rows = []
+
+  snapshot.forEach((entry) => {
+    rows.push(entry.data())
+  })
+
+  return normalizeFavoritesPayload(rows)
+}
+
+const fetchFavoritesFromApi = async () => {
+  const entries = await Promise.all(devices.value.map(async (device) => {
+    const res = await axios.get(FAVORITES_ENDPOINT, { params: { agent: device.id } })
+    const products = Array.isArray(res.data)
+      ? res.data
+      : Array.isArray(res.data?.favorites)
+        ? res.data.favorites
+        : []
+    return [String(device.id), normalizeFavoriteProducts(products)]
+  }))
+
+  return Object.fromEntries(entries)
+}
+
+const fetchFavoritesConfiguration = async () => {
+  loadingFavorites.value = true
+  favoritesConfigError.value = ''
+  favoritesConfigMessage.value = ''
+
+  try {
+    if (!categories.value.length) {
+      await fetchProducts()
+    }
+    await fetchDevices()
+
+    const normalizedFavorites = USE_FIREBASE_DIRECT_SYNC
+      ? await fetchFavoritesFromFirestore()
+      : await fetchFavoritesFromApi()
+
+    favoritesByDevice.value = { ...normalizedFavorites }
+    originalFavoritesByDevice.value = JSON.parse(JSON.stringify(normalizedFavorites))
+  } catch (error) {
+    console.error('Errore caricamento preferiti', error)
+    devices.value = []
+    favoritesByDevice.value = {}
+    originalFavoritesByDevice.value = {}
+    selectedFavoritesDeviceId.value = ''
+    favoritesConfigError.value = 'Impossibile caricare preferiti e dispositivi.'
+  } finally {
+    loadingFavorites.value = false
+  }
+}
+
+const saveFavoritesConfiguration = async () => {
+  savingFavoritesConfig.value = true
+  favoritesConfigError.value = ''
+  favoritesConfigMessage.value = ''
+
+  try {
+    if (USE_FIREBASE_DIRECT_SYNC) {
+      const db = getFirebaseDb()
+      const collectionRef = collection(db, FIREBASE_FAVORITES_COLLECTION)
+
+      await Promise.all(devices.value.map(async (device) => {
+        const deviceId = String(device.id)
+        const products = normalizeFavoriteProducts(favoritesByDevice.value[deviceId])
+        const snapshots = await Promise.all([
+          getDocs(buildFsQuery(collectionRef, where('device', '==', device.id))),
+          getDocs(buildFsQuery(collectionRef, where('device', '==', deviceId)))
+        ])
+        const matchedDocs = snapshots
+          .flatMap((snapshot) => snapshot.docs)
+          .filter((entry, index, entries) => entries.findIndex((candidate) => candidate.ref.path === entry.ref.path) === index)
+        const docRef = matchedDocs[0]?.ref || doc(db, FIREBASE_FAVORITES_COLLECTION, deviceId)
+
+        await setDoc(docRef, {
+          device: device.id,
+          products,
+          updatedAt: serverTimestamp()
+        }, { merge: true })
+
+        await Promise.all(matchedDocs.slice(1).map((entry) => deleteDoc(entry.ref)))
+      }))
+    } else {
+      const favorites = devices.value.map((device) => {
+        const deviceId = String(device.id)
+        return {
+          device: device.id,
+          products: normalizeFavoriteProducts(favoritesByDevice.value[deviceId])
+        }
+      })
+
+      await axios.post(FAVORITES_ENDPOINT, { favorites })
+    }
+
+    originalFavoritesByDevice.value = JSON.parse(JSON.stringify(favoritesByDevice.value))
+    favoritesConfigMessage.value = USE_FIREBASE_DIRECT_SYNC
+      ? 'Preferiti sincronizzati con Firebase.'
+      : 'Preferiti salvati sul backend locale e sincronizzati dal server.'
+  } catch (error) {
+    console.error('Errore salvataggio preferiti', error)
+    favoritesConfigError.value = USE_FIREBASE_DIRECT_SYNC
+      ? 'Salvataggio preferiti su Firebase non riuscito.'
+      : 'Salvataggio preferiti sul backend locale non riuscito.'
+  } finally {
+    savingFavoritesConfig.value = false
+  }
+}
+
 const selectedProducts = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
 
@@ -478,6 +835,23 @@ const dialogTitle = computed(() => (isCreatingProduct.value ? 'Nuovo prodotto' :
 const saveButtonLabel = computed(() => (saving.value
   ? (isCreatingProduct.value ? 'Creazione...' : 'Salvataggio...')
   : (isCreatingProduct.value ? 'Crea' : 'Salva')))
+const refreshButtonDisabled = computed(() => loading.value || loadingVariants.value || loadingFavorites.value)
+const refreshButtonLabel = computed(() => {
+  if (activeTab.value === 'products') return loading.value ? 'Caricamento...' : 'Aggiorna prodotti'
+  if (activeTab.value === 'variants') return loadingVariants.value ? 'Caricamento...' : 'Aggiorna varianti'
+  return loadingFavorites.value ? 'Caricamento...' : 'Aggiorna preferiti'
+})
+const refreshActiveTab = () => {
+  if (activeTab.value === 'products') {
+    fetchProducts()
+    return
+  }
+  if (activeTab.value === 'variants') {
+    fetchVariantFamilies()
+    return
+  }
+  fetchFavoritesConfiguration()
+}
 
 const normalizeProductName = (name) => String(name ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 
@@ -902,6 +1276,12 @@ const saveProduct = async () => {
 
 onMounted(fetchProducts)
 onMounted(fetchVariantFamilies)
+
+watch(activeTab, (tab) => {
+  if (tab === 'favorites' && !devices.value.length && !loadingFavorites.value) {
+    fetchFavoritesConfiguration()
+  }
+})
 </script>
 
 <template>
@@ -915,13 +1295,19 @@ onMounted(fetchVariantFamilies)
           Nuovo prodotto
         </button>
         <button
-          class="btn-refresh"
-          :disabled="loading || loadingVariants"
-          @click="activeTab === 'products' ? fetchProducts() : fetchVariantFamilies()"
+          v-if="activeTab === 'favorites'"
+          class="btn-primary"
+          :disabled="savingFavoritesConfig || loadingFavorites || !devices.length || !hasFavoritesChanges"
+          @click="saveFavoritesConfiguration"
         >
-          {{ activeTab === 'products'
-            ? (loading ? 'Caricamento...' : 'Aggiorna prodotti')
-            : (loadingVariants ? 'Caricamento...' : 'Aggiorna varianti') }}
+          {{ savingFavoritesConfig ? 'Salvataggio...' : 'Salva preferiti' }}
+        </button>
+        <button
+          class="btn-refresh"
+          :disabled="refreshButtonDisabled"
+          @click="refreshActiveTab"
+        >
+          {{ refreshButtonLabel }}
         </button>
       </div>
     </header>
@@ -944,6 +1330,15 @@ onMounted(fetchVariantFamilies)
         @click="activeTab = 'variants'"
       >
         Varianti
+      </button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'favorites' }"
+        role="tab"
+        :aria-selected="activeTab === 'favorites'"
+        @click="activeTab = 'favorites'"
+      >
+        Preferiti
       </button>
     </div>
 
@@ -1026,7 +1421,7 @@ onMounted(fetchVariantFamilies)
       <p v-else class="empty">Nessun prodotto disponibile per la categoria selezionata.</p>
     </div>
 
-    <section v-else class="variants-config-section">
+    <section v-else-if="activeTab === 'variants'" class="variants-config-section">
       <div class="variants-config-header">
         <div>
           <h2>Configurazione Varianti</h2>
@@ -1074,6 +1469,109 @@ onMounted(fetchVariantFamilies)
         </article>
       </div>
       <p v-else class="empty">Nessuna famiglia varianti configurata.</p>
+    </section>
+
+    <section v-else class="favorites-config-section">
+      <div class="favorites-config-header">
+        <div>
+          <h2>Gestione Preferiti</h2>
+          <p v-if="selectedFavoritesDevice" class="favorites-device-meta">
+            {{ selectedFavoritesDevice.name }}
+            <span v-if="selectedFavoritesDevice.area"> · {{ selectedFavoritesDevice.area }}</span>
+            <span v-if="selectedFavoritesDevice.type"> · {{ selectedFavoritesDevice.type }}</span>
+          </p>
+        </div>
+        <button
+          class="btn-primary"
+          :disabled="savingFavoritesConfig || loadingFavorites || !devices.length || !hasFavoritesChanges"
+          @click="saveFavoritesConfiguration"
+        >
+          Salva
+        </button>
+      </div>
+
+      <div class="favorites-toolbar">
+        <div class="filter-field">
+          <label for="favorites-device" class="sr-only">Dispositivo</label>
+          <select
+            id="favorites-device"
+            v-model="selectedFavoritesDeviceId"
+            :disabled="loadingFavorites || !devices.length"
+            aria-label="Dispositivo preferiti"
+          >
+            <option v-for="device in devices" :key="device.id" :value="String(device.id)">
+              {{ device.name }} #{{ device.id }}
+            </option>
+          </select>
+        </div>
+
+        <div class="filter-field filter-field-search">
+          <label for="favorites-search" class="sr-only">Cerca prodotto</label>
+          <input
+            id="favorites-search"
+            v-model="favoritesProductSearch"
+            type="text"
+            placeholder="Cerca prodotto..."
+            :disabled="loadingFavorites || !allProducts.length"
+          />
+        </div>
+      </div>
+
+      <p v-if="favoritesConfigError" class="status error">{{ favoritesConfigError }}</p>
+      <p v-if="favoritesConfigMessage" class="status success">{{ favoritesConfigMessage }}</p>
+
+      <div v-if="loadingFavorites" class="empty">Caricamento preferiti...</div>
+      <div v-else-if="!devices.length" class="empty">Nessun dispositivo configurato.</div>
+      <div v-else class="favorites-grid">
+        <section class="favorites-panel">
+          <div class="favorites-panel-head">
+            <h3>Preferiti dispositivo</h3>
+            <span>{{ selectedFavorites.length }} prodotti</span>
+          </div>
+
+          <div v-if="favoriteProductsForSelectedDevice.length" class="favorites-selected-list">
+            <div
+              v-for="product in favoriteProductsForSelectedDevice"
+              :key="product.id"
+              class="favorite-selected-item"
+              :style="{ '--row-color': product.color || '#e2e8f0' }"
+            >
+              <div>
+                <strong>{{ product.name }}</strong>
+                <small>#{{ product.id }} · {{ product.category }}</small>
+              </div>
+              <button class="btn-secondary btn-sm" :disabled="savingFavoritesConfig" @click="removeFavoriteFromSelectedDevice(product.id)">Rimuovi</button>
+            </div>
+          </div>
+          <p v-else class="empty compact-empty">Nessun preferito configurato per questo dispositivo.</p>
+        </section>
+
+        <section class="favorites-panel">
+          <div class="favorites-panel-head">
+            <h3>Catalogo prodotti</h3>
+            <span>{{ filteredFavoriteProducts.length }} disponibili</span>
+          </div>
+
+          <div v-if="filteredFavoriteProducts.length" class="favorites-products-list">
+            <button
+              v-for="product in filteredFavoriteProducts"
+              :key="product.id"
+              type="button"
+              class="favorite-product-option"
+              :class="{ active: selectedFavoritesSet.has(String(product.id)) }"
+              :disabled="savingFavoritesConfig"
+              @click="selectedFavoritesSet.has(String(product.id)) ? removeFavoriteFromSelectedDevice(product.id) : addFavoriteFromProduct(product)"
+            >
+              <span>
+                <strong>{{ product.name }}</strong>
+                <small>#{{ product.id }} · {{ product.category }}</small>
+              </span>
+              <span class="favorite-state">{{ selectedFavoritesSet.has(String(product.id)) ? 'Preferito' : 'Aggiungi' }}</span>
+            </button>
+          </div>
+          <p v-else class="empty compact-empty">Nessun prodotto trovato.</p>
+        </section>
+      </div>
     </section>
 
     <Teleport to="body">
@@ -1519,6 +2017,17 @@ onMounted(fetchVariantFamilies)
   backdrop-filter: blur(18px);
 }
 
+.favorites-config-section {
+  margin-top: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 28px;
+  padding: 18px;
+  box-shadow: var(--ds-shadow-card);
+  backdrop-filter: blur(18px);
+}
+
+.favorites-config-header,
 .variants-config-header {
   display: flex;
   justify-content: space-between;
@@ -1527,9 +2036,164 @@ onMounted(fetchVariantFamilies)
   margin-bottom: 12px;
 }
 
+.favorites-config-header h2,
 .variants-config-header h2 {
   margin: 0;
   font-size: 1.2rem;
+}
+
+.favorites-device-meta {
+  margin: 4px 0 0;
+  color: #64748b;
+}
+
+.favorites-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.favorites-toolbar select,
+.favorites-toolbar input {
+  box-sizing: border-box;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  height: 48px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.88);
+  line-height: 40px;
+  font: inherit;
+  width: 100%;
+}
+
+.favorites-toolbar select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 36px;
+  background-image: linear-gradient(45deg, transparent 50%, #475569 50%), linear-gradient(135deg, #475569 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 13px) calc(50% - 3px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.favorites-toolbar select:focus,
+.favorites-toolbar input:focus {
+  outline: none;
+  border-color: rgba(29, 140, 242, 0.34);
+  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
+}
+
+.favorites-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.82fr) minmax(320px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.favorites-panel {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 22px;
+  padding: 14px;
+  background: rgba(245, 249, 253, 0.78);
+}
+
+.favorites-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.favorites-panel-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.favorites-panel-head span {
+  color: #64748b;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.favorites-selected-list,
+.favorites-products-list {
+  display: grid;
+  gap: 8px;
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.favorite-selected-item,
+.favorite-product-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 10px;
+}
+
+.favorite-selected-item {
+  box-shadow: inset 5px 0 0 var(--row-color, #e2e8f0);
+}
+
+.favorite-product-option {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: #0f172a;
+}
+
+.favorite-product-option.active {
+  border-color: rgba(29, 140, 242, 0.34);
+  background: rgba(29, 140, 242, 0.1);
+}
+
+.favorite-selected-item div,
+.favorite-product-option span:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.favorite-selected-item strong,
+.favorite-product-option strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favorite-selected-item small,
+.favorite-product-option small {
+  color: #64748b;
+}
+
+.favorite-state {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(15, 23, 42, 0.08);
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.favorite-product-option.active .favorite-state {
+  background: rgba(29, 140, 242, 0.18);
+  color: #075985;
+}
+
+.compact-empty {
+  padding: 8px 0 0;
 }
 
 .variants-family-add {
@@ -1916,10 +2580,16 @@ onMounted(fetchVariantFamilies)
     grid-template-columns: 1fr;
   }
 
+  .favorites-config-header,
   .variants-config-header,
+  .favorites-toolbar,
   .variants-family-add {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .favorites-grid {
+    grid-template-columns: 1fr;
   }
 
   .variants-inner-item {

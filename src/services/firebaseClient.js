@@ -15,15 +15,16 @@ let firestoreDb = null
 
 export const isFirebaseRemoteMode = () => {
   const configuredSource = String(import.meta.env.VITE_DATA_SOURCE || '').trim().toLowerCase()
-  if (configuredSource === 'firebase') return true
   if (configuredSource === 'api') return false
 
-  if (import.meta.env.DEV) return false
   if (typeof window === 'undefined') return false
 
   const host = String(window.location.hostname || '').toLowerCase()
   const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
-  return !isLocalHost
+  if (import.meta.env.DEV || isLocalHost) return false
+
+  if (configuredSource === 'firebase') return true
+  return host.endsWith('.web.app') || host.endsWith('.firebaseapp.com')
 }
 
 export const getFirebaseDb = () => {
