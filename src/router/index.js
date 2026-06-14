@@ -123,6 +123,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {
+      path: '/breakfast-report',
+      name: 'BreakfastReport',
+      component: () => import('@/views/pms/BreakfastReport.vue'),
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
+    },
+    {
       path: '/services',
       name: 'ServicesConfig',
       component: () => import('@/views/config/ServicesConfig.vue'),
