@@ -33,7 +33,18 @@
 
         <nav id="app-sidebar-menu" :class="['menu', { 'menu-hidden-mobile': isMobileViewport && !isMobileMenuOpen }]">
           <!-- AREA PMS -->
-          <div v-if="canShowHotelBeachMenus && ((hasPermission('home') && isPmsTypeAllowed(['hotel'])) || hasPermission('customers') || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach'])))" class="menu-section">
+          <div
+            v-if="
+              canShowHotelBeachMenus
+              && (
+                (hasPermission('home') && isPmsTypeAllowed(['hotel']))
+                || hasPermission('customers')
+                || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach']))
+                || (hasPermission('listino') && isPmsTypeAllowed(['hotel']))
+              )
+            "
+            class="menu-section"
+          >
             <div class="section-label">PMS</div>
             
             <router-link
@@ -103,6 +114,34 @@
                 </svg>
               </span>
               <span class="label">Conti</span>
+            </router-link>
+
+            <router-link
+              v-if="hasPermission('listino') && isPmsTypeAllowed(['hotel'])"
+              to="/menu-del-giorno"
+              :class="['menu-item', { active: route.path === '/menu-del-giorno' }]"
+              aria-label="Composizione Menu del giorno"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M7 4h10M5 8h14M7 12h10M7 16h6M5 20h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Menu del giorno</span>
+            </router-link>
+
+            <router-link
+              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
+              to="/breakfast-report"
+              :class="['menu-item', { active: route.path === '/breakfast-report' }]"
+              aria-label="Report colazione"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 8h12v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8zM16 10h2a2 2 0 0 1 0 4h-2M6 4h8M7 20h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Report colazione</span>
             </router-link>
           </div>
 
@@ -197,20 +236,6 @@
                 </svg>
               </span>
               <span class="label">Listino Hotel</span>
-            </router-link>
-
-            <router-link
-              v-if="hasPermission('listino')"
-              to="/menu-del-giorno"
-              :class="['menu-item', { active: route.path === '/menu-del-giorno' }]"
-              aria-label="Composizione Menu del giorno"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M7 4h10M5 8h14M7 12h10M7 16h6M5 20h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Menu del giorno</span>
             </router-link>
 
             <router-link
@@ -324,6 +349,7 @@ const sectionContent = {
   '/beach-bookings': { title: 'Planner Spiaggia', description: 'Controllo rapido delle prenotazioni stabilimento.' },
   '/quotes': { title: 'Preventivi', description: 'Creazione e conversione offerte in prenotazioni operative.' },
   '/accounts': { title: 'Conti Ospiti', description: 'Saldo servizi, depositi e chiusure conto.' },
+  '/breakfast-report': { title: 'Report Colazione', description: 'Report giornaliero delle colazioni e riepilogo ospiti.' },
   '/listino-prodotti': { title: 'Catalogo Prodotti', description: 'Listini, categorie e prodotti in evidenza.' },
   '/inventory': { title: 'Magazzino', description: 'Stock, movimenti e carichi fornitori in un’unica vista.' },
   '/settings/configurations': { title: 'Configurazioni', description: 'Impostazioni globali e attivazione moduli del PMS.' },

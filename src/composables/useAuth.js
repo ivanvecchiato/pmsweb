@@ -200,7 +200,7 @@ const userName = computed(() => currentUser.value?.name)
 const isHotelPms = computed(() => pmsType.value === 'hotel')
 const isBeachPms = computed(() => pmsType.value === 'beach')
 const isHospitalityStudioPms = computed(() => pmsIntegrationType.value === 'hospitality studio')
-const canShowHotelBeachMenus = computed(() => pmsEnabled.value && isHospitalityStudioPms.value)
+const canShowHotelBeachMenus = computed(() => pmsEnabled.value)
 
 loadUser()
 loadStoredPmsType()
