@@ -261,6 +261,7 @@ const salaTranslations = {
       lunch: 'Pranzo',
       dinner: 'Cena'
     },
+    roomLabel: 'camera',
     portionLabels: 'norm.&nbsp;&nbsp;&nbsp;&nbsp;rid.',
     allergensTitle: 'Informazioni sugli allergeni:',
     allergensText: 'I nostri piatti possono contenere: cereali con glutine, crostacei, uova, pesce, arachidi, soia, latte, frutta a guscio, sedano, senape, sesamo, solfiti, lupini e molluschi.',
@@ -272,6 +273,7 @@ const salaTranslations = {
       lunch: 'Mittagessen',
       dinner: 'Abendessen'
     },
+    roomLabel: 'zimmer',
     portionLabels: 'norm.&nbsp;&nbsp;&nbsp;&nbsp;red.',
     allergensTitle: 'Informationen zu Allergenen:',
     allergensText: 'Unsere Gerichte können enthalten: glutenhaltiges Getreide, Krebstiere, Eier, Fisch, Erdnüsse, Soja, Milch, Schalenfrüchte, Sellerie, Senf, Sesam, Sulfite, Lupinen und Weichtiere.',
@@ -283,6 +285,7 @@ const salaTranslations = {
       lunch: 'Lunch',
       dinner: 'Dinner'
     },
+    roomLabel: 'room',
     portionLabels: 'reg.&nbsp;&nbsp;&nbsp;&nbsp;red.',
     allergensTitle: 'Allergen information:',
     allergensText: 'Our dishes may contain: cereals containing gluten, crustaceans, eggs, fish, peanuts, soy, milk, nuts, celery, mustard, sesame, sulphites, lupin and molluscs.',
@@ -862,6 +865,7 @@ function buildSalaContainer({ primi, secondi, meal }) {
     <div class="logo-area">
       <img src="${escapeHtml(logoUrl)}" alt="Logo Hotel Mirafiori" />
     </div>
+    <div class="camera-placeholder">${escapeHtml(translation.roomLabel)} ________</div>
     <div class="menu-section">
       <div class="section-title">${escapeHtml(formatSalaMenuDate())} - ${escapeHtml(translation.meals[meal])}</div>
       <div class="menu-item">
