@@ -23,7 +23,7 @@
             <strong>{{ roomCount }}</strong>
           </div>
           <div class="summary-item">
-            <span>Persone</span>
+            <span>Ospiti</span>
             <strong>{{ totalPax }}</strong>
           </div>
         </div>
@@ -42,7 +42,7 @@
             <tr>
               <th>Camera</th>
               <th>Nome</th>
-              <th>Persone</th>
+              <th>Ospiti</th>
               <th>Board</th>
               <th class="notes-col">Check / Note</th>
             </tr>
@@ -373,9 +373,9 @@ function printReport() {
   .breakfast-report {
     max-width: none;
     width: auto;
-    padding: 6mm 8mm 0;
+    padding: 6mm 8mm 16mm;
     box-sizing: border-box;
-    font-size: 10pt;
+    font-size: 9pt;
   }
 
   .report-card {
@@ -392,7 +392,7 @@ function printReport() {
 
   .table-wrap {
     overflow: visible;
-    padding: 0;
+    padding: 0 0 18mm;
   }
 
   .breakfast-table {
@@ -422,26 +422,37 @@ function printReport() {
 
   .breakfast-table th,
   .breakfast-table td {
-    height: 8mm;
+    height: 6.6mm;
     border-color: #333333;
-    padding: 1.3mm 1.8mm;
-    font-size: 8.5pt;
-    line-height: 1.15;
+    padding: 1mm 1.6mm;
+    font-size: 7.8pt;
+    line-height: 1.1;
     overflow-wrap: anywhere;
     word-break: normal;
   }
 
+  .breakfast-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .breakfast-table thead {
-    font-size: 7.5pt;
+    display: table-header-group;
+    font-size: 7.2pt;
+  }
+
+  .breakfast-table tbody {
+    break-inside: auto;
+    page-break-inside: auto;
   }
 
   .board-row td {
-    height: 7mm;
-    font-size: 9pt;
+    height: 6mm;
+    font-size: 8pt;
   }
 
   .room-cell {
-    font-size: 8.5pt;
+    font-size: 7.8pt;
   }
 
   .summary-item {
