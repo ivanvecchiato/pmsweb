@@ -93,24 +93,50 @@
       </div>
     </div>
 
+    <div v-else class="sala-options">
+      <div class="tabs-nav language-tabs" role="radiogroup" aria-label="Lingua menù extra">
+        <label
+          class="tab-btn"
+          :class="{ active: activeExtraLanguage === 'it' }"
+        >
+          <input v-model="activeExtraLanguage" class="hidden-radio" type="radio" value="it" />
+          Italiano
+        </label>
+        <label
+          class="tab-btn"
+          :class="{ active: activeExtraLanguage === 'de' }"
+        >
+          <input v-model="activeExtraLanguage" class="hidden-radio" type="radio" value="de" />
+          Tedesco
+        </label>
+        <label
+          class="tab-btn"
+          :class="{ active: activeExtraLanguage === 'en' }"
+        >
+          <input v-model="activeExtraLanguage" class="hidden-radio" type="radio" value="en" />
+          Inglese
+        </label>
+      </div>
+    </div>
+
     <div class="composer-grid">
       <section class="editor-card">
         <div class="card-heading">
-          <h3>Primi</h3>
+          <h3>{{ activeEditorTranslation.sections.primi }}</h3>
           <span>{{ compiledPrimi.length }}/{{ rowCount }}</span>
         </div>
 
         <div v-for="(row, index) in activePrimiRows" :key="`primo-${index}`" class="menu-row" :class="{ 'menu-row-sala': isSalaMenu }">
-          <label :for="`primo-desc-${index}`" class="sr-only">Descrizione primo {{ index + 1 }}</label>
+          <label :for="`primo-desc-${index}`" class="sr-only">{{ activeEditorTranslation.fields.primo }} {{ index + 1 }}</label>
           <input
             :id="`primo-desc-${index}`"
             v-model="row.description"
             type="text"
             class="row-description"
-            :placeholder="`Primo ${index + 1}`"
+            :placeholder="`${activeEditorTranslation.placeholders.primo} ${index + 1}`"
           />
 
-          <label :for="`primo-price-${index}`" class="sr-only">Prezzo primo {{ index + 1 }}</label>
+          <label :for="`primo-price-${index}`" class="sr-only">{{ activeEditorTranslation.fields.prezzoPrimo }} {{ index + 1 }}</label>
           <input
             v-if="!isSalaMenu"
             :id="`primo-price-${index}`"
@@ -127,21 +153,21 @@
 
       <section class="editor-card">
         <div class="card-heading">
-          <h3>Secondi</h3>
+          <h3>{{ activeEditorTranslation.sections.secondi }}</h3>
           <span>{{ compiledSecondi.length }}/{{ rowCount }}</span>
         </div>
 
         <div v-for="(row, index) in activeSecondiRows" :key="`secondo-${index}`" class="menu-row" :class="{ 'menu-row-sala': isSalaMenu }">
-          <label :for="`secondo-desc-${index}`" class="sr-only">Descrizione secondo {{ index + 1 }}</label>
+          <label :for="`secondo-desc-${index}`" class="sr-only">{{ activeEditorTranslation.fields.secondo }} {{ index + 1 }}</label>
           <input
             :id="`secondo-desc-${index}`"
             v-model="row.description"
             type="text"
             class="row-description"
-            :placeholder="`Secondo ${index + 1}`"
+            :placeholder="`${activeEditorTranslation.placeholders.secondo} ${index + 1}`"
           />
 
-          <label :for="`secondo-price-${index}`" class="sr-only">Prezzo secondo {{ index + 1 }}</label>
+          <label :for="`secondo-price-${index}`" class="sr-only">{{ activeEditorTranslation.fields.prezzoSecondo }} {{ index + 1 }}</label>
           <input
             v-if="!isSalaMenu"
             :id="`secondo-price-${index}`"
@@ -203,11 +229,16 @@ const menuType = ref('extra')
 const activeSalaMeal = ref('lunch')
 const salaDateMode = ref('tomorrow')
 const activeSalaLanguage = ref('it')
+const activeExtraLanguage = ref('it')
 
 const createEmptyRows = () => Array.from({ length: rowCount }, () => ({ description: '', price: '' }))
 
 const primiRows = ref(createEmptyRows())
 const secondiRows = ref(createEmptyRows())
+const extraDePrimiRows = ref(createEmptyRows())
+const extraDeSecondiRows = ref(createEmptyRows())
+const extraEnPrimiRows = ref(createEmptyRows())
+const extraEnSecondiRows = ref(createEmptyRows())
 const salaLunchPrimiRows = ref(createEmptyRows())
 const salaLunchSecondiRows = ref(createEmptyRows())
 const salaDinnerPrimiRows = ref(createEmptyRows())
@@ -251,6 +282,84 @@ const salaRowsByLanguage = {
       primi: salaEnDinnerPrimiRows,
       secondi: salaEnDinnerSecondiRows
     }
+  }
+}
+
+const extraRowsByLanguage = {
+  it: {
+    primi: primiRows,
+    secondi: secondiRows
+  },
+  de: {
+    primi: extraDePrimiRows,
+    secondi: extraDeSecondiRows
+  },
+  en: {
+    primi: extraEnPrimiRows,
+    secondi: extraEnSecondiRows
+  }
+}
+
+const extraTranslations = {
+  it: {
+    menuTitle: 'Una selezione dalla nostra cucina',
+    sections: {
+      primi: 'Primi',
+      secondi: 'Secondi'
+    },
+    placeholders: {
+      primo: 'Primo',
+      secondo: 'Secondo'
+    },
+    fields: {
+      primo: 'Descrizione primo',
+      secondo: 'Descrizione secondo',
+      prezzoPrimo: 'Prezzo primo',
+      prezzoSecondo: 'Prezzo secondo'
+    },
+    allergensTitle: 'Informazioni sugli allergeni:',
+    allergensText: 'I nostri piatti possono contenere: Cereali con glutine, Uova, Pesce, Latte, Frutta a guscio, Sedano, Senape.',
+    allergensNotice: 'Si prega di comunicare eventuali intolleranze o allergie al nostro personale.'
+  },
+  de: {
+    menuTitle: 'Eine Auswahl aus unserer Küche',
+    sections: {
+      primi: 'Erste Gänge',
+      secondi: 'Hauptgerichte'
+    },
+    placeholders: {
+      primo: 'Erster Gang',
+      secondo: 'Hauptgericht'
+    },
+    fields: {
+      primo: 'Beschreibung erster Gang',
+      secondo: 'Beschreibung Hauptgericht',
+      prezzoPrimo: 'Preis erster Gang',
+      prezzoSecondo: 'Preis Hauptgericht'
+    },
+    allergensTitle: 'Informationen zu Allergenen:',
+    allergensText: 'Unsere Gerichte können enthalten: glutenhaltiges Getreide, Eier, Fisch, Milch, Schalenfrüchte, Sellerie und Senf.',
+    allergensNotice: 'Bitte informieren Sie unser Personal über eventuelle Unverträglichkeiten oder Allergien.'
+  },
+  en: {
+    menuTitle: 'A selection from our kitchen',
+    sections: {
+      primi: 'First courses',
+      secondi: 'Main courses'
+    },
+    placeholders: {
+      primo: 'First course',
+      secondo: 'Main course'
+    },
+    fields: {
+      primo: 'First course description',
+      secondo: 'Main course description',
+      prezzoPrimo: 'First course price',
+      prezzoSecondo: 'Main course price'
+    },
+    allergensTitle: 'Allergen information:',
+    allergensText: 'Our dishes may contain: cereals containing gluten, eggs, fish, milk, nuts, celery and mustard.',
+    allergensNotice: 'Please inform our staff of any intolerances or allergies.'
   }
 }
 
@@ -303,8 +412,13 @@ watch([
   activeSalaMeal,
   salaDateMode,
   activeSalaLanguage,
+  activeExtraLanguage,
   primiRows,
   secondiRows,
+  extraDePrimiRows,
+  extraDeSecondiRows,
+  extraEnPrimiRows,
+  extraEnSecondiRows,
   salaLunchPrimiRows,
   salaLunchSecondiRows,
   salaDinnerPrimiRows,
@@ -337,8 +451,13 @@ const normalizeRows = rows => rows.map(row => ({
 const isSalaMenu = computed(() => menuType.value === 'sala')
 const activeSalaPrimiRows = computed(() => getSalaRows(activeSalaLanguage.value, activeSalaMeal.value).primi.value)
 const activeSalaSecondiRows = computed(() => getSalaRows(activeSalaLanguage.value, activeSalaMeal.value).secondi.value)
-const activePrimiRows = computed(() => isSalaMenu.value ? activeSalaPrimiRows.value : primiRows.value)
-const activeSecondiRows = computed(() => isSalaMenu.value ? activeSalaSecondiRows.value : secondiRows.value)
+const activeExtraPrimiRows = computed(() => getExtraRows(activeExtraLanguage.value).primi.value)
+const activeExtraSecondiRows = computed(() => getExtraRows(activeExtraLanguage.value).secondi.value)
+const activePrimiRows = computed(() => isSalaMenu.value ? activeSalaPrimiRows.value : activeExtraPrimiRows.value)
+const activeSecondiRows = computed(() => isSalaMenu.value ? activeSalaSecondiRows.value : activeExtraSecondiRows.value)
+const activeEditorTranslation = computed(() => isSalaMenu.value
+  ? extraTranslations.it
+  : getExtraTranslation())
 const compiledPrimi = computed(() => normalizeRows(activePrimiRows.value).filter(isCompleteRow))
 const compiledSecondi = computed(() => normalizeRows(activeSecondiRows.value).filter(isCompleteRow))
 const compiledSalaLunchPrimi = computed(() => normalizeRows(getSalaRows(activeSalaLanguage.value, 'lunch').primi.value).filter(isSalaCompleteRow))
@@ -362,7 +481,7 @@ const hasExcludedRows = computed(() => {
     return false
   }
 
-  const allRows = [...normalizeRows(primiRows.value), ...normalizeRows(secondiRows.value)]
+  const allRows = [...normalizeRows(activeExtraPrimiRows.value), ...normalizeRows(activeExtraSecondiRows.value)]
   return allRows.some(row => (row.description && !row.price) || (!row.description && row.price))
 })
 
@@ -375,6 +494,14 @@ const previewHtml = computed(() => buildMenuDocument({
 
 function getSalaRows(language, meal) {
   return salaRowsByLanguage[language]?.[meal] || salaRowsByLanguage.it.lunch
+}
+
+function getExtraRows(language) {
+  return extraRowsByLanguage[language] || extraRowsByLanguage.it
+}
+
+function getExtraTranslation() {
+  return extraTranslations[activeExtraLanguage.value] || extraTranslations.it
 }
 
 function getSalaTranslation() {
@@ -544,8 +671,19 @@ function persistDraft() {
     activeSalaMeal: activeSalaMeal.value,
     salaDateMode: salaDateMode.value,
     activeSalaLanguage: activeSalaLanguage.value,
+    activeExtraLanguage: activeExtraLanguage.value,
     primi: primiRows.value,
     secondi: secondiRows.value,
+    extraTranslations: {
+      de: {
+        primi: extraDePrimiRows.value,
+        secondi: extraDeSecondiRows.value
+      },
+      en: {
+        primi: extraEnPrimiRows.value,
+        secondi: extraEnSecondiRows.value
+      }
+    },
     salaLunchPrimi: salaLunchPrimiRows.value,
     salaLunchSecondi: salaLunchSecondiRows.value,
     salaDinnerPrimi: salaDinnerPrimiRows.value,
@@ -584,8 +722,13 @@ function restoreDraft() {
     activeSalaMeal.value = parsedDraft?.activeSalaMeal === 'dinner' ? 'dinner' : 'lunch'
     salaDateMode.value = parsedDraft?.salaDateMode === 'today' ? 'today' : 'tomorrow'
     activeSalaLanguage.value = ['it', 'de', 'en'].includes(parsedDraft?.activeSalaLanguage) ? parsedDraft.activeSalaLanguage : 'it'
+    activeExtraLanguage.value = ['it', 'de', 'en'].includes(parsedDraft?.activeExtraLanguage) ? parsedDraft.activeExtraLanguage : 'it'
     primiRows.value = sanitizeStoredRows(parsedDraft?.primi)
     secondiRows.value = sanitizeStoredRows(parsedDraft?.secondi)
+    extraDePrimiRows.value = sanitizeStoredRows(parsedDraft?.extraTranslations?.de?.primi)
+    extraDeSecondiRows.value = sanitizeStoredRows(parsedDraft?.extraTranslations?.de?.secondi)
+    extraEnPrimiRows.value = sanitizeStoredRows(parsedDraft?.extraTranslations?.en?.primi)
+    extraEnSecondiRows.value = sanitizeStoredRows(parsedDraft?.extraTranslations?.en?.secondi)
     salaLunchPrimiRows.value = sanitizeStoredRows(parsedDraft?.salaLunchPrimi ?? parsedDraft?.salaPrimi)
     salaLunchSecondiRows.value = sanitizeStoredRows(parsedDraft?.salaLunchSecondi ?? parsedDraft?.salaSecondi)
     salaDinnerPrimiRows.value = sanitizeStoredRows(parsedDraft?.salaDinnerPrimi)
@@ -602,6 +745,10 @@ function restoreDraft() {
     console.warn('Bozza menu del giorno non valida nello storage locale:', error)
     primiRows.value = createEmptyRows()
     secondiRows.value = createEmptyRows()
+    extraDePrimiRows.value = createEmptyRows()
+    extraDeSecondiRows.value = createEmptyRows()
+    extraEnPrimiRows.value = createEmptyRows()
+    extraEnSecondiRows.value = createEmptyRows()
     salaLunchPrimiRows.value = createEmptyRows()
     salaLunchSecondiRows.value = createEmptyRows()
     salaDinnerPrimiRows.value = createEmptyRows()
@@ -641,12 +788,8 @@ function formatPrice(price) {
   }).format(amount)} €`
 }
 
-function buildSectionMarkup(title, items) {
-  if (!items.length) {
-    return ''
-  }
-
-  const itemsMarkup = items
+function buildExtraItemsMarkup(items) {
+  return items
     .map(item => `
       <div class="menu-item">
         <div class="item-info">
@@ -656,13 +799,6 @@ function buildSectionMarkup(title, items) {
       </div>
     `)
     .join('')
-
-  return `
-    <div class="menu-section">
-      <div class="section-title">${escapeHtml(title)}</div>
-      ${itemsMarkup}
-    </div>
-  `
 }
 
 function buildDividerMarkup() {
@@ -695,35 +831,52 @@ function buildExtraMenuDocument({ primi, secondi, forPrint, autoPrint = false })
   const parser = new DOMParser()
   const doc = parser.parseFromString(menuTemplate, 'text/html')
   const container = doc.querySelector('.menu-container')
-  const allergens = doc.querySelector('.allergeni-legenda')?.outerHTML ?? ''
-  const footer = doc.querySelector('.footer')?.outerHTML ?? ''
   const logo = doc.querySelector('.logo-area img')
+  const menuSection = container?.querySelector('.menu-section')
+  const sectionTitle = menuSection?.querySelector('.section-title')
+  const dividers = menuSection ? Array.from(menuSection.querySelectorAll('.deco-icon')) : []
+  const translation = getExtraTranslation()
 
-  if (!container || !logo) {
+  if (!container || !logo || !menuSection || dividers.length < 2) {
     return menuTemplate
   }
 
+  doc.documentElement.lang = activeExtraLanguage.value
   logo.src = logoUrl
 
-  const sections = [
-    buildSectionMarkup('Primi', primi),
-    primi.length && secondi.length ? buildDividerMarkup() : '',
-    buildSectionMarkup('Secondi', secondi)
-  ].join('')
+  if (sectionTitle) {
+    sectionTitle.textContent = translation.menuTitle
+  }
 
-  container.innerHTML = `
-    <div class="logo-area">
-      <img src="${escapeHtml(logoUrl)}" alt="Logo Hotel Mirafiori" />
-    </div>
-    <div class="divider"></div>
-    ${sections}
-    ${allergens}
-    ${footer}
-  `
+  let reachedSecondDivider = false
+
+  Array.from(menuSection.children).forEach(child => {
+    if (child === dividers[1]) {
+      reachedSecondDivider = true
+      return
+    }
+
+    if (!reachedSecondDivider && child.classList.contains('menu-item')) {
+      child.remove()
+    }
+  })
+
+  dividers[0].insertAdjacentHTML('beforebegin', buildExtraItemsMarkup(primi))
+  dividers[1].insertAdjacentHTML('beforebegin', buildExtraItemsMarkup(secondi))
+
+  const allergens = container.querySelector('.allergeni-legenda')
+
+  if (allergens) {
+    allergens.innerHTML = `
+      <span class="allergeni-titolo">${escapeHtml(translation.allergensTitle)}</span>
+      ${escapeHtml(translation.allergensText)}
+      <br><i>${escapeHtml(translation.allergensNotice)}</i>
+    `
+  }
 
   const wrapperClass = forPrint ? 'print-mode' : 'preview-mode'
   const pageMarkup = forPrint
-    ? `<div class="a4-page"><div class="a4-scale">${container.outerHTML}</div></div>`
+    ? `<div class="a4-landscape-page">${container.outerHTML}${container.outerHTML}</div>`
     : container.outerHTML
 
   doc.body.className = wrapperClass
@@ -749,20 +902,15 @@ function buildExtraMenuDocument({ primi, secondi, forPrint, autoPrint = false })
       padding: 0;
     }
 
-    body.print-mode .a4-page {
-      width: 210mm;
-      height: 297mm;
-      overflow: hidden;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-    }
-
-    body.print-mode .a4-scale {
-      width: 148mm;
+    body.print-mode .a4-landscape-page {
+      width: 297mm;
       height: 210mm;
-      transform: scale(${a4Scale});
-      transform-origin: top center;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: repeat(2, 148mm);
+      justify-content: space-between;
+      align-items: start;
+      background: #ffffff;
     }
 
     body.print-mode .menu-container {
@@ -770,7 +918,7 @@ function buildExtraMenuDocument({ primi, secondi, forPrint, autoPrint = false })
     }
 
     @page {
-      size: A4 portrait;
+      size: A4 landscape;
       margin: 0;
     }
   `
@@ -931,6 +1079,13 @@ function appendSalaStyles(doc, { forPrint, autoPrint }) {
       justify-content: space-between;
       align-items: start;
       background: #ffffff;
+      page-break-after: always;
+      break-after: page;
+    }
+
+    body.print-mode .a4-landscape-page:last-child {
+      page-break-after: auto;
+      break-after: auto;
     }
 
     body.print-mode .a4-page:last-child {
@@ -1001,6 +1156,10 @@ function buildSalaMenuPreviewDocument({ lunchPrimi, lunchSecondi, dinnerPrimi, d
     doc.body.innerHTML = `
       <div class="a4-landscape-page">
         ${lunch}
+        ${lunch}
+      </div>
+      <div class="a4-landscape-page">
+        ${dinner}
         ${dinner}
       </div>
     `
@@ -1090,7 +1249,7 @@ function buildPdfFileName() {
     String(now.getDate()).padStart(2, '0')
   ].join('-')
 
-  return `menu-del-giorno-${date}.pdf`
+  return `menu-extra-${activeExtraLanguage.value}-${date}.pdf`
 }
 
 function buildSalaPdfFileName() {
@@ -1123,22 +1282,11 @@ async function exportPdf() {
       const { frameDocument, cleanup } = await createRenderFrame(exportHtml, { orientation: 'landscape' })
 
       try {
-        const page = frameDocument.querySelector('.a4-landscape-page')
+        const pages = Array.from(frameDocument.querySelectorAll('.a4-landscape-page'))
 
-        if (!page) {
+        if (!pages.length) {
           throw new Error('Layout A4 orizzontale non trovato.')
         }
-
-        const canvas = await html2canvas(page, {
-          backgroundColor: '#ffffff',
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          width: page.scrollWidth,
-          height: page.scrollHeight,
-          windowWidth: page.scrollWidth,
-          windowHeight: page.scrollHeight
-        })
 
         const pdf = new jsPDF({
           orientation: 'landscape',
@@ -1147,7 +1295,25 @@ async function exportPdf() {
           compress: true
         })
 
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 297, 210, undefined, 'FAST')
+        for (const [index, page] of pages.entries()) {
+          const canvas = await html2canvas(page, {
+            backgroundColor: '#ffffff',
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            width: page.scrollWidth,
+            height: page.scrollHeight,
+            windowWidth: page.scrollWidth,
+            windowHeight: page.scrollHeight
+          })
+
+          if (index > 0) {
+            pdf.addPage('a4', 'landscape')
+          }
+
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 297, 210, undefined, 'FAST')
+        }
+
         pdf.save(buildSalaPdfFileName())
       } finally {
         cleanup()
@@ -1163,13 +1329,13 @@ async function exportPdf() {
       autoPrint: false
     })
 
-    const { frameDocument, cleanup } = await createRenderFrame(exportHtml)
+    const { frameDocument, cleanup } = await createRenderFrame(exportHtml, { orientation: 'landscape' })
 
     try {
-      const page = frameDocument.querySelector('.a4-page')
+      const page = frameDocument.querySelector('.a4-landscape-page')
 
       if (!page) {
-        throw new Error('Layout A4 non trovato.')
+        throw new Error('Layout A4 orizzontale non trovato.')
       }
 
       const canvas = await html2canvas(page, {
@@ -1184,13 +1350,13 @@ async function exportPdf() {
       })
 
       const pdf = new jsPDF({
-        orientation: 'portrait',
+        orientation: 'landscape',
         unit: 'mm',
         format: 'a4',
         compress: true
       })
 
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297, undefined, 'FAST')
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 297, 210, undefined, 'FAST')
       pdf.save(buildPdfFileName())
     } finally {
       cleanup()
@@ -1219,7 +1385,7 @@ async function printMenu() {
     })
 
     const { frameWindow, cleanup } = await createRenderFrame(printHtml, {
-      orientation: isSalaMenu.value ? 'landscape' : 'portrait'
+      orientation: 'landscape'
     })
     let hasCleanedUp = false
 
