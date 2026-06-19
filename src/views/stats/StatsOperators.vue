@@ -52,12 +52,23 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 
+const formatDateForPicker = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const today = new Date();
+const yesterday = new Date(today);
+yesterday.setDate(today.getDate() - 1);
+
 const searchQuery = ref('');
-const fromDate = ref('');
-const toDate = ref('');
+const fromDate = ref(formatDateForPicker(yesterday));
+const toDate = ref(formatDateForPicker(today));
 const loading = ref(false);
 const error = ref('');
 const stats = ref(null);
@@ -189,6 +200,8 @@ const fetchStats = async () => {
     loading.value = false;
   }
 };
+
+onMounted(fetchStats);
 </script>
 
 <style scoped>
