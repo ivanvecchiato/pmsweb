@@ -217,6 +217,7 @@ import axios from 'axios'
 import menuTemplate from '@/menu/assets/menu-hotel.html?raw'
 import dailyMenuTemplate from '@/menu/assets/menu-hotel-giornaliero.html?raw'
 import logoUrl from '@/menu/assets/logo.png'
+import interrazzaLogoUrl from '@/menu/assets/interrazza.png'
 
 const MENU_ENDPOINT = '/api/menu'
 const rowCount = 6
@@ -491,6 +492,20 @@ const previewHtml = computed(() => buildMenuDocument({
   forPrint: false,
   autoPrint: false
 }))
+
+function resolveAssetUrl(assetUrl) {
+  return new URL(assetUrl, window.location.href).href
+}
+
+function resolveTemplateLogoUrl(logo) {
+  const templateSrc = logo.getAttribute('src') || ''
+
+  if (templateSrc.includes('interrazza')) {
+    return resolveAssetUrl(interrazzaLogoUrl)
+  }
+
+  return resolveAssetUrl(logoUrl)
+}
 
 function getSalaRows(language, meal) {
   return salaRowsByLanguage[language]?.[meal] || salaRowsByLanguage.it.lunch
@@ -837,32 +852,38 @@ function buildExtraMenuDocument({ primi, secondi, forPrint, autoPrint = false })
   const dividers = menuSection ? Array.from(menuSection.querySelectorAll('.deco-icon')) : []
   const translation = getExtraTranslation()
 
-  if (!container || !logo || !menuSection || dividers.length < 2) {
+  if (!container || !logo || !menuSection || !dividers.length) {
     return menuTemplate
   }
 
   doc.documentElement.lang = activeExtraLanguage.value
-  logo.src = logoUrl
+  logo.src = resolveTemplateLogoUrl(logo)
 
   if (sectionTitle) {
     sectionTitle.textContent = translation.menuTitle
   }
 
-  let reachedSecondDivider = false
+  const fixedSectionDivider = dividers[1] || null
+  let reachedFixedSection = false
 
   Array.from(menuSection.children).forEach(child => {
-    if (child === dividers[1]) {
-      reachedSecondDivider = true
+    if (child === fixedSectionDivider) {
+      reachedFixedSection = true
       return
     }
 
-    if (!reachedSecondDivider && child.classList.contains('menu-item')) {
+    if (!reachedFixedSection && child.classList.contains('menu-item')) {
       child.remove()
     }
   })
 
   dividers[0].insertAdjacentHTML('beforebegin', buildExtraItemsMarkup(primi))
-  dividers[1].insertAdjacentHTML('beforebegin', buildExtraItemsMarkup(secondi))
+
+  if (fixedSectionDivider) {
+    fixedSectionDivider.insertAdjacentHTML('beforebegin', buildExtraItemsMarkup(secondi))
+  } else {
+    dividers[0].insertAdjacentHTML('afterend', buildExtraItemsMarkup(secondi))
+  }
 
   const allergens = container.querySelector('.allergeni-legenda')
 
@@ -911,6 +932,13 @@ function buildExtraMenuDocument({ primi, secondi, forPrint, autoPrint = false })
       justify-content: space-between;
       align-items: start;
       background: #ffffff;
+      page-break-after: always;
+      break-after: page;
+    }
+
+    body.print-mode .a4-landscape-page:last-child {
+      page-break-after: auto;
+      break-after: auto;
     }
 
     body.print-mode .menu-container {
@@ -997,6 +1025,7 @@ function buildSalaContainer({ primi, secondi, meal }) {
   const doc = parser.parseFromString(dailyMenuTemplate, 'text/html')
   const container = doc.querySelector('.menu-container')
   const translation = getSalaTranslation()
+  const resolvedLogoUrl = resolveAssetUrl(logoUrl)
 
   if (!container) {
     return ''
@@ -1011,7 +1040,7 @@ function buildSalaContainer({ primi, secondi, meal }) {
 
   container.innerHTML = `
     <div class="logo-area">
-      <img src="${escapeHtml(logoUrl)}" alt="Logo Hotel Mirafiori" />
+      <img src="${escapeHtml(resolvedLogoUrl)}" alt="Logo Hotel Mirafiori" />
     </div>
     <div class="camera-placeholder">${escapeHtml(translation.roomLabel)} ________</div>
     <div class="menu-section">
