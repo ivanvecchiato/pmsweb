@@ -90,6 +90,13 @@
           <input v-model="activeSalaLanguage" class="hidden-radio" type="radio" value="en" />
           Inglese
         </label>
+        <label
+          class="tab-btn"
+          :class="{ active: activeSalaLanguage === 'other' }"
+        >
+          <input v-model="activeSalaLanguage" class="hidden-radio" type="radio" value="other" />
+          Altro
+        </label>
       </div>
     </div>
 
@@ -252,6 +259,10 @@ const salaEnLunchPrimiRows = ref(createEmptyRows())
 const salaEnLunchSecondiRows = ref(createEmptyRows())
 const salaEnDinnerPrimiRows = ref(createEmptyRows())
 const salaEnDinnerSecondiRows = ref(createEmptyRows())
+const salaOtherLunchPrimiRows = ref(createEmptyRows())
+const salaOtherLunchSecondiRows = ref(createEmptyRows())
+const salaOtherDinnerPrimiRows = ref(createEmptyRows())
+const salaOtherDinnerSecondiRows = ref(createEmptyRows())
 
 const salaRowsByLanguage = {
   it: {
@@ -282,6 +293,16 @@ const salaRowsByLanguage = {
     dinner: {
       primi: salaEnDinnerPrimiRows,
       secondi: salaEnDinnerSecondiRows
+    }
+  },
+  other: {
+    lunch: {
+      primi: salaOtherLunchPrimiRows,
+      secondi: salaOtherLunchSecondiRows
+    },
+    dinner: {
+      primi: salaOtherDinnerPrimiRows,
+      secondi: salaOtherDinnerSecondiRows
     }
   }
 }
@@ -400,6 +421,18 @@ const salaTranslations = {
     allergensTitle: 'Allergen information:',
     allergensText: 'Our dishes may contain: cereals containing gluten, crustaceans, eggs, fish, peanuts, soy, milk, nuts, celery, mustard, sesame, sulphites, lupin and molluscs.',
     footer: 'Please inform our staff of any intolerances or allergies'
+  },
+  other: {
+    locale: 'en-GB',
+    meals: {
+      lunch: 'Lunch',
+      dinner: 'Dinner'
+    },
+    roomLabel: 'room',
+    portionLabels: 'reg.&nbsp;&nbsp;&nbsp;&nbsp;red.',
+    allergensTitle: 'Allergen information:',
+    allergensText: 'Our dishes may contain: cereals containing gluten, crustaceans, eggs, fish, peanuts, soy, milk, nuts, celery, mustard, sesame, sulphites, lupin and molluscs.',
+    footer: 'Please inform our staff of any intolerances or allergies'
   }
 }
 
@@ -431,7 +464,11 @@ watch([
   salaEnLunchPrimiRows,
   salaEnLunchSecondiRows,
   salaEnDinnerPrimiRows,
-  salaEnDinnerSecondiRows
+  salaEnDinnerSecondiRows,
+  salaOtherLunchPrimiRows,
+  salaOtherLunchSecondiRows,
+  salaOtherDinnerPrimiRows,
+  salaOtherDinnerSecondiRows
 ], () => {
   if (isRestoringBackendMenu.value) {
     return
@@ -610,6 +647,16 @@ function buildSalaMenuSnapshot() {
           primi: serializeRows(salaEnDinnerPrimiRows.value),
           secondi: serializeRows(salaEnDinnerSecondiRows.value)
         }
+      },
+      other: {
+        lunch: {
+          primi: serializeRows(salaOtherLunchPrimiRows.value),
+          secondi: serializeRows(salaOtherLunchSecondiRows.value)
+        },
+        dinner: {
+          primi: serializeRows(salaOtherDinnerPrimiRows.value),
+          secondi: serializeRows(salaOtherDinnerSecondiRows.value)
+        }
       }
     }
   }
@@ -630,6 +677,10 @@ function applySalaMenuSnapshot(menu) {
   salaEnLunchSecondiRows.value = cloneRows(languages.en?.lunch?.secondi)
   salaEnDinnerPrimiRows.value = cloneRows(languages.en?.dinner?.primi)
   salaEnDinnerSecondiRows.value = cloneRows(languages.en?.dinner?.secondi)
+  salaOtherLunchPrimiRows.value = cloneRows(languages.other?.lunch?.primi)
+  salaOtherLunchSecondiRows.value = cloneRows(languages.other?.lunch?.secondi)
+  salaOtherDinnerPrimiRows.value = cloneRows(languages.other?.dinner?.primi)
+  salaOtherDinnerSecondiRows.value = cloneRows(languages.other?.dinner?.secondi)
 }
 
 function getSalaMenuIsoDate() {
@@ -715,6 +766,12 @@ function persistDraft() {
         lunchSecondi: salaEnLunchSecondiRows.value,
         dinnerPrimi: salaEnDinnerPrimiRows.value,
         dinnerSecondi: salaEnDinnerSecondiRows.value
+      },
+      other: {
+        lunchPrimi: salaOtherLunchPrimiRows.value,
+        lunchSecondi: salaOtherLunchSecondiRows.value,
+        dinnerPrimi: salaOtherDinnerPrimiRows.value,
+        dinnerSecondi: salaOtherDinnerSecondiRows.value
       }
     }
   }))
@@ -736,7 +793,7 @@ function restoreDraft() {
     menuType.value = parsedDraft?.menuType === 'sala' ? 'sala' : 'extra'
     activeSalaMeal.value = parsedDraft?.activeSalaMeal === 'dinner' ? 'dinner' : 'lunch'
     salaDateMode.value = parsedDraft?.salaDateMode === 'today' ? 'today' : 'tomorrow'
-    activeSalaLanguage.value = ['it', 'de', 'en'].includes(parsedDraft?.activeSalaLanguage) ? parsedDraft.activeSalaLanguage : 'it'
+    activeSalaLanguage.value = ['it', 'de', 'en', 'other'].includes(parsedDraft?.activeSalaLanguage) ? parsedDraft.activeSalaLanguage : 'it'
     activeExtraLanguage.value = ['it', 'de', 'en'].includes(parsedDraft?.activeExtraLanguage) ? parsedDraft.activeExtraLanguage : 'it'
     primiRows.value = sanitizeStoredRows(parsedDraft?.primi)
     secondiRows.value = sanitizeStoredRows(parsedDraft?.secondi)
@@ -756,6 +813,10 @@ function restoreDraft() {
     salaEnLunchSecondiRows.value = sanitizeStoredRows(parsedDraft?.salaTranslations?.en?.lunchSecondi)
     salaEnDinnerPrimiRows.value = sanitizeStoredRows(parsedDraft?.salaTranslations?.en?.dinnerPrimi)
     salaEnDinnerSecondiRows.value = sanitizeStoredRows(parsedDraft?.salaTranslations?.en?.dinnerSecondi)
+    salaOtherLunchPrimiRows.value = sanitizeStoredRows(parsedDraft?.salaTranslations?.other?.lunchPrimi)
+    salaOtherLunchSecondiRows.value = sanitizeStoredRows(parsedDraft?.salaTranslations?.other?.lunchSecondi)
+    salaOtherDinnerPrimiRows.value = sanitizeStoredRows(parsedDraft?.salaTranslations?.other?.dinnerPrimi)
+    salaOtherDinnerSecondiRows.value = sanitizeStoredRows(parsedDraft?.salaTranslations?.other?.dinnerSecondi)
   } catch (error) {
     console.warn('Bozza menu del giorno non valida nello storage locale:', error)
     primiRows.value = createEmptyRows()
@@ -776,6 +837,10 @@ function restoreDraft() {
     salaEnLunchSecondiRows.value = createEmptyRows()
     salaEnDinnerPrimiRows.value = createEmptyRows()
     salaEnDinnerSecondiRows.value = createEmptyRows()
+    salaOtherLunchPrimiRows.value = createEmptyRows()
+    salaOtherLunchSecondiRows.value = createEmptyRows()
+    salaOtherDinnerPrimiRows.value = createEmptyRows()
+    salaOtherDinnerSecondiRows.value = createEmptyRows()
   }
 }
 
