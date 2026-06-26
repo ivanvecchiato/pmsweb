@@ -22,8 +22,8 @@ const router = createRouter({
     },
     {
       path: '/',
-      name: 'Planner',
-      component: () => import('@/views/pms/HotelBookingPlanner.vue'),
+      name: 'Home',
+      component: () => import('@/views/pms/Home.vue'),
       meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {
