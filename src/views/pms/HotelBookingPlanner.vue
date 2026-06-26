@@ -1,7 +1,7 @@
 <template>
   <div class="planner-container">
     <div class="header">
-      <h1 class="title">Planning Prenotazioni Hotel</h1>
+      <h1 class="title">Planning</h1>
       <div class="header-controls">
         <button
           @click="syncHotelH5s"
