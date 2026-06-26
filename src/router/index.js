@@ -27,6 +27,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {
+      path: '/bookings',
+      name: 'Bookings',
+      component: () => import('@/views/pms/Bookings.vue'),
+      meta: { requiresAuth: true, permissions: ['home', 'beach-bookings'], pmsTypes: ['hotel', 'beach'], requiresHospitalityStudioPms: true }
+    },
+    {
       path: '/customers',
       name: 'CustomerManagement',
       component: () => import('@/views/pms/CustomerManagement.vue'),
@@ -158,6 +164,8 @@ router.beforeEach(async (to, from, next) => {
     if (!isAuthenticated.value) {
       // Non autenticato, redirect a login
       next('/login')
+    } else if (to.meta.permissions && !to.meta.permissions.some((permission) => hasPermission(permission))) {
+      next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
     } else if (to.meta.permission && !hasPermission(to.meta.permission)) {
       next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
     } else if (to.meta.requiresHospitalityStudioPms && !canShowHotelBeachMenus.value) {

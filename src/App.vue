@@ -62,6 +62,23 @@
             </router-link>
 
             <router-link
+              v-if="
+                (hasPermission('home') && isPmsTypeAllowed(['hotel']))
+                || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach']))
+              "
+              to="/bookings"
+              :class="['menu-item', { active: route.path === '/bookings' }]"
+              aria-label="Prenotazioni"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M7 3v4M17 3v4M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM8 13h3M8 17h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Prenotazioni</span>
+            </router-link>
+
+            <router-link
               v-if="hasPermission('customers')"
               to="/customers"
               :class="['menu-item', { active: route.path === '/customers' }]"
@@ -345,6 +362,7 @@ const isMobileMenuOpen = ref(false)
 
 const sectionContent = {
   '/': { title: 'Planner Hotel', description: 'Monitoraggio camere, prenotazioni e operativita giornaliera.' },
+  '/bookings': { title: 'Prenotazioni', description: 'Lista annuale prenotazioni con ricerca, filtri e ordinamento.' },
   '/customers': { title: 'Gestione Clienti', description: 'Anagrafica ospiti, contatti e storico relazioni.' },
   '/beach-bookings': { title: 'Planner Spiaggia', description: 'Controllo rapido delle prenotazioni stabilimento.' },
   '/quotes': { title: 'Preventivi', description: 'Creazione e conversione offerte in prenotazioni operative.' },
