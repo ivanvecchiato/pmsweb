@@ -85,6 +85,10 @@
                 <span>Note</span>
                 <p>{{ booking.notes }}</p>
               </div>
+              <div v-if="booking.housekeepingNotes.length" class="movement-notes">
+                <span>Housekeeping</span>
+                <p v-for="note in booking.housekeepingNotes" :key="note">{{ note }}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -194,6 +198,14 @@ const getReservationNotes = (reservation) => {
   return String(rawNotes).trim()
 }
 
+const getHousekeepingNotes = (reservation) => {
+  if (!Array.isArray(reservation?.housekeeping)) return []
+
+  return reservation.housekeeping
+    .map((note) => String(note).trim())
+    .filter(Boolean)
+}
+
 const normalizeBooking = (booking) => ({
   ...booking,
   id: booking?.id || booking?._id || crypto.randomUUID(),
@@ -201,7 +213,8 @@ const normalizeBooking = (booking) => ({
   checkin: toDateOnly(booking?.checkin),
   checkout: toDateOnly(booking?.checkout),
   resourceLabel: booking?.room || booking?.roomName || booking?.placeLabel || booking?.placeId || '',
-  notes: getReservationNotes(booking)
+  notes: getReservationNotes(booking),
+  housekeepingNotes: getHousekeepingNotes(booking)
 })
 
 const extractMovementRows = (data) => {
@@ -273,12 +286,13 @@ const escapeHtml = (value) => String(value ?? '')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#039;')
 
-const buildReportRows = (rows) => rows.map((booking) => `
+const buildReportRows = (rows, includeHousekeepingNotes = false) => rows.map((booking) => `
   <tr>
     <td>
       <strong>${escapeHtml(booking.customerName || '-')}</strong>
       <small>#${escapeHtml(booking.id)}</small>
       ${booking.notes ? `<div class="notes"><span>Note</span>${escapeHtml(booking.notes).replace(/\n/g, '<br>')}</div>` : ''}
+      ${includeHousekeepingNotes && booking.housekeepingNotes.length ? `<div class="notes"><span>Housekeeping</span>${booking.housekeepingNotes.map((note) => escapeHtml(note)).join('<br>')}</div>` : ''}
     </td>
     <td>${escapeHtml(booking.resourceLabel || '-')}</td>
     <td>${escapeHtml(formatDate(booking.checkin))}</td>
@@ -322,7 +336,7 @@ const printReport = (type) => {
             </tr>
           </thead>
           <tbody>
-            ${buildReportRows(rows)}
+            ${buildReportRows(rows, type === 'arrivals')}
           </tbody>
         </table>
       </body>
