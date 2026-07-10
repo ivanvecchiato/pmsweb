@@ -33,16 +33,6 @@
             </div>
 
             <div class="field">
-              <label for="booking-date-search">Data prenotazione</label>
-              <input id="booking-date-search" v-model="filters.bookingDate" type="date" />
-            </div>
-
-            <div class="field">
-              <label for="arrival-date-search">Data arrivo</label>
-              <input id="arrival-date-search" v-model="filters.arrivalDate" type="date" />
-            </div>
-
-            <div class="field">
               <label for="booking-sort">Ordina per</label>
               <select id="booking-sort" v-model="sortBy">
                 <option value="name">Nome</option>
@@ -52,27 +42,53 @@
           </div>
 
           <div class="range-grid">
-            <div class="range-group">
-              <span class="group-label">Data arrivo</span>
+            <div class="range-group" :class="{ disabled: filters.dateFilterType !== 'arrival' }">
+              <label class="range-radio">
+                <input v-model="filters.dateFilterType" type="radio" value="arrival" />
+                <span>Data arrivo</span>
+              </label>
               <label class="range-field">
                 <span>da</span>
-                <input v-model="filters.arrivalFrom" type="date" aria-label="Data arrivo da" />
+                <input
+                  v-model="filters.arrivalFrom"
+                  type="date"
+                  aria-label="Data arrivo da"
+                  :disabled="filters.dateFilterType !== 'arrival'"
+                />
               </label>
               <label class="range-field">
                 <span>a</span>
-                <input v-model="filters.arrivalTo" type="date" aria-label="Data arrivo a" />
+                <input
+                  v-model="filters.arrivalTo"
+                  type="date"
+                  aria-label="Data arrivo a"
+                  :disabled="filters.dateFilterType !== 'arrival'"
+                />
               </label>
             </div>
 
-            <div class="range-group">
-              <span class="group-label">Data prenotazione</span>
+            <div class="range-group" :class="{ disabled: filters.dateFilterType !== 'booking' }">
+              <label class="range-radio">
+                <input v-model="filters.dateFilterType" type="radio" value="booking" />
+                <span>Data prenotazione</span>
+              </label>
               <label class="range-field">
                 <span>da</span>
-                <input v-model="filters.bookingFrom" type="date" aria-label="Data prenotazione da" />
+                <input
+                  v-model="filters.bookingFrom"
+                  type="date"
+                  aria-label="Data prenotazione da"
+                  :disabled="filters.dateFilterType !== 'booking'"
+                />
               </label>
               <label class="range-field">
                 <span>a</span>
-                <input v-model="filters.bookingTo" type="date" aria-label="Data prenotazione a" />
+                <input
+                  v-model="filters.bookingTo"
+                  type="date"
+                  aria-label="Data prenotazione a"
+                  :disabled="filters.dateFilterType !== 'booking'"
+                />
               </label>
             </div>
           </div>
@@ -129,20 +145,32 @@ import { useAuth } from '@/composables/useAuth'
 
 const { pmsType, loadPmsType } = useAuth()
 const currentYear = new Date().getFullYear()
+const today = new Date()
+const yesterday = new Date(today)
+yesterday.setDate(today.getDate() - 1)
 const bookings = ref([])
 const isLoading = ref(false)
 const errorMessage = ref('')
 const lastUpdated = ref('')
 const sortBy = ref('name')
 
+const formatDateForPicker = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const defaultDateFrom = formatDateForPicker(yesterday)
+const defaultDateTo = formatDateForPicker(today)
+
 const filters = reactive({
   customer: '',
-  bookingDate: '',
-  arrivalDate: '',
-  arrivalFrom: '',
-  arrivalTo: '',
-  bookingFrom: '',
-  bookingTo: ''
+  dateFilterType: 'arrival',
+  arrivalFrom: defaultDateFrom,
+  arrivalTo: defaultDateTo,
+  bookingFrom: defaultDateFrom,
+  bookingTo: defaultDateTo
 })
 
 const statusLabels = {
@@ -192,10 +220,10 @@ const normalizeBooking = (booking) => ({
 })
 
 const getArrivalRequestRange = () => {
-  if (filters.arrivalDate) {
+  if (filters.dateFilterType === 'booking') {
     return {
-      from: filters.arrivalDate,
-      to: filters.arrivalDate
+      from: getYearBoundary('01', '01'),
+      to: getYearBoundary('12', '31')
     }
   }
 
@@ -248,10 +276,8 @@ const filteredBookings = computed(() => {
   return bookings.value
     .filter((booking) => {
       if (customerQuery && !normalizeText(booking.customerName).includes(customerQuery)) return false
-      if (filters.bookingDate && booking.bookingDate !== filters.bookingDate) return false
-      if (filters.arrivalDate && booking.checkin !== filters.arrivalDate) return false
-      if ((filters.arrivalFrom || filters.arrivalTo) && !isInRange(booking.checkin, filters.arrivalFrom, filters.arrivalTo)) return false
-      if ((filters.bookingFrom || filters.bookingTo) && !isInRange(booking.bookingDate, filters.bookingFrom, filters.bookingTo)) return false
+      if (filters.dateFilterType === 'arrival' && (filters.arrivalFrom || filters.arrivalTo) && !isInRange(booking.checkin, filters.arrivalFrom, filters.arrivalTo)) return false
+      if (filters.dateFilterType === 'booking' && (filters.bookingFrom || filters.bookingTo) && !isInRange(booking.bookingDate, filters.bookingFrom, filters.bookingTo)) return false
       return true
     })
     .sort((left, right) => {
@@ -265,9 +291,12 @@ const filteredBookings = computed(() => {
 const resourceColumnLabel = computed(() => (pmsType.value === 'beach' ? 'Posto' : 'Stanza'))
 
 const resetFilters = () => {
-  Object.keys(filters).forEach((key) => {
-    filters[key] = ''
-  })
+  filters.customer = ''
+  filters.dateFilterType = 'arrival'
+  filters.arrivalFrom = defaultDateFrom
+  filters.arrivalTo = defaultDateTo
+  filters.bookingFrom = defaultDateFrom
+  filters.bookingTo = defaultDateTo
   sortBy.value = 'name'
   loadBookings()
 }
@@ -377,7 +406,7 @@ onMounted(loadBookings)
 
 .filters-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 1.5fr) repeat(3, minmax(180px, 1fr));
+  grid-template-columns: minmax(260px, 1.5fr) minmax(180px, 1fr);
   gap: 14px;
 }
 
@@ -415,6 +444,32 @@ label,
   color: var(--ds-text-soft);
 }
 
+.range-radio {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ds-text);
+  white-space: nowrap;
+}
+
+.range-radio input {
+  width: 16px;
+  min-height: 16px;
+  padding: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.range-radio span {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.range-group.disabled {
+  opacity: 0.58;
+}
+
 .range-group .group-label {
   min-height: 48px;
   display: flex;
@@ -446,6 +501,11 @@ select {
   background: rgba(255, 255, 255, 0.88);
   color: var(--ds-text);
   box-shadow: var(--ds-shadow-inset);
+}
+
+input:disabled {
+  cursor: not-allowed;
+  background: rgba(241, 245, 249, 0.72);
 }
 
 .btn {
