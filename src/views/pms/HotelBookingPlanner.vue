@@ -362,38 +362,40 @@
   </Teleport>
 </transition>
 
-<div
-  v-if="showBookingActionMenu"
-  class="booking-action-menu"
-  :style="bookingActionMenuStyle"
-  @click.stop
->
-  <template v-if="isCheckoutContextMenu">
-    <button type="button" class="booking-action-item" @click="openViewFromMenu">
-      Visualizza
-    </button>
-    <button v-if="isPendingPaymentContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
-      Paga
-    </button>
-    <button type="button" class="booking-action-item booking-action-item--danger" @click="undoCheckoutFromMenu">
-      Annulla checkout
-    </button>
-  </template>
-  <template v-else>
-    <button type="button" class="booking-action-item" @click="openEditFromMenu">
-      Modifica
-    </button>
-    <button v-if="bookingStatusActionLabel" type="button" class="booking-action-item" @click="runBookingStatusAction">
-      {{ bookingStatusActionLabel }}
-    </button>
-    <button type="button" class="booking-action-item" @click="openAddServiceFromMenu">
-      Aggiungi Servizio
-    </button>
-    <button v-if="isCheckedInContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
-      Paga conto
-    </button>
-  </template>
-</div>
+<Teleport to="body">
+  <div
+    v-if="showBookingActionMenu"
+    class="booking-action-menu"
+    :style="bookingActionMenuStyle"
+    @click.stop
+  >
+    <template v-if="isCheckoutContextMenu">
+      <button type="button" class="booking-action-item" @click="openViewFromMenu">
+        Visualizza
+      </button>
+      <button v-if="isPendingPaymentContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
+        Paga
+      </button>
+      <button type="button" class="booking-action-item booking-action-item--danger" @click="undoCheckoutFromMenu">
+        Annulla checkout
+      </button>
+    </template>
+    <template v-else>
+      <button type="button" class="booking-action-item" @click="openEditFromMenu">
+        Modifica
+      </button>
+      <button v-if="bookingStatusActionLabel" type="button" class="booking-action-item" @click="runBookingStatusAction">
+        {{ bookingStatusActionLabel }}
+      </button>
+      <button type="button" class="booking-action-item" @click="openAddServiceFromMenu">
+        Aggiungi Servizio
+      </button>
+      <button v-if="isCheckedInContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
+        Paga conto
+      </button>
+    </template>
+  </div>
+</Teleport>
 
 <!-- Modale Aggiungi Servizio (hotel) -->
 <transition name="fade">
@@ -489,7 +491,7 @@ const initialPlannerStartDate = new Date();
 initialPlannerStartDate.setHours(0, 0, 0, 0);
 initialPlannerStartDate.setDate(initialPlannerStartDate.getDate() - 10);
 const startDate = ref(initialPlannerStartDate);
-const days = ref(61);
+const days = ref(20);
 const daysToShift = 7;
 
 // Converti le prenotazioni con date assolute
@@ -1832,7 +1834,7 @@ const confirmCancel = async () => {
 const getReservations = () => {
   // Chiediamo al server dati a partire da 30 giorni prima della data visibile
   // per includere le prenotazioni che finiscono dentro la finestra attuale
-  const safetyMargin = 30; 
+  const safetyMargin = 15;
   const fetchStart = new Date(startDate.value);
   fetchStart.setDate(fetchStart.getDate() - safetyMargin);
   
@@ -1855,6 +1857,7 @@ const getReservations = () => {
 const convertRooms = (apiRooms) => {
   rooms.value = apiRooms.map(r => ({
     id: String(r.id), // Forza ID a stringa
+    code: String(r.room_code),
     name: r.description,
     type: r.room_type.label
   }));
@@ -1869,6 +1872,16 @@ const convertReservations = (apiReservations) => {
     // Trasformiamo la stringa "YYYY-MM-DD" in oggetto Date locale a mezzanotte
     const [year, month, day] = res.checkin.split('-').map(Number);
     const startDateObj = new Date(year, month - 1, day, 0, 0, 0);
+    const roomId = res.roomId != null
+      ? String(res.roomId)
+      : rooms.value.find(room => room.code === String(res.room))?.id;
+    let duration = Number(res.duration);
+
+    if (!Number.isFinite(duration) && res.checkout) {
+      const [checkoutYear, checkoutMonth, checkoutDay] = res.checkout.split('-').map(Number);
+      const checkoutDateObj = new Date(checkoutYear, checkoutMonth - 1, checkoutDay, 0, 0, 0);
+      duration = Math.round((checkoutDateObj - startDateObj) / (1000 * 60 * 60 * 24));
+    }
 
     const deposits = normalizeDeposits(getReservationDeposits(res));
     const hasDeposit = deposits.some(dep => Number(dep?.amount || 0) > 0) || deposits.length > 0;
@@ -1877,9 +1890,9 @@ const convertReservations = (apiReservations) => {
 
     return {
       id: res.id,
-      roomId: String(res.roomId), // Forza a stringa per il confronto
+      roomId,
       startDate: startDateObj,
-      duration: res.duration,
+      duration,
       rawStatus,
       displayStatus,
       status: displayStatus,
