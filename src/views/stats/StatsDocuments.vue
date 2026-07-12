@@ -135,6 +135,7 @@
               <thead>
                 <tr>
                   <th>Prodotto</th>
+                  <th>Data/Ora inserimento</th>
                   <th style="text-align: right;">Qta</th>
                   <th style="text-align: right;">Prezzo</th>
                   <th style="text-align: right;">Totale riga</th>
@@ -144,6 +145,7 @@
               <tbody>
                 <tr v-for="row in selectedDocumentDetail.rows" :key="row.rowId">
                   <td>{{ row.productName }}</td>
+                  <td>{{ formatDateTime(row.insertTime) }}</td>
                   <td class="amount">{{ row.quantity }}</td>
                   <td class="amount">{{ formatEuro(row.unitPrice) }}</td>
                   <td class="amount">{{ formatEuro(row.total) }}</td>
@@ -259,6 +261,7 @@ const printDocumentDetail = () => {
       return `
         <tr>
           <td>${escapeHtml(row.productName)}</td>
+          <td>${escapeHtml(formatDateTime(row.insertTime))}</td>
           <td class="num">${escapeHtml(row.quantity)}</td>
           <td class="num">${escapeHtml(formatEuro(row.unitPrice))}</td>
           <td class="num">${escapeHtml(formatEuro(row.total))}</td>
@@ -378,15 +381,16 @@ const printDocumentDetail = () => {
           <table>
             <thead>
               <tr>
-                <th style="width: 38%;">Prodotto</th>
+                <th style="width: 25%;">Prodotto</th>
+                <th style="width: 18%;">Data/Ora inserimento</th>
                 <th style="width: 10%;" class="num">Qta</th>
-                <th style="width: 16%;" class="num">Prezzo</th>
-                <th style="width: 16%;" class="num">Totale</th>
+                <th style="width: 13%;" class="num">Prezzo</th>
+                <th style="width: 14%;" class="num">Totale</th>
                 <th style="width: 20%;">Note</th>
               </tr>
             </thead>
             <tbody>
-              ${rowsHtml || '<tr><td colspan="5">Nessuna riga disponibile</td></tr>'}
+              ${rowsHtml || '<tr><td colspan="6">Nessuna riga disponibile</td></tr>'}
             </tbody>
           </table>
 
