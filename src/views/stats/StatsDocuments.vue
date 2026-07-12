@@ -449,7 +449,9 @@ const openDocumentDetail = async (doc) => {
       params: {
         firestoreId: doc?.firestore_id || '',
         progressivo: doc?.progressivo || '',
-        chiusura: doc?.chiusura || ''
+        chiusura: doc?.chiusura || '',
+        docType: doc?.docType ?? '',
+        timestamp: doc?.timestamp || ''
       }
     })
 
