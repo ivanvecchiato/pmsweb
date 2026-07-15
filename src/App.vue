@@ -1,7 +1,14 @@
 <template>
   <div id="app">
-    <div v-if="isAuthenticated" :class="['app-shell', { 'mobile-menu-open': isMobileViewport && isMobileMenuOpen }]">
-      <aside :class="['sidebar', { 'is-collapsed': isMobileViewport && !isMobileMenuOpen }]" role="navigation" aria-label="Sidebar menu">
+    <div
+      v-if="isAuthenticated"
+      :class="['app-shell', { 'sidebar-compact': !isMobileViewport && isSidebarCompact, 'mobile-menu-open': isMobileViewport && isMobileMenuOpen }]"
+    >
+      <aside
+        :class="['sidebar', { 'is-compact': !isMobileViewport && isSidebarCompact, 'is-collapsed': isMobileViewport && !isMobileMenuOpen }]"
+        role="navigation"
+        aria-label="Sidebar menu"
+      >
         <div class="sidebar-brand">
           <div class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -13,6 +20,21 @@
             <strong>MBAR PMS</strong>
             <span>Operations Suite</span>
           </div>
+
+          <button
+            type="button"
+            class="sidebar-size-toggle"
+            :aria-label="isSidebarCompact ? 'Espandi sidebar' : 'Riduci sidebar'"
+            :title="isSidebarCompact ? 'Espandi sidebar' : 'Riduci sidebar'"
+            @click="isSidebarCompact = !isSidebarCompact"
+          >
+            <svg v-if="!isSidebarCompact" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="m14 8-4 4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="m10 8 4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
 
           <button
             type="button"
@@ -195,9 +217,10 @@
             </router-link>
 
             <div v-if="hasPermission('stats')" class="menu-group">
-              <button 
+              <button
                 @click="isStatsOpen = !isStatsOpen"
                 :class="['menu-item', 'menu-trigger', { active: route.path.startsWith('/stats') }]"
+                aria-label="Statistiche"
               >
                 <span class="icon">
                   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -315,7 +338,7 @@
 
           <!-- Logout button -->
           <div class="menu-section menu-section-bottom">
-            <button @click="handleLogout" class="menu-item logout-btn">
+            <button @click="handleLogout" class="menu-item logout-btn" aria-label="Logout">
               <span class="icon">
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -359,6 +382,7 @@ const MOBILE_BREAKPOINT = 1080
 const isStatsOpen = ref(false)
 const isMobileViewport = ref(false)
 const isMobileMenuOpen = ref(false)
+const isSidebarCompact = ref(false)
 
 const sectionContent = {
   '/': { title: 'Planner Hotel', description: 'Monitoraggio camere, prenotazioni e operativita giornaliera.' },
@@ -450,6 +474,10 @@ const handleLogout = () => {
   background: transparent;
 }
 
+.app-shell.sidebar-compact {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -484,6 +512,33 @@ const handleLogout = () => {
   justify-content: center;
   cursor: pointer;
   transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.sidebar-size-toggle {
+  margin-left: auto;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid rgba(29, 140, 242, 0.16);
+  border-radius: 12px;
+  background: rgba(29, 140, 242, 0.08);
+  color: var(--ds-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.sidebar-size-toggle:hover {
+  transform: translateY(-1px);
+  background: rgba(29, 140, 242, 0.14);
+  border-color: rgba(29, 140, 242, 0.24);
+}
+
+.sidebar-size-toggle svg {
+  width: 18px;
+  height: 18px;
 }
 
 .mobile-menu-toggle:hover {
@@ -682,6 +737,34 @@ const handleLogout = () => {
   font-weight: 700;
 }
 
+.sidebar.is-compact {
+  padding: 18px 14px;
+}
+
+.sidebar.is-compact .sidebar-brand {
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0 16px;
+}
+
+.sidebar.is-compact .brand-copy,
+.sidebar.is-compact .section-label,
+.sidebar.is-compact .menu-item .label,
+.sidebar.is-compact .arrow-icon,
+.sidebar.is-compact .submenu,
+.sidebar.is-compact .user-info {
+  display: none;
+}
+
+.sidebar.is-compact .sidebar-size-toggle {
+  margin-left: 0;
+}
+
+.sidebar.is-compact .menu-item {
+  justify-content: center;
+  padding: 10px;
+}
+
 .content {
   min-width: 0;
   display: flex;
@@ -748,6 +831,10 @@ const handleLogout = () => {
 
   .mobile-menu-toggle {
     display: inline-flex;
+  }
+
+  .sidebar-size-toggle {
+    display: none;
   }
 
   .menu {
