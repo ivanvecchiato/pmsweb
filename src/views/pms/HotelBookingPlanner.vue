@@ -1887,6 +1887,10 @@ const convertReservations = (apiReservations) => {
     const hasDeposit = deposits.some(dep => Number(dep?.amount || 0) > 0) || deposits.length > 0;
     const rawStatus = getRawBookingStatus(res);
     const displayStatus = resolveDisplayBookingStatus(res, hasDeposit);
+    const accountHolder = res.accountholder || {};
+    const firstGuest = Array.isArray(res.guests) ? res.guests[0] : null;
+    const guestName = firstGuest?.firstname || accountHolder.firstname || '';
+    const guestSurname = firstGuest?.lastname || accountHolder.lastname || '';
 
     return {
       id: res.id,
@@ -1898,15 +1902,15 @@ const convertReservations = (apiReservations) => {
       status: displayStatus,
       hasDeposit,
       deposits,
-      guestName: res.accountholder?.firstname || '',
-      guestSurname: res.accountholder?.lastname || '',
+      guestName,
+      guestSurname,
       adults: res.adults ?? res.pax ?? 1,
       children: res.kids ?? 0,
       kidsAges: normalizeKidsAges(res.kidsAges ?? res.childrenAges ?? res.kids_ages ?? res.children_ages, res.kids ?? 0),
       board: (res.board || 'BB').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
       notes: getReservationNotes(res),
-      guest: (res.accountholder?.firstname ?? '') + ' ' + (res.accountholder?.lastname ?? ''),
+      guest: `${guestName} ${guestSurname}`.trim(),
       color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
     };
   }).filter(booking => getBookingStatus(booking) !== STATUS_CANCELLED);
