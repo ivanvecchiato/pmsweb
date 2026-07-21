@@ -4,11 +4,11 @@
       <h1 class="title">Planning</h1>
       <div class="header-controls">
         <button
-          @click="syncHotelH5s"
+          @click="refreshPlanner"
           class="btn-nav btn-sync"
-          :disabled="isSyncingH5s"
-          :title="isSyncingH5s ? 'Sincronizzazione H5S in corso' : 'Sincronizza da H5S'"
-          aria-label="Sincronizza prenotazioni da H5S"
+          :disabled="isRefreshingPlanner"
+          :title="isRefreshingPlanner ? 'Aggiornamento planning in corso' : 'Aggiorna planning'"
+          aria-label="Aggiorna planning"
         >
           <svg
             width="18"
@@ -17,7 +17,7 @@
             fill="none"
             stroke="currentColor"
             stroke-width="2"
-            :class="{ 'is-spinning': isSyncingH5s }"
+            :class="{ 'is-spinning': isRefreshingPlanner }"
           >
             <path d="M23 4v6h-6"></path>
             <path d="M1 20v-6h6"></path>
@@ -116,8 +116,10 @@
                   <div
                     v-if="getBookingStatus(booking) === STATUS_CHECKOUT_PENDING_PAYMENT"
                     class="booking-status-badge booking-status-badge-pending"
+                    title="Pagamento in attesa"
+                    aria-label="Pagamento in attesa"
                   >
-                    In attesa pagamento
+                    ⚠
                   </div>
                 </div>
 
@@ -466,6 +468,11 @@
   @close="showQuoteBuilder = false"
   @created="() => { showQuoteBuilder = false; router.push('/quotes'); }"
 />
+    <Transition name="planner-toast">
+      <div v-if="plannerToast.show" class="planner-toast" :class="`planner-toast-${plannerToast.type}`">
+        {{ plannerToast.message }}
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -476,8 +483,10 @@ import { watch } from 'vue';
 import { useRouter } from 'vue-router'
 import QuoteBuilder from '../quotes/QuoteBuilder.vue'
 import { usePricing } from '@/composables/usePricing'
+import { useAuth } from '@/composables/useAuth'
 
 const { calculateQuotePrice, calculateOvernightTax, loadHotelPricingPolicy } = usePricing();
+const { pmsIntegrationType: providerType } = useAuth();
 
 const rooms = ref([
   { id: 1, name: 'Camera 101 - Singola' },
@@ -513,7 +522,18 @@ const router = useRouter();
 
 const cellWidth = 60;
 const cellHeight = 40;
-const isSyncingH5s = ref(false);
+const isRefreshingPlanner = ref(false);
+const plannerToast = ref({ show: false, message: '', type: 'success' });
+let plannerToastTimeout = null;
+let suppressNextBookingClick = false;
+
+const showPlannerToast = (message, type = 'success') => {
+  if (plannerToastTimeout) clearTimeout(plannerToastTimeout);
+  plannerToast.value = { show: true, message, type };
+  plannerToastTimeout = setTimeout(() => {
+    plannerToast.value.show = false;
+  }, 3000);
+};
 
 const mouseLineX = ref(0);
 const hoverDate = ref('');
@@ -607,6 +627,16 @@ const STATUS_CHECKOUT_PENDING_PAYMENT = 10;
 const STATUS_CANCELLED = -100;
 const STATUS_CHECKING_IN = 3;
 const STATUS_CHECKING_OUT = 4;
+
+const SUB_STATUS_CONFIRMED = 1;
+const SUB_STATUS_CONFIRMED_WITHOUT_DEPOSIT = 2;
+const SUB_STATUS_AWAITING_DEPOSIT = 3;
+const SUB_STATUS_PROVISIONAL = 4;
+const SUB_STATUS_CANCELLED_DEPOSIT_REFUNDED = 5;
+const SUB_STATUS_OPTIONED = 6;
+const SUB_STATUS_OVERBOOKING = 7;
+const SUB_STATUS_NO_SHOW = 8;
+const SUB_STATUS_PAID = 9;
 
 const BOOKING_STATUS_META = {
   [STATUS_BOOKED_NO_DEPOSIT]: {
@@ -873,36 +903,7 @@ const resolveBookedDisplayStatus = (reservation, hasDeposit) => {
 
 const isCheckoutPaid = (reservation) => {
   if (!reservation || typeof reservation !== 'object') return false;
-
-  const explicitPaidFlags = [
-    reservation.isPaid,
-    reservation.paid,
-    reservation.checkoutPaid,
-    reservation.checkout_paid,
-    reservation.balancePaid,
-    reservation.balance_paid,
-    reservation.saldoPaid,
-    reservation.saldo_paid
-  ];
-
-  if (explicitPaidFlags.some(flag => flag === true)) {
-    return true;
-  }
-
-  const paymentStatusRaw = reservation.paymentStatus
-    ?? reservation.payment_status
-    ?? reservation.checkoutPaymentStatus
-    ?? reservation.checkout_payment_status
-    ?? reservation.balanceStatus
-    ?? reservation.balance_status
-    ?? '';
-
-  const paymentStatus = String(paymentStatusRaw || '').trim().toLowerCase();
-  return paymentStatus === 'paid'
-    || paymentStatus === 'pagato'
-    || paymentStatus === 'settled'
-    || paymentStatus === 'completed'
-    || paymentStatus === 'complete';
+  return Number(reservation.sub_status) === SUB_STATUS_PAID;
 };
 
 const resolveDisplayBookingStatus = (reservation, hasDeposit) => {
@@ -1044,6 +1045,10 @@ const closeBookingActions = () => {
 };
 
 const openBookingActions = (event, booking) => {
+  if (suppressNextBookingClick) {
+    suppressNextBookingClick = false;
+    return;
+  }
   selectedBooking.value = booking.id;
   actionMenuBooking.value = booking;
 
@@ -1247,21 +1252,21 @@ const postToFirstAvailableEndpoint = async (endpoints, payload) => {
   throw lastError;
 };
 
-const syncHotelH5s = async () => {
-  if (isSyncingH5s.value) return;
+const refreshPlanner = async () => {
+  if (isRefreshingPlanner.value) return;
 
-  isSyncingH5s.value = true;
-  const syncEndpoint = '/api/pms/hotel/sync_h5s';
-
+  isRefreshingPlanner.value = true;
   try {
-    await axios.get(syncEndpoint, { timeout: 60000 });
+    if (providerType.value === 'h5s') {
+      await axios.get('/api/pms/hotel/sync_h5s', { timeout: 60000 });
+    }
 
     getReservations();
   } catch (error) {
-    console.error('Errore sincronizzazione H5S:', error);
-    alert('Errore durante la sincronizzazione H5S');
+    console.error('Errore aggiornamento planning:', error);
+    alert('Errore durante l\'aggiornamento del planning');
   } finally {
-    isSyncingH5s.value = false;
+    isRefreshingPlanner.value = false;
   }
 };
 
@@ -1743,8 +1748,8 @@ const handleMouseMove = (e) => {
   }
 };
 
-const updateReservation = (booking) => {
-  if (!booking) return; // Protezione contro chiamate nulle
+const updateReservation = async (booking) => {
+  if (!booking) return false;
 
   console.log('Aggiornamento prenotazione:', booking.id);
   const obj = {
@@ -1754,37 +1759,85 @@ const updateReservation = (booking) => {
     duration: booking.duration
   };
 
-  axios.post('/api/pms/updatereservation', obj)
-    .then(response => {
-      movingReservation.value = null; // CORRETTO: usa .value
-      console.log('Prenotazione aggiornata con successo');
-    })
-    .catch(error => {
-      movingReservation.value = null; // CORRETTO: usa .value
-      console.error('Errore nell\'aggiornamento:', error);
-    });
+  try {
+    await axios.post('/api/pms/updatereservation', obj);
+    movingReservation.value = null;
+    console.log('Prenotazione aggiornata con successo');
+    return true;
+  } catch (error) {
+    movingReservation.value = null;
+    console.error('Errore nell\'aggiornamento:', error);
+    return false;
+  }
 };
 
-const handleMouseUp = () => {
+const handleMouseUp = async (event) => {
   if (dragging.value || resizing.value) {
+    const activeDrag = dragging.value;
+    const isDragMove = Boolean(dragging.value);
     const bookingId = dragging.value?.bookingId || resizing.value?.bookingId;
     const booking = bookings.value.find(b => b.id === bookingId);
+    const originalBooking = tempBooking.value;
+
+    if (activeDrag && event) {
+      const movedPixels = Math.hypot(event.clientX - activeDrag.startX, event.clientY - activeDrag.startY);
+      if (movedPixels > 4) {
+        suppressNextBookingClick = true;
+        setTimeout(() => {
+          suppressNextBookingClick = false;
+        }, 0);
+      }
+    }
+
+    dragging.value = null;
+    resizing.value = null;
     
     // Ripristina se c'è conflitto
-    if (booking && hasConflict(booking) && tempBooking.value) {
-      booking.startDate = new Date(tempBooking.value.startDate);
-      booking.roomId = tempBooking.value.roomId;
-      booking.duration = tempBooking.value.duration;
+    if (booking && hasConflict(booking) && originalBooking) {
+      booking.startDate = new Date(originalBooking.startDate);
+      booking.roomId = originalBooking.roomId;
+      booking.duration = originalBooking.duration;
+      movingReservation.value = null;
     }
     
     // Salva solo se abbiamo effettivamente mosso qualcosa
-    if (movingReservation.value) {
-      updateReservation(movingReservation.value);
+    if (booking && movingReservation.value && originalBooking) {
+      const dateChanged = toISODate(booking.startDate) !== toISODate(originalBooking.startDate);
+      const roomChanged = String(booking.roomId) !== String(originalBooking.roomId);
+
+      if (!dateChanged && !roomChanged && booking.duration === originalBooking.duration) {
+        movingReservation.value = null;
+      } else {
+        let confirmed = true;
+        if (isDragMove) {
+          const oldRoom = rooms.value.find(room => String(room.id) === String(originalBooking.roomId));
+          const newRoom = rooms.value.find(room => String(room.id) === String(booking.roomId));
+          const changes = [];
+          if (dateChanged) changes.push(`dal ${formatDate(originalBooking.startDate)} al ${formatDate(booking.startDate)}`);
+          if (roomChanged) changes.push(`da ${oldRoom?.name || originalBooking.roomId} a ${newRoom?.name || booking.roomId}`);
+          confirmed = window.confirm(`Confermare lo spostamento ${changes.join(' e ')}?`);
+        }
+
+        if (!confirmed) {
+          booking.startDate = new Date(originalBooking.startDate);
+          booking.roomId = originalBooking.roomId;
+          booking.duration = originalBooking.duration;
+          movingReservation.value = null;
+        } else {
+          const updated = await updateReservation(booking);
+          if (updated) {
+            showPlannerToast(isDragMove ? 'Spostamento confermato' : 'Durata aggiornata');
+          } else {
+            booking.startDate = new Date(originalBooking.startDate);
+            booking.roomId = originalBooking.roomId;
+            booking.duration = originalBooking.duration;
+            showPlannerToast('Spostamento non salvato', 'error');
+          }
+        }
+      }
     }
   }
-  
-  dragging.value = null;
-  resizing.value = null;
+
   tempBooking.value = null;
 };
 
@@ -1999,6 +2052,7 @@ onUnmounted(() => {
   window.removeEventListener('mousemove', handleMouseMove);
   window.removeEventListener('mouseup', handleMouseUp);
   window.removeEventListener('click', handleGlobalClick);
+  if (plannerToastTimeout) clearTimeout(plannerToastTimeout);
 });
 </script>
 
@@ -2020,6 +2074,43 @@ onUnmounted(() => {
   --planner-danger: #dc4d4d;
   --planner-shadow: 0 18px 34px rgba(148, 163, 184, 0.16);
   --planner-shadow-lg: 0 28px 56px rgba(148, 163, 184, 0.24);
+}
+
+.planner-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 480px;
+  padding: 14px 16px;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 16px;
+  background: rgba(236, 253, 245, 0.96);
+  color: #166534;
+  box-shadow: var(--planner-shadow-lg);
+  font-size: 0.9rem;
+  font-weight: 700;
+  backdrop-filter: blur(18px);
+}
+
+.planner-toast-error {
+  border-color: rgba(239, 68, 68, 0.2);
+  background: rgba(254, 242, 242, 0.96);
+  color: #b91c1c;
+}
+
+.planner-toast-enter-active,
+.planner-toast-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.planner-toast-enter-from,
+.planner-toast-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
 }
 
 .planner-container {
@@ -2310,9 +2401,15 @@ onUnmounted(() => {
 }
 
 .booking-status-badge-pending {
-  background: #ffffff;
-  color: var(--planner-text-soft);
-  border: 1px solid var(--planner-border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  background: #eef0f2;
+  color: #c96b6b;
+  border: 1px solid #d9dde2;
 }
 
 .booking-form-fieldset {

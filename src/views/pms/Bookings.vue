@@ -632,7 +632,7 @@ tbody tr:last-child td {
 }
 
 .status-pill-arrival {
-  background: #a5d6a7;
+  background: #C8E6C9;
   color: #2e7d32;
 }
 
