@@ -126,7 +126,13 @@
                 <td>{{ formatDate(booking.checkout) }}</td>
                 <td>{{ booking.resourceLabel || '-' }}</td>
                 <td>
-                  <span class="status-pill">{{ booking.statusLabel }}</span>
+                  <span
+                    class="status-pill"
+                    :class="{
+                      'status-pill-arrival': booking.statusLabel === 'In arrivo',
+                      'status-pill-departure': booking.statusLabel === 'In partenza'
+                    }"
+                  >{{ booking.statusLabel }}</span>
                 </td>
                 <td class="amount-cell">{{ formatCurrency(booking.amount) }}</td>
               </tr>
@@ -176,7 +182,7 @@ const filters = reactive({
 const statusLabels = {
   '-100': 'Annullata',
   0: 'Prenotata',
-  1: 'Check-in',
+  1: 'Presente',
   2: 'Check-out',
   3: 'In arrivo',
   4: 'In partenza'
@@ -623,6 +629,16 @@ tbody tr:last-child td {
   color: var(--ds-primary-strong);
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.status-pill-arrival {
+  background: #a5d6a7;
+  color: #2e7d32;
+}
+
+.status-pill-departure {
+  background: #ffcdd2;
+  color: #c62828;
 }
 
 .amount-cell {
