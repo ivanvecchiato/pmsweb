@@ -277,10 +277,14 @@ const buildStatsResponseFromFirestore = async ({ endpoint, params }) => {
 
   if (endpoint === '/api/mbar/product_stats/trend') {
     const selectedProductId = String(params.productId || '')
+    const selectedCategory = lower(params.category || '')
     const byDay = new Map()
 
     rows
-      .filter((row) => String(row.productId) === selectedProductId)
+      .filter((row) => {
+        if (selectedCategory) return lower(row.category) === selectedCategory
+        return String(row.productId) === selectedProductId
+      })
       .forEach((row) => {
         if (!byDay.has(row.date)) {
           byDay.set(row.date, { date: row.date, quantity: 0, sales: 0 })
