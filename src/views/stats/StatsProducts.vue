@@ -140,6 +140,18 @@
           <div class="summary-value">{{ formatCurrency(categorySummary.sales) }}</div>
         </div>
       </div>
+
+      <div v-if="loadingCategoryTrend" class="loading">Caricamento andamento categoria...</div>
+      <div v-else-if="categoryTrendError" class="error">{{ categoryTrendError }}</div>
+      <div v-else-if="!categoryTrendData.length" class="empty-state">
+        Nessuna vendita rilevata per questa categoria nel periodo selezionato.
+      </div>
+      <div v-else>
+        <h3>Andamento settimanale vendite</h3>
+        <div class="chart-section">
+          <canvas id="categoryTrendChart"></canvas>
+        </div>
+      </div>
     </section>
 
     <section v-if="searchMode === 'category' && selectedCategory && categoryProducts.length" class="section-container category-detail">
@@ -191,6 +203,9 @@ const categoryProducts = ref([]);
 const categorySummary = ref({ quantity: 0, sales: 0 });
 const loadingCategory = ref(false);
 const categoryError = ref('');
+const categoryTrendData = ref([]);
+const loadingCategoryTrend = ref(false);
+const categoryTrendError = ref('');
 const selectedProduct = ref(null);
 const productTrendData = ref([]);
 const productTrendViewMode = ref('daily');
@@ -199,6 +214,7 @@ const productTrendError = ref('');
 const productSearchDebounceMs = 350;
 let productSearchDebounceTimer = null;
 let productTrendChart = null;
+let categoryTrendChart = null;
 
 const canExportData = computed(() => {
   return searchMode.value === 'category' && !!selectedCategory.value && categoryProducts.value.length > 0;
@@ -282,6 +298,26 @@ const selectedProductTotals = computed(() => {
   );
 });
 
+const categoryTrendWeeklyData = computed(() => {
+  const weekly = {};
+  categoryTrendData.value.forEach((point) => {
+    const date = new Date(point.date);
+    const weekStart = getWeekStart(date);
+    const key = toISODate(weekStart);
+    if (!weekly[key]) {
+      weekly[key] = { quantity: 0, sales: 0 };
+    }
+    weekly[key].quantity += Number(point.quantity) || 0;
+    weekly[key].sales += Number(point.sales) || 0;
+  });
+
+  return Object.entries(weekly).map(([date, values]) => ({
+    date: `${date} - ${toISODate(getWeekEnd(new Date(date)))}`,
+    quantity: values.quantity,
+    sales: values.sales
+  }));
+});
+
 const escapeCsvValue = (value) => {
   const safeValue = String(value ?? '');
   if (safeValue.includes(';') || safeValue.includes('"') || safeValue.includes('\n')) {
@@ -345,6 +381,9 @@ const fetchBaseData = async () => {
         categoryProducts.value = [];
         categorySummary.value = { quantity: 0, sales: 0 };
         categoryError.value = '';
+        categoryTrendData.value = [];
+        categoryTrendError.value = '';
+        destroyCategoryTrendChart();
       } else {
         await fetchCategoryDetails(selectedCategory.value);
       }
@@ -361,6 +400,136 @@ const destroyProductTrendChart = () => {
   if (productTrendChart) {
     productTrendChart.destroy();
     productTrendChart = null;
+  }
+};
+
+const destroyCategoryTrendChart = () => {
+  if (categoryTrendChart) {
+    categoryTrendChart.destroy();
+    categoryTrendChart = null;
+  }
+};
+
+const renderCategoryTrendChart = async () => {
+  await nextTick();
+
+  const canvas = document.getElementById('categoryTrendChart');
+  if (!canvas) return;
+
+  destroyCategoryTrendChart();
+
+  categoryTrendChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: categoryTrendWeeklyData.value.map((point) => point.date),
+      datasets: [
+        {
+          label: 'Fatturato categoria (€)',
+          data: categoryTrendWeeklyData.value.map((point) => point.sales),
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 5,
+          pointBackgroundColor: '#3b82f6',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointHoverRadius: 7
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            font: { size: 14 },
+            padding: 15
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          padding: 12,
+          titleFont: { size: 13 },
+          bodyFont: { size: 12 },
+          callbacks: {
+            label: (ctx) => `€ ${Number(ctx.parsed.y || 0).toFixed(2)}`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: (value) => `€ ${Number(value).toFixed(0)}`
+          }
+        }
+      }
+    }
+  });
+};
+
+const fetchCategoryTrend = async (categoryName, products) => {
+  loadingCategoryTrend.value = true;
+  categoryTrendError.value = '';
+  categoryTrendData.value = [];
+  destroyCategoryTrendChart();
+
+  try {
+    let res = await axios.get('/api/mbar/product_stats/trend', {
+      params: {
+        category: categoryName,
+        from: fromDate.value,
+        to: toDate.value
+      }
+    });
+
+    let trend = Array.isArray(res.data?.trend) ? res.data.trend : [];
+
+    if (!trend.length && products.length) {
+      const responses = await Promise.all(
+        products.map((product) => axios.get('/api/mbar/product_stats/trend', {
+          params: {
+            productId: product.id,
+            from: fromDate.value,
+            to: toDate.value
+          }
+        }))
+      );
+      const byDay = {};
+      responses.forEach((response) => {
+        const productTrend = Array.isArray(response.data?.trend) ? response.data.trend : [];
+        productTrend.forEach((point) => {
+          if (!byDay[point.date]) {
+            byDay[point.date] = { date: point.date, quantity: 0, sales: 0 };
+          }
+          byDay[point.date].quantity += Number(point.quantity) || 0;
+          byDay[point.date].sales += Number(point.sales) || 0;
+        });
+      });
+      trend = Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    categoryTrendData.value = trend.map((point) => ({
+      date: point.date,
+      quantity: Number(point.quantity) || 0,
+      sales: Number(point.sales) || 0
+    }));
+
+    if (categoryTrendData.value.length) {
+      loadingCategoryTrend.value = false;
+      await renderCategoryTrendChart();
+    }
+  } catch (err) {
+    console.error('Errore fetch trend categoria', err);
+    categoryTrendError.value = 'Impossibile caricare l\'andamento della categoria';
+    categoryTrendData.value = [];
+    destroyCategoryTrendChart();
+  } finally {
+    loadingCategoryTrend.value = false;
   }
 };
 
@@ -571,11 +740,15 @@ const fetchCategoryDetails = async (categoryName) => {
       quantity: products.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0),
       sales: products.reduce((sum, p) => sum + (Number(p.sales) || 0), 0)
     };
+    await fetchCategoryTrend(categoryName, products);
   } catch (err) {
     console.error('Errore fetch prodotti per categoria', err);
     categoryProducts.value = [];
     categorySummary.value = { quantity: 0, sales: 0 };
     categoryError.value = 'Impossibile caricare i dettagli della categoria';
+    categoryTrendData.value = [];
+    categoryTrendError.value = '';
+    destroyCategoryTrendChart();
   } finally {
     loadingCategory.value = false;
   }
@@ -586,6 +759,9 @@ const onCategoryChange = async () => {
     categoryProducts.value = [];
     categorySummary.value = { quantity: 0, sales: 0 };
     categoryError.value = '';
+    categoryTrendData.value = [];
+    categoryTrendError.value = '';
+    destroyCategoryTrendChart();
     return;
   }
 
@@ -608,6 +784,9 @@ watch(searchMode, (mode) => {
     categoryProducts.value = [];
     categorySummary.value = { quantity: 0, sales: 0 };
     categoryError.value = '';
+    categoryTrendData.value = [];
+    categoryTrendError.value = '';
+    destroyCategoryTrendChart();
   } else {
     if (productSearchDebounceTimer) {
       clearTimeout(productSearchDebounceTimer);
@@ -680,6 +859,7 @@ onBeforeUnmount(() => {
     productSearchDebounceTimer = null;
   }
   destroyProductTrendChart();
+  destroyCategoryTrendChart();
 });
 </script>
 
