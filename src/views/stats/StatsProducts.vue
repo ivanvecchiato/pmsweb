@@ -91,6 +91,22 @@
             <span class="product-period-summary-label">Totale venduto nel periodo</span>
             <strong class="product-period-summary-value">{{ selectedProductTotals.quantity }} pezzi</strong>
           </div>
+
+          <div v-if="loadingArea" class="loading">Caricamento ripartizione per area...</div>
+          <div v-else-if="areaError" class="error">{{ areaError }}</div>
+          <div v-else-if="areaData.length" class="area-stats-section">
+            <h3>Ordinato per area</h3>
+            <div class="area-stats-grid">
+              <div v-for="row in areaData" :key="row.area" class="area-stat-card">
+                <div class="area-stat-name">{{ row.area }}</div>
+                <div class="area-stat-amount">{{ formatCurrency(row.sales) }}</div>
+                <div class="area-stat-bar">
+                  <div class="area-stat-bar-fill" :style="{ width: areaBarWidth(row.sales) + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="trend-controls">
             <label>Visualizza:</label>
             <select v-model="productTrendViewMode">
@@ -138,6 +154,21 @@
         <div class="summary-card">
           <div class="summary-label">Fatturato Categoria</div>
           <div class="summary-value">{{ formatCurrency(categorySummary.sales) }}</div>
+        </div>
+      </div>
+
+      <div v-if="loadingArea" class="loading">Caricamento ripartizione per area...</div>
+      <div v-else-if="areaError" class="error">{{ areaError }}</div>
+      <div v-else-if="areaData.length" class="area-stats-section">
+        <h3>Ordinato per area</h3>
+        <div class="area-stats-grid">
+          <div v-for="row in areaData" :key="row.area" class="area-stat-card">
+            <div class="area-stat-name">{{ row.area }}</div>
+            <div class="area-stat-amount">{{ formatCurrency(row.sales) }}</div>
+            <div class="area-stat-bar">
+              <div class="area-stat-bar-fill" :style="{ width: areaBarWidth(row.sales) + '%' }"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -211,6 +242,9 @@ const productTrendData = ref([]);
 const productTrendViewMode = ref('daily');
 const loadingProductTrend = ref(false);
 const productTrendError = ref('');
+const areaData = ref([]);
+const loadingArea = ref(false);
+const areaError = ref('');
 const productSearchDebounceMs = 350;
 let productSearchDebounceTimer = null;
 let productTrendChart = null;
@@ -298,6 +332,39 @@ const selectedProductTotals = computed(() => {
   );
 });
 
+const areaBarWidth = (sales) => {
+  const max = Math.max(...areaData.value.map((row) => Number(row.sales) || 0), 1);
+  return Math.round(((Number(sales) || 0) / max) * 100);
+};
+
+const fetchAreaData = async (params) => {
+  loadingArea.value = true;
+  areaError.value = '';
+  areaData.value = [];
+
+  try {
+    const res = await axios.get('/api/mbar/product_stats/by_area', {
+      params: {
+        ...params,
+        from: fromDate.value,
+        to: toDate.value
+      }
+    });
+
+    areaData.value = (Array.isArray(res.data?.areas) ? res.data.areas : [])
+      .map((row) => ({
+        area: row.area || 'Altro',
+        sales: Number(row.sales) || 0
+      }))
+      .sort((a, b) => b.sales - a.sales);
+  } catch (err) {
+    console.error('Errore fetch ripartizione per area', err);
+    areaError.value = 'Impossibile caricare la ripartizione per area';
+  } finally {
+    loadingArea.value = false;
+  }
+};
+
 const categoryTrendWeeklyData = computed(() => {
   const weekly = {};
   categoryTrendData.value.forEach((point) => {
@@ -373,6 +440,8 @@ const fetchBaseData = async () => {
     selectedProduct.value = null;
     productTrendData.value = [];
     productTrendError.value = '';
+    areaData.value = [];
+    areaError.value = '';
     destroyProductTrendChart();
 
     if (searchMode.value === 'category' && selectedCategory.value) {
@@ -661,7 +730,10 @@ const fetchProductTrend = async (product) => {
 
 const selectProduct = async (product) => {
   selectedProduct.value = product;
-  await fetchProductTrend(product);
+  await Promise.all([
+    fetchProductTrend(product),
+    fetchAreaData({ productId: product.id })
+  ]);
 };
 
 const searchProduct = async () => {
@@ -672,6 +744,8 @@ const searchProduct = async () => {
     selectedProduct.value = null;
     productTrendData.value = [];
     productTrendError.value = '';
+    areaData.value = [];
+    areaError.value = '';
     destroyProductTrendChart();
     return;
   }
@@ -682,6 +756,8 @@ const searchProduct = async () => {
   selectedProduct.value = null;
   productTrendData.value = [];
   productTrendError.value = '';
+  areaData.value = [];
+  areaError.value = '';
   destroyProductTrendChart();
 
   try {
@@ -740,7 +816,10 @@ const fetchCategoryDetails = async (categoryName) => {
       quantity: products.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0),
       sales: products.reduce((sum, p) => sum + (Number(p.sales) || 0), 0)
     };
-    await fetchCategoryTrend(categoryName, products);
+    await Promise.all([
+      fetchCategoryTrend(categoryName, products),
+      fetchAreaData({ category: categoryName })
+    ]);
   } catch (err) {
     console.error('Errore fetch prodotti per categoria', err);
     categoryProducts.value = [];
@@ -748,6 +827,8 @@ const fetchCategoryDetails = async (categoryName) => {
     categoryError.value = 'Impossibile caricare i dettagli della categoria';
     categoryTrendData.value = [];
     categoryTrendError.value = '';
+    areaData.value = [];
+    areaError.value = '';
     destroyCategoryTrendChart();
   } finally {
     loadingCategory.value = false;
@@ -761,6 +842,8 @@ const onCategoryChange = async () => {
     categoryError.value = '';
     categoryTrendData.value = [];
     categoryTrendError.value = '';
+    areaData.value = [];
+    areaError.value = '';
     destroyCategoryTrendChart();
     return;
   }
@@ -799,6 +882,8 @@ watch(searchMode, (mode) => {
     productTrendViewMode.value = 'daily';
     productTrendData.value = [];
     productTrendError.value = '';
+    areaData.value = [];
+    areaError.value = '';
     destroyProductTrendChart();
   }
 });
@@ -822,6 +907,8 @@ watch(searchQuery, (nextQuery) => {
     productTrendViewMode.value = 'daily';
     productTrendData.value = [];
     productTrendError.value = '';
+    areaData.value = [];
+    areaError.value = '';
     destroyProductTrendChart();
     return;
   }
@@ -840,6 +927,8 @@ watch(productResults, (results) => {
     productTrendViewMode.value = 'daily';
     productTrendData.value = [];
     productTrendError.value = '';
+    areaData.value = [];
+    areaError.value = '';
     destroyProductTrendChart();
   }
 });
@@ -1149,6 +1238,55 @@ h3 {
   font-size: 1rem;
   font-weight: 800;
   color: #065f46;
+}
+
+.area-stats-section {
+  margin-bottom: 20px;
+}
+
+.area-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.area-stat-card {
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 22px;
+  padding: 16px 20px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: var(--ds-shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.area-stat-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ds-text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.area-stat-amount {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--ds-primary-strong);
+}
+
+.area-stat-bar {
+  height: 6px;
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.area-stat-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--ds-primary), var(--ds-primary-strong));
+  border-radius: 999px;
+  transition: width 0.4s ease;
 }
 
 .trend-controls label {
