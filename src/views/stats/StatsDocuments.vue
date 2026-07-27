@@ -51,6 +51,18 @@
         <span class="summary-label">Totale periodo</span>
         <strong class="summary-value">{{ formatEuro(totalAmount) }}</strong>
       </div>
+      <div class="summary-card">
+        <span class="summary-label">Contanti</span>
+        <strong class="summary-value">{{ formatEuro(cashAmount) }}</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Elettronico</span>
+        <strong class="summary-value">{{ formatEuro(electronicAmount) }}</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Hotel</span>
+        <strong class="summary-value">{{ formatEuro(hotelAmount) }}</strong>
+      </div>
     </div>
 
     <div class="table-wrapper" v-if="!loading && !error && filteredDocuments.length">
@@ -62,6 +74,7 @@
             <th>Prenotazione</th>
             <th>Camera/Tavolo</th>
             <th>Progressivo</th>
+            <th>Pagamento</th>
             <th style="text-align: right;">Totale</th>
           </tr>
         </thead>
@@ -81,6 +94,7 @@
             <td>{{ doc.reservationName || '-' }}</td>
             <td>{{ doc.room || doc.tableName || '-' }}</td>
             <td>{{ doc.progressivo || '-' }}</td>
+            <td>{{ getPaymentLabel(doc) }}</td>
             <td class="amount">{{ formatEuro(doc.totale) }}</td>
           </tr>
         </tbody>
@@ -126,6 +140,7 @@
             </div>
             <div><strong>Prenotazione:</strong> {{ selectedDocumentDetail.reservationName || '-' }}</div>
             <div><strong>Camera/Tavolo:</strong> {{ selectedDocumentDetail.room || selectedDocumentDetail.tableName || '-' }}</div>
+            <div><strong>Pagamento:</strong> {{ getPaymentLabel(selectedDocumentDetail) }}</div>
             <div><strong>Righe:</strong> {{ selectedDocumentDetail.rows?.length || 0 }}</div>
             <div><strong>Totale:</strong> {{ formatEuro(selectedDocumentDetail.totale) }}</div>
           </div>
@@ -198,6 +213,28 @@ const filteredDocuments = computed(() => {
   return documents.value.filter((item) => Number(item?.docType) === Number(selectedDocType.value))
 })
 
+const cashAmount = computed(() => {
+  return filteredDocuments.value.reduce((sum, item) => {
+    return Number(item?.docType) !== 2 && Number(item?.payment) === 1
+      ? sum + (Number(item?.totale) || 0)
+      : sum
+  }, 0)
+})
+
+const electronicAmount = computed(() => {
+  return filteredDocuments.value.reduce((sum, item) => {
+    return Number(item?.docType) !== 2 && Number(item?.payment) === 2
+      ? sum + (Number(item?.totale) || 0)
+      : sum
+  }, 0)
+})
+
+const hotelAmount = computed(() => {
+  return filteredDocuments.value.reduce((sum, item) => {
+    return Number(item?.docType) === 2 ? sum + (Number(item?.totale) || 0) : sum
+  }, 0)
+})
+
 const totalAmount = computed(() => {
   return filteredDocuments.value.reduce((sum, item) => sum + (Number(item?.totale) || 0), 0)
 })
@@ -240,6 +277,86 @@ const getDocTypeClass = (docType) => {
   if (normalizedDocType === 2) return 'doc-type-pill--hotel'
 
   return 'doc-type-pill--default'
+}
+
+const getPaymentLabel = (document) => {
+  const payments = Array.isArray(document?.payments)
+    ? document.payments
+    : Array.isArray(document?.pagamenti)
+      ? document.pagamenti
+      : []
+
+  if (payments.length) {
+    const labels = payments.map((payment) => {
+      const description = String(payment?.description ?? payment?.name ?? payment?.paymentMode ?? '').toLowerCase()
+
+      if (
+        payment?.cash === true ||
+        Number(payment?.index ?? payment?.id) === 0 ||
+        description.includes('contant') ||
+        description.includes('cash')
+      ) {
+        return 'Contanti'
+      }
+
+      if (
+        payment?.bancomat === true ||
+        payment?.credit_card === true ||
+        Number(payment?.index ?? payment?.id) === 1 ||
+        description.includes('carta') ||
+        description.includes('bancomat') ||
+        description.includes('card') ||
+        description.includes('elettr')
+      ) {
+        return 'Elettronico'
+      }
+
+      return ''
+    }).filter(Boolean)
+
+    const uniqueLabels = [...new Set(labels)]
+    if (uniqueLabels.length) return uniqueLabels.join(' + ')
+  }
+
+  const paymentValue = document?.payment
+    ?? document?.paymentType
+    ?? document?.payment_type
+    ?? document?.paymentMode
+    ?? document?.payment_mode
+    ?? document?.pagamento
+    ?? document?.tipoPagamento
+    ?? document?.tipo_pagamento
+    ?? document?.electronic
+    ?? document?.elettronico
+    ?? document?.isElectronic
+
+  if (typeof paymentValue === 'boolean') {
+    return paymentValue ? 'Elettronico' : 'Contanti'
+  }
+
+  const normalizedPayment = String(paymentValue ?? '').toLowerCase()
+  if (normalizedPayment) {
+    const numericPayment = Number(normalizedPayment)
+    if (Number.isFinite(numericPayment)) {
+      if (numericPayment === 1) return 'Contanti'
+      if (numericPayment === 2) return 'Elettronico'
+      return '-'
+    }
+  }
+
+  if (normalizedPayment.includes('contant') || normalizedPayment.includes('cash')) {
+    return 'Contanti'
+  }
+  if (
+    normalizedPayment.includes('carta') ||
+    normalizedPayment.includes('bancomat') ||
+    normalizedPayment.includes('card') ||
+    normalizedPayment.includes('elettr')
+  ) {
+    return 'Elettronico'
+  }
+
+  return '-'
 }
 
 const escapeHtml = (value) => {
@@ -375,6 +492,7 @@ const printDocumentDetail = () => {
             <div><strong>Prenotazione:</strong> ${escapeHtml(detail.reservationName || '-')}</div>
             <div><strong>Camera/Tavolo:</strong> ${escapeHtml(detail.room || detail.tableName || '-')}</div>
             <div><strong>Chiusura:</strong> ${escapeHtml(detail.chiusura || '-')}</div>
+            <div><strong>Pagamento:</strong> ${escapeHtml(getPaymentLabel(detail))}</div>
             <div><strong>Righe:</strong> ${escapeHtml(detailRows.length)}</div>
           </div>
 
@@ -461,6 +579,7 @@ const openDocumentDetail = async (doc) => {
     }
 
     selectedDocumentDetail.value = {
+      ...doc,
       ...detail,
       rows: Array.isArray(detail.rows) ? detail.rows : []
     }
@@ -551,7 +670,7 @@ h1 {
 
 .summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 240px));
+  grid-template-columns: repeat(5, minmax(0, 240px));
   gap: 12px;
 }
 
