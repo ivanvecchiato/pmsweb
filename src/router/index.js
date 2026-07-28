@@ -69,6 +69,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'listino_beach', pmsTypes: ['beach'], requiresHospitalityStudioPms: true }
     },
     {
+      path: '/menu-app',
+      name: 'MenuAppConfig',
+      component: () => import('@/views/config/MenuAppConfig.vue'),
+      meta: { requiresAuth: true, permission: 'onda_push_products' }
+    },
+    {
       path: '/onda-push-products',
       name: 'OndaPushProductsConfig',
       component: () => import('@/views/config/OndaPushProductsConfig.vue'),

@@ -571,6 +571,18 @@ export const installApiTransportBridge = async () => {
   axios.request = async (config = {}) => {
     const method = (config.method || 'get').toLowerCase()
     const url = config.url || ''
+
+    if (config.mbarDirect === true) {
+      const directConfig = {
+        ...config,
+        url: PMS_API_BASE_URL && String(url).startsWith('/')
+          ? `${PMS_API_BASE_URL}${url}`
+          : url
+      }
+      delete directConfig.mbarDirect
+      return originalAxiosRequest(directConfig)
+    }
+
     const bypass = buildRemoteStatsUrl({ url, params: config.params })
 
     if (bypass.url) {

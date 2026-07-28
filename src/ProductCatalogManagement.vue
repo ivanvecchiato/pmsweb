@@ -1890,6 +1890,7 @@ watch(activeTab, (tab) => {
 .table-wrap {
   background: rgba(255, 255, 255, 0.78);
   border-radius: 28px;
+  padding: 10px;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.18);
   box-shadow: var(--ds-shadow-card);

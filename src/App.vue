@@ -306,19 +306,28 @@
               <span class="label">Gestione Spiaggia</span>
             </router-link>
 
-            <router-link
-              v-if="hasPermission('onda_push_products')"
-              to="/onda-push-products"
-              :class="['menu-item', { active: route.path === '/onda-push-products' }]"
-              aria-label="Prodotti in evidenza Onda"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 8h16M7 4h10M9 12h6M6 16h12M8 20h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Promo</span>
-            </router-link>
+            <div v-if="hasPermission('onda_push_products')" class="menu-group">
+              <button
+                @click="isMenuAppOpen = !isMenuAppOpen"
+                :class="['menu-item', 'menu-trigger', { active: route.path === '/menu-app' || route.path === '/onda-push-products' }]"
+                aria-label="Menu App"
+              >
+                <span class="icon" aria-hidden>
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 8h16M7 4h10M9 12h6M6 16h12M8 20h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                <span class="label">Menu App</span>
+                <span class="arrow-icon" :class="{ rotated: isMenuAppOpen }">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+              </button>
+
+              <div v-if="isMenuAppOpen" class="submenu">
+                <router-link to="/menu-app" class="submenu-item">Composizione</router-link>
+                <router-link to="/onda-push-products" class="submenu-item">Promo</router-link>
+              </div>
+            </div>
 
             <router-link
               v-if="canShowHotelBeachMenus && (hasPermission('listino') || hasPermission('listino_beach'))"
@@ -380,6 +389,7 @@ const { isAuthenticated, logout, hasPermission, userRole, userName, isPmsTypeAll
 
 const MOBILE_BREAKPOINT = 1080
 const isStatsOpen = ref(false)
+const isMenuAppOpen = ref(false)
 const isMobileViewport = ref(false)
 const isMobileMenuOpen = ref(false)
 const isSidebarCompact = ref(false)
@@ -399,6 +409,7 @@ const sectionContent = {
   '/menu-del-giorno': { title: 'Menu del Giorno', description: 'Composizione del menu stampabile per il servizio hotel.' },
   '/settings/hotel-pricing': { title: 'Policy Prezzi', description: 'Regole tariffarie per camere, ospiti e stagionalita.' },
   '/listino_beach': { title: 'Gestione Spiaggia', description: 'Configurazione posti, settori e prezzi stabilimento.' },
+  '/menu-app': { title: 'Composizione Menu App', description: 'Selezione e ordinamento dei prodotti pubblicati nell’app menu.' },
   '/onda-push-products': { title: 'Promo Onda', description: 'Selezione prodotti e slot promozionali pubblicati.' },
   '/services': { title: 'Servizi', description: 'Servizi accessori e add-on per hotel e spiaggia.' }
 }
@@ -441,6 +452,7 @@ watch(
   () => route.fullPath,
   () => {
     isStatsOpen.value = route.path.startsWith('/stats')
+    isMenuAppOpen.value = route.path === '/menu-app' || route.path === '/onda-push-products'
 
     if (isMobileViewport.value) {
       isMobileMenuOpen.value = false
