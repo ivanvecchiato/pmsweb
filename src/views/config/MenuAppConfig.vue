@@ -13,6 +13,7 @@ const selectedCategory = ref('')
 const selectedProducts = ref({})
 const productOrder = ref({})
 const presentationNames = ref({})
+const categoryPresentationNames = ref({})
 const loading = ref(true)
 const saving = ref(false)
 const message = ref('')
@@ -98,8 +99,15 @@ const loadData = async () => {
     const selected = {}
     const order = {}
     const names = {}
+    const categoryNames = {}
 
     configuredCategories.forEach((category) => {
+      const categoryName = String(category?.name ?? category?.category ?? '').trim()
+      if (categoryName) {
+        categoryNames[categoryName] = String(
+          category?.presentationName ?? categoryName
+        ).trim()
+      }
       const products = Array.isArray(category?.products) ? category.products : []
       products.forEach((product) => {
         const id = String(product?.id ?? product?.productId ?? '')
@@ -116,6 +124,7 @@ const loadData = async () => {
     selectedProducts.value = selected
     productOrder.value = order
     presentationNames.value = names
+    categoryPresentationNames.value = categoryNames
   } catch (error) {
     console.error('Errore caricamento configurazione Menu App', error)
     errorMessage.value = 'Impossibile caricare il catalogo o la configurazione Menu App.'
@@ -145,6 +154,13 @@ const toggleProduct = (product, checked) => {
       [id]: ''
     }
   }
+
+  if (checked && categoryPresentationNames.value[selectedCategory.value] === undefined) {
+    categoryPresentationNames.value = {
+      ...categoryPresentationNames.value,
+      [selectedCategory.value]: ''
+    }
+  }
 }
 
 const saveConfig = async () => {
@@ -153,6 +169,18 @@ const saveConfig = async () => {
   errorMessage.value = ''
 
   try {
+    const categoryWithoutName = categories.value.find(category =>
+      category.products.some(product => selectedProducts.value[String(product.id)])
+      && !String(categoryPresentationNames.value[category.name] || '').trim()
+    )
+
+    if (categoryWithoutName) {
+      selectedCategory.value = categoryWithoutName.name
+      errorMessage.value = `Inserisci il nome di presentazione per la categoria ${categoryWithoutName.name}.`
+      saving.value = false
+      return
+    }
+
     const productWithoutName = categories.value
       .flatMap(category => category.products)
       .find(product =>
@@ -173,6 +201,7 @@ const saveConfig = async () => {
     const payload = categories.value
       .map((category, categoryIndex) => ({
         name: category.name,
+        presentationName: String(categoryPresentationNames.value[category.name]).trim(),
         order: categoryIndex + 1,
         products: category.products
           .filter(product => selectedProducts.value[String(product.id)])
@@ -230,6 +259,15 @@ onMounted(loadData)
           </option>
         </select>
         <span>{{ selectedCount }} prodotti selezionati complessivamente</span>
+        <label class="category-presentation-field">
+          <span>Nome categoria nell’app</span>
+          <input
+            v-model="categoryPresentationNames[selectedCategory]"
+            type="text"
+            maxlength="100"
+            :placeholder="selectedCategory"
+          />
+        </label>
       </div>
 
       <div class="products-list">
@@ -343,6 +381,26 @@ onMounted(loadData)
 .category-filter span {
   color: var(--ds-text-soft);
   font-size: 0.88rem;
+}
+
+.category-presentation-field {
+  grid-column: 2 / 4;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.category-presentation-field span {
+  font-weight: 700;
+}
+
+.category-presentation-field input {
+  min-height: 42px;
+  border: 1px solid var(--ds-border-strong);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: white;
+  color: var(--ds-text);
 }
 
 .products-list {

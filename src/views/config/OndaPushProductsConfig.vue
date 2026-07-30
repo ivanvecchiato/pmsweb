@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { getFirebaseDb } from '../../services/firebaseClient'
@@ -39,6 +39,7 @@ const slotMessages = ref({
   dopo_cena: ''
 })
 const uploadingImages = ref({})
+const imagePreviewUrls = ref({})
 
 const LISTINO_PRODUCTS_ENDPOINT = '/api/products'
 const FIREBASE_ONDA_COLLECTION = import.meta.env.VITE_FIREBASE_ONDA_COLLECTION || 'onda_push_config'
@@ -255,6 +256,13 @@ const uploadProductImage = async (slotKey, product, event) => {
   }
 
   const key = imageUploadKey(slotKey, product)
+  if (imagePreviewUrls.value[key]?.startsWith('blob:')) {
+    URL.revokeObjectURL(imagePreviewUrls.value[key])
+  }
+  imagePreviewUrls.value = {
+    ...imagePreviewUrls.value,
+    [key]: URL.createObjectURL(file)
+  }
   uploadingImages.value = {
     ...uploadingImages.value,
     [key]: true
@@ -290,6 +298,10 @@ const uploadProductImage = async (slotKey, product, event) => {
     }
     slotMessages.value[slotKey] = messages[serverError]
       || `Upload non riuscito${error.response?.status ? ` (HTTP ${error.response.status})` : ': server non raggiungibile'}.`
+    URL.revokeObjectURL(imagePreviewUrls.value[key])
+    const nextPreviewUrls = { ...imagePreviewUrls.value }
+    delete nextPreviewUrls[key]
+    imagePreviewUrls.value = nextPreviewUrls
     input.value = ''
   } finally {
     uploadingImages.value = {
@@ -399,6 +411,12 @@ const handleProductInput = (slotKey) => {
 onMounted(async () => {
   await Promise.all([fetchListinoProducts(), loadConfig()])
 })
+
+onBeforeUnmount(() => {
+  Object.values(imagePreviewUrls.value).forEach((previewUrl) => {
+    if (String(previewUrl).startsWith('blob:')) URL.revokeObjectURL(previewUrl)
+  })
+})
 </script>
 
 <template>
@@ -477,7 +495,11 @@ onMounted(async () => {
               :placeholder="`Descrizione di ${product.name} per la fascia ${slot.label.toLowerCase()}`"
             ></textarea>
             <div class="product-image-row">
-              <img v-if="product.imgUrl" :src="product.imgUrl" :alt="`Immagine Onda di ${product.name}`" />
+              <img
+                v-if="imagePreviewUrls[imageUploadKey(slot.key, product)] || product.imgUrl"
+                :src="imagePreviewUrls[imageUploadKey(slot.key, product)] || product.imgUrl"
+                :alt="`Immagine Onda di ${product.name}`"
+              />
               <span v-else class="product-image-placeholder">Nessuna immagine dedicata</span>
               <label class="btn-image" :class="{ disabled: uploadingImages[imageUploadKey(slot.key, product)] }">
                 {{ uploadingImages[imageUploadKey(slot.key, product)] ? 'Caricamento...' : 'Seleziona immagine' }}
