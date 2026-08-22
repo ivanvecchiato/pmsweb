@@ -64,7 +64,7 @@
           <div class="form-section">
             <label>Bambini</label>
             <input 
-              v-model.number="quoteData.children" 
+              v-model.number="quoteData.kids" 
               type="number" 
               min="0"
             />
@@ -128,7 +128,7 @@
           </p>
           <p v-if="type === 'hotel'">
             <strong>Ospiti:</strong> {{ quoteData.adults }} adult{{ quoteData.adults !== 1 ? 'i' : 'o' }}
-            <span v-if="quoteData.children > 0">, {{ quoteData.children }} bambin{{ quoteData.children !== 1 ? 'i' : 'o' }}</span>
+            <span v-if="quoteData.kids > 0">, {{ quoteData.kids }} bambin{{ quoteData.kids !== 1 ? 'i' : 'o' }}</span>
           </p>
           <div v-if="quoteData.roomType" class="price-section">
             <p>
@@ -190,7 +190,7 @@ const quoteData = ref({
   checkin: '',
   checkout: '',
   adults: 1,
-  children: 0,
+  kids: 0,
   kidsAges: [],
   board: 'bb',
   type: props.type,
@@ -215,7 +215,7 @@ const daysCount = computed(() => {
 })
 
 const normalizedChildrenCount = computed(() => {
-  const count = Number(quoteData.value.children)
+  const count = Number(quoteData.value.kids)
   if (!Number.isFinite(count) || count <= 0) return 0
   return Math.floor(count)
 })
@@ -247,12 +247,12 @@ const calculateAllRoomPrices = () => {
         quoteData.value.checkout,
         room.roomType,
         props.type,
-        quoteData.value.adults + quoteData.value.children,
+        quoteData.value.adults + quoteData.value.kids,
         {
           board: quoteData.value.board,
           adults: quoteData.value.adults,
-          children: quoteData.value.children,
-          kidAges: normalizeKidsAges(quoteData.value.kidsAges, quoteData.value.children)
+          kids: quoteData.value.kids,
+          kidAges: normalizeKidsAges(quoteData.value.kidsAges, quoteData.value.kids)
         }
       )
       return {
@@ -271,7 +271,7 @@ const calculateAllRoomPrices = () => {
         quoteData.value.checkout,
         room.placeType, // Usa placeType per beach (es. "FILA 1")
         props.type,
-        quoteData.value.adults + quoteData.value.children
+        quoteData.value.adults + quoteData.value.kids
       )
       return {
         roomType: room.placeType, // Usa placeType (es. "FILA 1")
@@ -295,15 +295,15 @@ const selectRoom = (roomType) => {
 }
 
 watch(
-  () => [quoteData.value.checkin, quoteData.value.checkout, quoteData.value.adults, quoteData.value.children],
+  () => [quoteData.value.checkin, quoteData.value.checkout, quoteData.value.adults, quoteData.value.kids],
   () => calculateAllRoomPrices(),
   { deep: true }
 )
 
 watch(
-  () => quoteData.value.children,
-  (children) => {
-    quoteData.value.kidsAges = normalizeKidsAges(quoteData.value.kidsAges, children)
+  () => quoteData.value.kids,
+  (kids) => {
+    quoteData.value.kidsAges = normalizeKidsAges(quoteData.value.kidsAges, kids)
   }
 )
 
@@ -370,8 +370,7 @@ const submitQuote = async () => {
     } else {
       await saveQuote({
         ...quoteData.value,
-        kidsAges: normalizeKidsAges(quoteData.value.kidsAges, quoteData.value.children),
-        childrenAges: normalizeKidsAges(quoteData.value.kidsAges, quoteData.value.children),
+        kidsAges: normalizeKidsAges(quoteData.value.kidsAges, quoteData.value.kids),
         // Mantieni la camera/fila selezionata (se presente)
         duration: daysCount.value,
         allRoomOptions: roomOptions, // Salva le opzioni calcolate

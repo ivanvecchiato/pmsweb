@@ -210,11 +210,11 @@
               </div>
               <div class="form-section">
                 <label>Bambini</label>
-                <input type="number" v-model="newBookingData.children" min="0" />
+                <input type="number" v-model="newBookingData.kids" min="0" />
               </div>
             </div>
 
-            <div v-if="Number(newBookingData.children) > 0" class="form-section">
+            <div v-if="Number(newBookingData.kids) > 0" class="form-section">
               <label>Età bambini</label>
               <div class="kids-ages-grid">
                 <div
@@ -311,11 +311,45 @@
         </div>
         </fieldset>
 
+        <section v-if="editingBooking" class="dialog-section dialog-section-full reservation-services-section">
+          <div class="reservation-services-header">
+            <h4 class="section-title">Servizi extra</h4>
+            <button type="button" class="text-action" @click="openAddServiceFromDetails">Aggiungi</button>
+          </div>
+          <div v-if="editingBooking.services?.length" class="existing-services reservation-services-list">
+            <div v-for="(svc, i) in editingBooking.services" :key="i" class="existing-service-row">
+              <div class="existing-service-info">
+                <span class="existing-service-name">{{ svc.name }} × {{ svc.quantity || 1 }}</span>
+                <span v-if="svc.addedAt" class="existing-service-date">{{ formatServiceDate(svc.addedAt) }}</span>
+              </div>
+              <div class="existing-service-actions">
+                <span class="existing-service-price">{{ svc.price != null ? '€' + (svc.price * (svc.quantity || 1)).toFixed(2) : '—' }}</span>
+                <button
+                  v-if="!isModalReadOnly"
+                  type="button"
+                  class="service-remove"
+                  title="Elimina servizio"
+                  aria-label="Elimina servizio"
+                  @click="removeServiceFromDetails(i)"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6m4-6v6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div v-else class="deposit-empty">Nessun servizio assegnato</div>
+        </section>
+
+        <div v-if="editingBooking && !isModalReadOnly" class="reservation-cancel-action">
+          <button type="button" class="text-action text-action-danger" @click.prevent="openCancelDialog">
+            Cancella prenotazione
+          </button>
+        </div>
+
         <div class="modal-footer">
           <button type="button" @click="showModal = false" class="btn btn-cancel">{{ isModalReadOnly ? 'Chiudi' : 'Annulla' }}</button>
-          <button v-if="editingBooking && !isModalReadOnly" type="button" class="btn btn-danger" @click.prevent="openCancelDialog">
-            Cancella
-          </button>
           <button v-if="!isModalReadOnly" type="submit" class="btn btn-save">{{ editingBooking ? 'Salva' : 'Conferma Prenotazione' }}</button>
         </div>
       </form>
@@ -417,7 +451,7 @@
         <div class="existing-services-title">Servizi aggiunti</div>
         <div v-for="(svc, i) in addServiceTarget.services" :key="i" class="existing-service-row">
           <div class="existing-service-info">
-            <span class="existing-service-name">{{ svc.name }}<span v-if="svc.quantity > 1"> x{{ svc.quantity }}</span></span>
+            <span class="existing-service-name">{{ svc.name }} × {{ svc.quantity || 1 }}</span>
             <span v-if="svc.note" class="existing-service-note"> &mdash; {{ svc.note }}</span>
             <span v-if="svc.addedAt" class="existing-service-date">{{ formatServiceDate(svc.addedAt) }}</span>
           </div>
@@ -440,13 +474,17 @@
         </div>
         <div class="form-row-inline">
           <div class="form-section">
+            <label>Prezzo (€)</label>
+            <input v-model.number="addServiceForm.price" type="number" min="0" step="0.01" />
+          </div>
+          <div class="form-section">
             <label>Quantità</label>
             <input v-model.number="addServiceForm.quantity" type="number" min="1" />
           </div>
-          <div class="form-section">
-            <label>Note</label>
-            <input v-model="addServiceForm.note" type="text" placeholder="Opzionale" />
-          </div>
+        </div>
+        <div class="form-section add-service-note">
+          <label>Note</label>
+          <textarea v-model="addServiceForm.note" rows="2" placeholder="Opzionale"></textarea>
         </div>
       </div>
 
@@ -485,7 +523,13 @@ import QuoteBuilder from '../quotes/QuoteBuilder.vue'
 import { usePricing } from '@/composables/usePricing'
 import { useAuth } from '@/composables/useAuth'
 
-const { calculateQuotePrice, calculateOvernightTax, loadHotelPricingPolicy } = usePricing();
+const {
+  calculateQuotePrice,
+  calculateOvernightTax,
+  loadHotelPricingPolicy,
+  loadPricelists,
+  loadTimetable
+} = usePricing();
 const { pmsIntegrationType: providerType } = useAuth();
 
 const rooms = ref([
@@ -525,6 +569,11 @@ const cellHeight = 40;
 const isRefreshingPlanner = ref(false);
 const plannerToast = ref({ show: false, message: '', type: 'success' });
 let plannerToastTimeout = null;
+let pmsEventsUrl = '';
+let pmsEventAbortController = null;
+let pmsReconnectTimeout = null;
+let pmsStreamStopped = false;
+let pmsRefreshTimeout = null;
 let suppressNextBookingClick = false;
 
 const showPlannerToast = (message, type = 'success') => {
@@ -695,7 +744,7 @@ const availableServices = ref([]);
 const showAddServiceModal = ref(false);
 const addServiceTarget = ref(null);
 const addingService = ref(false);
-const addServiceForm = ref({ serviceId: '', quantity: 1, note: '' });
+const addServiceForm = ref({ serviceId: '', price: null, quantity: 1, note: '' });
 
 async function loadAvailableServices() {
   try {
@@ -717,9 +766,24 @@ function openAddServiceFromMenu() {
     return;
   }
   addServiceTarget.value = actionMenuBooking.value;
-  addServiceForm.value = { serviceId: '', quantity: 1, note: '' };
+  addServiceForm.value = { serviceId: '', price: null, quantity: 1, note: '' };
   closeBookingActions();
   showAddServiceModal.value = true;
+}
+
+function openAddServiceFromDetails() {
+  if (!editingBooking.value) return;
+  addServiceTarget.value = editingBooking.value;
+  addServiceForm.value = { serviceId: '', price: null, quantity: 1, note: '' };
+  showAddServiceModal.value = true;
+}
+
+function removeServiceFromDetails(index) {
+  if (!editingBooking.value || isModalReadOnly.value) return;
+  editingBooking.value = {
+    ...editingBooking.value,
+    services: editingBooking.value.services.filter((_, serviceIndex) => serviceIndex !== index)
+  };
 }
 
 function closeAddServiceModal() {
@@ -736,7 +800,7 @@ async function confirmAddService() {
     const serviceEntry = {
       serviceId: svc.id,
       name: svc.name,
-      price: svc.price,
+      price: addServiceForm.value.price == null ? svc.price : Number(addServiceForm.value.price),
       quantity: addServiceForm.value.quantity || 1,
       note: addServiceForm.value.note || '',
       addedAt: new Date().toISOString()
@@ -748,8 +812,11 @@ async function confirmAddService() {
     // aggiorna i servizi visibili nella modale senza chiuderla
     if (result.data?.services) {
       addServiceTarget.value = { ...addServiceTarget.value, services: result.data.services };
+      if (editingBooking.value?.id === addServiceTarget.value.id) {
+        editingBooking.value = { ...editingBooking.value, services: result.data.services };
+      }
     }
-    addServiceForm.value = { serviceId: '', quantity: 1, note: '' };
+    addServiceForm.value = { serviceId: '', price: null, quantity: 1, note: '' };
     getReservations();
   } catch (e) {
     console.error('Errore aggiunta servizio:', e);
@@ -765,6 +832,11 @@ function formatServiceDate(iso) {
   if (isNaN(d)) return String(iso);
   return d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+
+watch(() => addServiceForm.value.serviceId, (serviceId) => {
+  const service = availableServices.value.find(item => item.id === serviceId);
+  addServiceForm.value.price = service?.price ?? null;
+});
 const depositDraft = ref({
   amount: null,
   paymentDate: '',
@@ -776,7 +848,7 @@ const newBookingData = ref({
   guestSurname: '',
   notes: '',
   adults: 1,
-  children: 0,
+  kids: 0,
   kidsAges: [],
   checkin: '',
   checkout: '',
@@ -845,7 +917,7 @@ const totalDeposits = computed(() => {
 });
 
 const normalizedChildrenCount = computed(() => {
-  const count = Number(newBookingData.value.children);
+  const count = Number(newBookingData.value.kids);
   if (!Number.isFinite(count) || count <= 0) return 0;
   return Math.floor(count);
 });
@@ -975,9 +1047,13 @@ watch(() => newBookingData.value.checkin, (newIn) => {
   }
 });
 
-watch(() => newBookingData.value.children, (newValue) => {
-  const count = Math.max(0, Number(newValue) || 0);
-  newBookingData.value.kidsAges = normalizeKidsAges(newBookingData.value.kidsAges, count);
+watch(() => newBookingData.value.kids, (newValue) => {
+  const count = Math.max(0, Math.floor(Number(newValue) || 0));
+  const ages = Array.isArray(newBookingData.value.kidsAges)
+    ? newBookingData.value.kidsAges.slice(0, count)
+    : [];
+  while (ages.length < count) ages.push(1);
+  newBookingData.value.kidsAges = ages;
 });
 
 const getBookingStatus = (booking) => {
@@ -1134,7 +1210,7 @@ const addBooking = (room = null, event = null) => {
     guestSurname: '',
     notes: '',
     adults: 1,
-    children: 0,
+    kids: 0,
     kidsAges: [],
     checkin,
     checkout,
@@ -1164,8 +1240,8 @@ const loadBookingIntoDialog = (booking) => {
     guestSurname: booking.guestSurname || '',
     notes: getReservationNotes(booking),
     adults: booking.adults || 1,
-    children: booking.children || 0,
-    kidsAges: normalizeKidsAges(booking.kidsAges, booking.children || 0),
+    kids: booking.kids || 0,
+    kidsAges: normalizeKidsAges(booking.kidsAges, booking.kids || 0),
     checkin: toISODate(start),
     checkout: toISODate(end),
     board: booking.board || 'bb',
@@ -1280,8 +1356,8 @@ const buildOvernightTaxSnapshot = () => {
     checkin: newBookingData.value.checkin,
     checkout: newBookingData.value.checkout,
     adults: Number(newBookingData.value.adults || 0),
-    children: Number(newBookingData.value.children || 0),
-    kidsAges: normalizeKidsAges(newBookingData.value.kidsAges, newBookingData.value.children)
+    kids: Number(newBookingData.value.kids || 0),
+    kidsAges: normalizeKidsAges(newBookingData.value.kidsAges, newBookingData.value.kids)
   });
 
   return {
@@ -1327,10 +1403,8 @@ const submitNewBooking = async () => {
       lastname: newBookingData.value.guestSurname
     },
     adults: parseInt(newBookingData.value.adults),
-    children: parseInt(newBookingData.value.children),
-    kids: parseInt(newBookingData.value.children),
-    kidsAges: normalizeKidsAges(newBookingData.value.kidsAges, newBookingData.value.children),
-    childrenAges: normalizeKidsAges(newBookingData.value.kidsAges, newBookingData.value.children),
+    kids: parseInt(newBookingData.value.kids),
+    kidsAges: normalizeKidsAges(newBookingData.value.kidsAges, newBookingData.value.kids),
     checkin: newBookingData.value.checkin,
     duration: duration,
     board: normalizeBoardForBackend(newBookingData.value.board),
@@ -1350,7 +1424,10 @@ const submitNewBooking = async () => {
       amount: dep.amount,
       payment_mode: dep.payment_mode,
       payment_date: dep.payment_date
-    })))
+    }))),
+    services: editingBooking.value && Array.isArray(editingBooking.value.services)
+      ? editingBooking.value.services
+      : []
   };
 
   try {
@@ -1439,27 +1516,27 @@ const todayLineStyle = computed(() => {
 });
 
 const bookingQuote = computed(() => {
-  const { checkin, checkout, roomId, board, adults, children } = newBookingData.value;
+  const { checkin, checkout, roomId, board, adults, kids } = newBookingData.value;
   if (!checkin || !checkout || !roomId) return null;
 
   const start = new Date(checkin);
   const end = new Date(checkout);
   const room = rooms.value.find(r => r.id === roomId);
   const numAdults = parseInt(adults) || 0;
-  const numChildren = parseInt(children) || 0;
+  const numKids = parseInt(kids) || 0;
 
-  if (!room || start >= end || numAdults + numChildren === 0) return null;
+  if (!room || start >= end || numAdults + numKids === 0) return null;
 
   const quote = calculateQuotePrice(
     checkin,
     checkout,
     room.type,
     'hotel',
-    numAdults + numChildren,
+    numAdults + numKids,
     {
       board,
       adults: numAdults,
-      children: numChildren,
+      kids: numKids,
       kidAges: newBookingData.value.kidsAges || []
     }
   );
@@ -1868,11 +1945,15 @@ const confirmCancel = async () => {
   if (!cancelReason.value.trim() || isCancelling.value) return;
   isCancelling.value = true;
   try {
-    await axios.post('/api/pms/hotel/cancel_reservation', {
+    const response = await axios.post('/api/pms/hotel/cancel_reservation', {
       id: editingBooking.value.id,
       cancellation_reason: cancelReason.value.trim()
     });
-    bookings.value = bookings.value.filter(b => b.id !== editingBooking.value.id);
+    editingBooking.value.rawStatus = response.data.status;
+    editingBooking.value.displayStatus = STATUS_CANCELLED;
+    editingBooking.value.status = STATUS_CANCELLED;
+    editingBooking.value.cancellation_reason = response.data.cancellation_reason;
+    editingBooking.value.cancelled_at = response.data.cancelled_at;
     selectedBooking.value = null;
     editingBooking.value = null;
     showCancelDialog.value = false;
@@ -1955,11 +2036,12 @@ const convertReservations = (apiReservations) => {
       status: displayStatus,
       hasDeposit,
       deposits,
+      services: Array.isArray(res.services) ? res.services : [],
       guestName,
       guestSurname,
       adults: res.adults ?? res.pax ?? 1,
-      children: res.kids ?? 0,
-      kidsAges: normalizeKidsAges(res.kidsAges ?? res.childrenAges ?? res.kids_ages ?? res.children_ages, res.kids ?? 0),
+      kids: res.kids ?? 0,
+      kidsAges: normalizeKidsAges(res.kidsAges, res.kids ?? 0),
       board: (res.board || 'BB').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
       notes: getReservationNotes(res),
@@ -2022,19 +2104,59 @@ const getDateRange = () => {
   return `${formatDate(start)} - ${formatDate(end)}`;
 };
 
-const pricelists = ref([]); // Da pricesDB.json
-const timetable = ref([]);   // Da timeTableDB.json
+const handlePmsEvent = (event) => {
+  if (!String(event.type || '').startsWith('reservation_')) return;
+  const data = event.data || {};
+  if (event.type === 'reservation_services_updated' && Array.isArray(data.services)) {
+    bookings.value = bookings.value.map(booking => String(booking.id) === String(data.id)
+      ? { ...booking, services: data.services }
+      : booking);
+    if (editingBooking.value && String(editingBooking.value.id) === String(data.id)) {
+      editingBooking.value = { ...editingBooking.value, services: data.services };
+    }
+    if (addServiceTarget.value && String(addServiceTarget.value.id) === String(data.id)) {
+      addServiceTarget.value = { ...addServiceTarget.value, services: data.services };
+    }
+  }
+  if (pmsRefreshTimeout) clearTimeout(pmsRefreshTimeout);
+  pmsRefreshTimeout = setTimeout(() => getReservations(), 150);
+};
 
-const loadPricingData = async () => {
+const connectPmsEvents = async () => {
+  if (pmsStreamStopped || !pmsEventsUrl) return;
+  const controller = new AbortController();
+  pmsEventAbortController = controller;
   try {
-    const [resPrices, resTime] = await Promise.all([
-      axios.get('/api/pms/getrates'),
-      axios.get('/api/pms/gettimetable')
-    ]);
-    pricelists.value = resPrices.data;
-    timetable.value = resTime.data;
-  } catch (err) {
-    console.error("Errore caricamento listini:", err);
+    const response = await fetch(pmsEventsUrl, {
+      signal: controller.signal,
+      cache: 'no-store'
+    });
+    if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (!pmsStreamStopped) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const messages = buffer.split(/\r?\n\r?\n/);
+      buffer = messages.pop() || '';
+      messages.forEach(message => {
+        const payload = message.trim();
+        if (!payload) return;
+        try {
+          handlePmsEvent(JSON.parse(payload));
+        } catch (error) {
+          console.error('Evento PMS non valido:', error);
+        }
+      });
+    }
+  } catch (error) {
+    if (!controller.signal.aborted) console.error('Connessione eventi PMS interrotta:', error);
+  } finally {
+    if (pmsEventAbortController === controller) pmsEventAbortController = null;
+    if (!pmsStreamStopped) pmsReconnectTimeout = setTimeout(connectPmsEvents, 3000);
   }
 };
 
@@ -2044,8 +2166,14 @@ onMounted(() => {
   window.addEventListener('click', handleGlobalClick);
   getRooms();
   loadHotelPricingPolicy();
-  loadPricingData();
+  loadPricelists('hotel');
+  loadTimetable('hotel');
   loadAvailableServices();
+  const pmsApiBaseUrl = String(import.meta.env.VITE_PMS_API_BASE_URL || '').trim().replace(/\/+$/, '');
+  const eventNode = `pmsweb-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  pmsEventsUrl = `${pmsApiBaseUrl}/api/pms/events?node=${encodeURIComponent(eventNode)}&agent=web`;
+  pmsStreamStopped = false;
+  connectPmsEvents();
 });
 
 onUnmounted(() => {
@@ -2053,6 +2181,10 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', handleMouseUp);
   window.removeEventListener('click', handleGlobalClick);
   if (plannerToastTimeout) clearTimeout(plannerToastTimeout);
+  if (pmsRefreshTimeout) clearTimeout(pmsRefreshTimeout);
+  pmsStreamStopped = true;
+  if (pmsReconnectTimeout) clearTimeout(pmsReconnectTimeout);
+  if (pmsEventAbortController) pmsEventAbortController.abort();
 });
 </script>
 
@@ -2605,6 +2737,9 @@ onUnmounted(() => {
 .modal-title { margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--planner-text); }
 .modal-sub { font-size: 0.85rem; color: var(--planner-text-soft); margin: 0 0 0.75rem; }
 .form-row-inline { display: flex; gap: 1rem; margin-bottom: 1rem; }
+.form-row-inline .form-section { min-width: 0; }
+.form-row-inline input { width: 100%; }
+.add-service-note textarea { width: 100%; min-height: 0; }
 .modal-footer-row { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; }
 .btn-save { background: linear-gradient(180deg, var(--planner-primary), var(--planner-primary-strong)); color: white; border: none; padding: 0.5rem 1.1rem; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 0.875rem; box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18); }
 .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -2642,6 +2777,22 @@ onUnmounted(() => {
 .existing-service-note { color: var(--planner-text-soft); font-size: 0.78rem; font-style: italic; }
 .existing-service-date { color: #94a3b8; font-size: 0.72rem; }
 .existing-service-price { font-weight: 700; color: var(--planner-text); white-space: nowrap; flex-shrink: 0; }
+.existing-service-actions { display: flex; align-items: center; gap: 10px; }
+.service-remove {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--planner-danger);
+  cursor: pointer;
+  padding: 5px;
+}
+.service-remove:hover { background: rgba(220, 77, 77, 0.1); }
+.service-remove svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .add-service-form { margin-top: 0.25rem; }
 .add-service-form-title {
   font-size: 0.72rem;
@@ -2651,6 +2802,26 @@ onUnmounted(() => {
   color: var(--planner-text-soft);
   margin-bottom: 8px;
 }
+.reservation-services-section { margin-top: 1rem; }
+.reservation-services-header { display: flex; align-items: center; justify-content: space-between; }
+.reservation-services-header .section-title { margin-bottom: 0; }
+.reservation-services-list { margin: 0.75rem 0 0; }
+.text-action {
+  border: 0;
+  background: transparent;
+  color: var(--planner-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+}
+.text-action:hover { text-decoration: underline; }
+.reservation-cancel-action {
+  display: flex;
+  justify-content: flex-start;
+  padding: 18px 4px 0;
+}
+.text-action-danger { color: var(--planner-danger); }
 
 .modal-content {
   background: rgba(255, 255, 255, 0.9);

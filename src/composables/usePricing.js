@@ -20,11 +20,7 @@ const hotelPricingPolicy = ref({
     childExemptUnderAge: 3,
     maxDays: 10
   },
-  ageBands: [
-    { label: 'Infant', minAge: 0, maxAge: 2, pricingType: 'fixed', fixedPrice: 15, discountPct: 0 },
-    { label: 'Child', minAge: 3, maxAge: 11, pricingType: 'discount', discountPct: 50, fixedPrice: 0 },
-    { label: 'Teen', minAge: 12, maxAge: 17, pricingType: 'discount', discountPct: 20, fixedPrice: 0 }
-  ]
+  ageBands: []
 })
 
 const isValidISODate = (value) => {
@@ -95,9 +91,7 @@ const normalizePolicy = (rawPolicy = {}) => {
     boardChargeMode: String(rawPolicy?.boardChargeMode || 'per_person'),
     fallbackKidDiscountPct: Math.max(0, Math.min(100, fallbackKidDiscountPct)),
     extraBedDiscountPct: Math.max(0, Math.min(100, extraBedDiscountPct)),
-    overnightTax: normalizeOvernightTax(
-      rawPolicy?.overnightTax || rawPolicy?.overnight_tax || rawPolicy?.tassaDiSoggiorno || {}
-    ),
+    overnightTax: normalizeOvernightTax(rawPolicy?.overnightTax || {}),
     ageBands
   }
 }
@@ -290,14 +284,14 @@ const resolveKidPricing = (age, policy, fullPrice) => {
 
 const calculateWeightedGuests = (occupancy = {}, policy = hotelPricingPolicy.value, fullPrice = 0) => {
   const adults = Math.max(0, Number(occupancy.adults || 0))
-  const children = Math.max(0, Number(occupancy.children || 0))
+  const kids = Math.max(0, Number(occupancy.kids || 0))
   const extraBeds = Math.max(0, Number(occupancy.extraBeds || 0))
   const kidAges = Array.isArray(occupancy.kidAges) ? occupancy.kidAges : []
 
   const adultsAmount = Number((adults * Number(fullPrice || 0)).toFixed(2))
   let kidsAmount = 0
   const kidsBreakdown = []
-  for (let i = 0; i < children; i++) {
+  for (let i = 0; i < kids; i++) {
     const age = i < kidAges.length ? Number(kidAges[i]) : NaN
     const pricing = resolveKidPricing(age, policy, fullPrice)
     kidsBreakdown.push({
@@ -319,7 +313,7 @@ const calculateWeightedGuests = (occupancy = {}, policy = hotelPricingPolicy.val
 
   return {
     adults,
-    children,
+    kids,
     adultsAmount,
     kidsAmount: Number(kidsAmount.toFixed(2)),
     extraBedsAmount,
@@ -357,7 +351,7 @@ const calculateQuotePrice = (checkin, checkout, roomType, type = 'hotel', person
       } else {
         weighted = calculateWeightedGuests({
           adults: options?.adults ?? persone,
-          children: options?.children ?? 0,
+          kids: options?.kids ?? 0,
           kidAges: options?.kidAges ?? [],
           extraBeds: options?.extraBeds ?? 0
         }, policy, dayPrice)
@@ -400,7 +394,7 @@ const calculateOvernightTax = ({
   checkin,
   checkout,
   adults = 0,
-  children = 0,
+  kids = 0,
   kidsAges = [],
   policy = hotelPricingPolicy.value
 } = {}) => {
@@ -421,16 +415,16 @@ const calculateOvernightTax = ({
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) return result
 
   const safeAdults = Math.max(0, Number(adults || 0))
-  const safeChildren = Math.max(0, Number(children || 0))
+  const safeKids = Math.max(0, Number(kids || 0))
 
-  let taxableChildren = 0
-  for (let i = 0; i < safeChildren; i++) {
+  let taxableKids = 0
+  for (let i = 0; i < safeKids; i++) {
     const age = Number(Array.isArray(kidsAges) ? kidsAges[i] : NaN)
     const isExempt = Number.isFinite(age) && age < taxPolicy.childExemptUnderAge
-    if (!isExempt) taxableChildren += 1
+    if (!isExempt) taxableKids += 1
   }
 
-  result.taxablePersons = safeAdults + taxableChildren
+  result.taxablePersons = safeAdults + taxableKids
   if (result.taxablePersons <= 0) return result
 
   let current = new Date(start)

@@ -11,7 +11,7 @@
     <div v-if="isLoading" class="card state">Caricamento prenotazione...</div>
     <div v-else-if="!account" class="card state">Prenotazione non trovata.</div>
 
-    <section v-else ref="receiptRef" class="card detail-card">
+    <section v-else class="card detail-card">
       <h2>Conto Prenotazione #{{ account.id }}</h2>
 
       <div class="info-grid">
@@ -19,60 +19,49 @@
         <div class="info-item"><span class="label">Camera</span><span class="value">{{ account.roomName }}</span></div>
         <div class="info-item"><span class="label">Trattamento</span><span class="value">{{ account.board.toUpperCase() }}</span></div>
         <div class="info-item"><span class="label">Periodo</span><span class="value">{{ formatDate(account.checkin) }} -> {{ formatDate(account.checkout) }}</span></div>
-        <div class="info-item"><span class="label">Ospiti</span><span class="value">{{ account.adults }} adult{{ account.adults !== 1 ? 'i' : 'o' }}<template v-if="account.children > 0">, {{ account.children }} bambin{{ account.children !== 1 ? 'i' : 'o' }}</template></span></div>
+        <div class="info-item"><span class="label">Ospiti</span><span class="value">{{ account.adults }} adult{{ account.adults !== 1 ? 'i' : 'o' }}<template v-if="account.kids > 0">, {{ account.kids }} bambin{{ account.kids !== 1 ? 'i' : 'o' }}</template></span></div>
       </div>
 
       <div class="lines-block">
         <h3>Righe conto</h3>
-        <div class="line-row"><span>Servizio hotel (netto)</span><span>{{ formatCurrency(account.hotelNetTotal) }}</span></div>
-        <div class="line-row tax-row"><span>Tassa di soggiorno (IVA esente)</span><span>{{ formatCurrency(account.overnightTax.total) }}</span></div>
+        <div class="line-row"><span>Totale soggiorno</span><span>{{ formatCurrency(account.hotelNetTotal) }}</span></div>
 
         <template v-if="account.services.length">
-          <div class="line-row services-header-row"><span><strong>Servizi aggiuntivi</strong></span><span>{{ formatCurrency(account.servicesTotal) }}</span></div>
           <div v-for="(svc, i) in account.services" :key="i" class="line-row service-line">
-            <span>{{ svc.name }}<span v-if="svc.quantity > 1"> x{{ svc.quantity }}</span><span v-if="svc.note"> — {{ svc.note }}</span><span v-if="svc.addedAt"> · {{ formatDateTime(svc.addedAt) }}</span></span>
+            <span>{{ svc.name }} x {{ svc.quantity || 1 }}<span v-if="svc.note"> — {{ svc.note }}</span><span v-if="svc.addedAt"> · {{ formatDateTime(svc.addedAt) }}</span></span>
             <span>{{ formatCurrency(getServiceLineTotal(svc)) }}</span>
           </div>
         </template>
-        <template v-else>
-          <div class="line-row service-line"><span>Servizi aggiuntivi</span><span>{{ formatCurrency(0) }}</span></div>
-        </template>
 
-        <div class="line-row services-header-row"><span><strong>Caparre / Acconti</strong></span><span>{{ formatCurrency(paymentTotal) }}</span></div>
+        <button
+          type="button"
+          class="line-row bar-total-row"
+          :class="{ 'bar-total-row--active': barConsumptions.length }"
+          :disabled="!barConsumptions.length"
+          @click="showBarAccount = true"
+        >
+          <span>Totale bar</span>
+          <span>{{ isLoadingBar ? 'Caricamento...' : formatCurrency(barConsumptionsTotal) }}</span>
+        </button>
+
+        <div class="line-row total-row"><span>Totale conto</span><span>{{ formatCurrency(accountTotalWithBar) }}</span></div>
         <template v-if="payments.length">
           <div v-for="(pay, i) in payments" :key="`pay-${i}`" class="line-row service-line">
-            <span>{{ pay.type || 'acconto' }}<span v-if="pay.paymentDate"> · {{ formatDate(pay.paymentDate) }}</span><span v-if="pay.paymentMode"> — {{ pay.paymentMode }}</span></span>
-            <span>{{ formatCurrency(pay.amount || 0) }}</span>
+            <span>{{ String(pay.type || 'acconto').toLowerCase() === 'caparra' ? 'Caparra' : 'Acconto' }}<span v-if="pay.paymentDate"> · {{ formatDate(pay.paymentDate) }}</span><span v-if="pay.paymentMode"> — {{ pay.paymentMode }}</span></span>
+            <span>{{ formatCurrency(-Number(pay.amount || 0)) }}</span>
           </div>
         </template>
-        <template v-else>
-          <div class="line-row service-line"><span>Nessuna caparra/acconto registrato</span><span>{{ formatCurrency(0) }}</span></div>
-        </template>
 
+        <div class="line-row tax-row"><span>Tassa di soggiorno</span><span>{{ formatCurrency(account.overnightTax.total) }}</span></div>
         <div class="line-row"><span>Residuo da incassare</span><span>{{ formatCurrency(remaining) }}</span></div>
-        <div class="line-row total-row"><span>Totale conto</span><span>{{ formatCurrency(account.accountTotal) }}</span></div>
       </div>
 
       <div class="lines-block">
         <h3>Gestione pagamento checkout</h3>
-        <div class="counter-row"><span>Prossimo progressivo backend</span><strong>{{ counterInfo?.nextProgressive ?? '-' }}</strong></div>
-        <div class="counter-row"><span>Progressivo riservato</span><strong>{{ reservedProgressive ?? 'non riservato' }}</strong></div>
 
-        <!-- Bar Consumptions Section -->
-        <div class="bar-section">
+        <div v-if="!isLoadingBar && !barConsumptions.length" class="bar-empty-section">
           <h4>Consumazioni Bar</h4>
-          <div v-if="isLoadingBar" class="bar-loading">Caricamento consumazioni bar...</div>
-          <div v-else-if="barConsumptions.length === 0" class="bar-empty">Nessuna consumazione bar</div>
-          <div v-else class="bars-list">
-            <div v-for="(item, i) in barConsumptions" :key="`bar-${i}`" class="bar-item">
-              <span class="bar-name">{{ item.name }}<span v-if="item.quantity > 1"> x{{ item.quantity }}</span></span>
-              <span class="bar-price">{{ formatCurrency(getBarLineTotal(item)) }}</span>
-            </div>
-          </div>
-          <div v-if="barConsumptions.length > 0" class="bar-total">
-            <strong>Totale Bar:</strong>
-            <strong>{{ formatCurrency(barConsumptionsTotal) }}</strong>
-          </div>
+          <span>Nessuna consumazione bar</span>
         </div>
 
         <div class="payment-entry-form">
@@ -87,9 +76,6 @@
         </div>
 
         <div class="payment-actions-row">
-          <button type="button" class="btn btn-secondary" :disabled="isReserving" @click="reserveProgressive">
-            {{ isReserving ? 'Riserva in corso...' : 'Riserva progressivo' }}
-          </button>
           <button type="button" class="btn btn-secondary" @click="printA4">Stampa ricevuta A4</button>
           <button type="button" class="btn btn-primary" :disabled="isClosing" @click="closeAccount">
             {{ isClosing ? 'Chiusura in corso...' : 'Chiudi conto e stampa fiscale' }}
@@ -97,6 +83,32 @@
         </div>
       </div>
     </section>
+
+    <div v-if="showBarAccount" class="bar-modal-overlay" @click.self="showBarAccount = false">
+      <section class="bar-modal">
+        <div class="bar-modal-header">
+          <div>
+            <h2>Conto bar camera {{ account.roomName }}</h2>
+            <p>{{ account.guest }}</p>
+          </div>
+          <button type="button" class="bar-modal-close" aria-label="Chiudi" @click="showBarAccount = false">&times;</button>
+        </div>
+        <div class="bar-account-list">
+          <div v-for="(item, i) in barConsumptions" :key="item.id || i" class="bar-account-row">
+            <div>
+              <strong>{{ item.name }}<span v-if="item.quantity > 1"> × {{ item.quantity }}</span></strong>
+              <span v-if="item.addedAt">{{ formatDateTime(item.addedAt) }}</span>
+            </div>
+            <span>{{ formatCurrency(getBarLineTotal(item)) }}</span>
+          </div>
+        </div>
+        <div class="bar-account-total"><span>Totale bar</span><strong>{{ formatCurrency(barConsumptionsTotal) }}</strong></div>
+        <div class="bar-modal-actions">
+          <button type="button" class="btn btn-secondary" @click="showBarAccount = false">Chiudi</button>
+          <button type="button" class="btn btn-primary" @click="printBarAccount">Stampa conto bar</button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -113,29 +125,20 @@ const { calculateQuotePrice, calculateOvernightTax, loadHotelPricingPolicy } = u
 const reservationId = computed(() => String(route.params.reservationId || ''))
 const isLoading = ref(false)
 const account = ref(null)
-const counterInfo = ref(null)
-const reservedProgressive = ref(null)
-const isReserving = ref(false)
 const isClosing = ref(false)
-const receiptRef = ref(null)
-const structureInfo = ref({
-  name: 'Struttura',
-  address: '',
-  city: '',
-  vatNumber: '',
-  logoUrl: ''
-})
 const paymentDraft = ref({ amount: '', paymentDate: toISODate(new Date()), paymentMode: 'Contanti', type: 'acconto' })
 const payments = ref([])
 
 const isLoadingBar = ref(false)
 const barConsumptions = ref([])
+const showBarAccount = ref(false)
 
 const paymentTotal = computed(() => Number(payments.value.reduce((sum, p) => sum + Number(p?.amount || 0), 0).toFixed(2)))
-const remaining = computed(() => Number((Number(account.value?.accountTotal || 0) - paymentTotal.value).toFixed(2)))
 const barConsumptionsTotal = computed(() => 
   Number(barConsumptions.value.reduce((sum, item) => sum + getBarLineTotal(item), 0).toFixed(2))
 )
+const accountTotalWithBar = computed(() => Number((Number(account.value?.accountTotal || 0) + barConsumptionsTotal.value).toFixed(2)))
+const remaining = computed(() => Number((accountTotalWithBar.value - paymentTotal.value).toFixed(2)))
 
 function toISODate(date) {
   const y = date.getFullYear()
@@ -187,15 +190,105 @@ const loadBarConsumptions = async () => {
     if (account.value.checkin) params.set('checkin', account.value.checkin)
     if (account.value.checkout) params.set('checkout', account.value.checkout)
     const response = await axios.get(
-      `/api/pms/hotel/get_bar_consumptions?${params.toString()}`
+      `/api/pms/hotel/get_bar_consumptions?${params.toString()}`,
+      { mbarDirect: true }
     )
     barConsumptions.value = response.data?.consumptions || []
+    if (!barConsumptions.value.length) {
+      const floorResponse = await axios.get('/api/floorplan', { mbarDirect: true })
+      const floor = Array.isArray(floorResponse.data) ? floorResponse.data : []
+      let barAccount = floor.find(item => String(item?.reservation?.id || '') === String(account.value.id))
+      if (!barAccount && account.value.roomId != null) {
+        barAccount = floor.find(item => String(item?.id || '') === String(account.value.roomId))
+      }
+      if (!barAccount) {
+        barAccount = floor.find(item => String(item?.name || '').trim() === String(account.value.roomName || '').trim())
+      }
+      const order = Array.isArray(barAccount?.conto?.order) ? barAccount.conto.order : []
+      barConsumptions.value = order.map(item => ({
+        id: item?.insert_id || null,
+        name: item?.product?.name || 'Prodotto',
+        quantity: Number(item?.quantity || 1),
+        price: Number(item?.product?.price || 0),
+        addedAt: item?.insertTime || null
+      }))
+    }
   } catch (error) {
-    console.error('Errore caricamento consumazioni bar:', error)
-    barConsumptions.value = []
+    try {
+      const floorResponse = await axios.get('/api/floorplan', { mbarDirect: true })
+      const floor = Array.isArray(floorResponse.data) ? floorResponse.data : []
+      let barAccount = floor.find(item => String(item?.reservation?.id || '') === String(account.value.id))
+      if (!barAccount && account.value.roomId != null) {
+        barAccount = floor.find(item => String(item?.id || '') === String(account.value.roomId))
+      }
+      if (!barAccount) {
+        barAccount = floor.find(item => String(item?.name || '').trim() === String(account.value.roomName || '').trim())
+      }
+      const order = Array.isArray(barAccount?.conto?.order) ? barAccount.conto.order : []
+      barConsumptions.value = order.map(item => ({
+        id: item?.insert_id || null,
+        name: item?.product?.name || 'Prodotto',
+        quantity: Number(item?.quantity || 1),
+        price: Number(item?.product?.price || 0),
+        addedAt: item?.insertTime || null
+      }))
+    } catch (floorError) {
+      console.error('Errore caricamento consumazioni bar:', error, floorError)
+      barConsumptions.value = []
+    }
   } finally {
     isLoadingBar.value = false
   }
+}
+
+const printBarAccount = () => {
+  const rows = barConsumptions.value.map(item => `
+    <div class="row">
+      <div>
+        <strong>${escapeHtml(item.name)}${Number(item.quantity || 1) > 1 ? ` × ${Number(item.quantity)}` : ''}</strong>
+        ${item.addedAt ? `<small>${escapeHtml(formatDateTime(item.addedAt))}</small>` : ''}
+      </div>
+      <strong>${escapeHtml(formatCurrency(getBarLineTotal(item)))}</strong>
+    </div>
+  `).join('')
+  const iframe = document.createElement('iframe')
+  iframe.style.position = 'fixed'
+  iframe.style.left = '-10000px'
+  iframe.style.width = '1px'
+  iframe.style.height = '1px'
+  iframe.style.border = '0'
+  iframe.srcdoc = `
+    <!doctype html>
+    <html>
+      <head>
+        <title>Conto bar camera ${escapeHtml(account.value?.roomName || '')}</title>
+        <style>
+          @page { margin: 15mm; }
+          body { margin: 0; font-family: Arial, sans-serif; color: #1e293b; font-size: 13px; }
+          h1 { margin: 0 0 4px; font-size: 20px; }
+          .guest { margin: 0 0 20px; color: #64748b; }
+          .row { display: flex; justify-content: space-between; gap: 20px; padding: 10px 0; border-bottom: 1px solid #e2e8f0; break-inside: avoid; }
+          .row div { display: flex; flex-direction: column; gap: 3px; }
+          small { color: #64748b; }
+          .total { display: flex; justify-content: space-between; gap: 20px; margin-top: 16px; padding-top: 12px; border-top: 2px solid #1e293b; font-size: 17px; }
+        </style>
+      </head>
+      <body>
+        <h1>Conto bar camera ${escapeHtml(account.value?.roomName || '')}</h1>
+        <p class="guest">${escapeHtml(account.value?.guest || '')}</p>
+        ${rows}
+        <div class="total"><span>Totale bar</span><strong>${escapeHtml(formatCurrency(barConsumptionsTotal.value))}</strong></div>
+      </body>
+    </html>
+  `
+  iframe.onload = () => {
+    const printWindow = iframe.contentWindow
+    printWindow.onafterprint = () => iframe.remove()
+    printWindow.focus()
+    printWindow.print()
+    window.setTimeout(() => iframe.remove(), 60000)
+  }
+  document.body.appendChild(iframe)
 }
 
 const normalizeKidsAges = (ages, expectedCount) => {
@@ -237,78 +330,12 @@ const getOvernightTaxSnapshotFromReservation = (reservation) => {
   }
 }
 
-const loadCounter = async () => {
-  const response = await axios.get('/api/pms/hotel/account/counter')
-  counterInfo.value = response.data || null
-}
-
-const toSafeText = (value) => String(value || '').trim()
-
 const escapeHtml = (value) => String(value || '')
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
   .replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;')
   .replaceAll("'", '&#39;')
-
-const extractStructureInfo = (configs) => {
-  const root = configs && typeof configs === 'object' ? configs : {}
-  const structure = root.structure || root.hotel?.structure || {}
-
-  const name = toSafeText(
-    structure.name
-    || structure.businessName
-    || root.businessName
-    || root.hotel?.businessName
-    || 'Struttura'
-  )
-
-  const address = toSafeText(
-    structure.address
-    || structure.street
-    || root.address
-    || root.hotel?.address
-    || ''
-  )
-
-  const city = toSafeText(
-    structure.city
-    || root.city
-    || root.hotel?.city
-    || ''
-  )
-
-  const vatNumber = toSafeText(
-    structure.vatNumber
-    || structure.vat
-    || structure.piva
-    || root.vatNumber
-    || root.vat
-    || root.piva
-    || root.hotel?.vatNumber
-    || ''
-  )
-
-  const logoUrl = toSafeText(
-    structure.logoUrl
-    || structure.logo
-    || root.logoUrl
-    || root.logo
-    || root.hotel?.logoUrl
-    || ''
-  )
-
-  return { name, address, city, vatNumber, logoUrl }
-}
-
-const loadStructureInfo = async () => {
-  try {
-    const response = await axios.get('/api/pms/getconfigs')
-    structureInfo.value = extractStructureInfo(response.data)
-  } catch (error) {
-    console.error('Errore caricamento dati struttura:', error)
-  }
-}
 
 const loadReservationAccount = async () => {
   if (!reservationId.value) return
@@ -325,19 +352,25 @@ const loadReservationAccount = async () => {
     const checkin = typeof res.checkin === 'string' ? res.checkin : ''
     const duration = Math.max(1, Number(res.duration || 1))
     const adults = Math.max(0, Number(res.adults ?? res.pax ?? 1))
-    const children = Math.max(0, Number(res.kids ?? res.children ?? 0))
-    const kidsAges = normalizeKidsAges(res.kidsAges ?? res.childrenAges ?? res.kids_ages ?? res.children_ages, children)
+    const kids = Math.max(0, Number(res.kids ?? 0))
+    const kidsAges = normalizeKidsAges(res.kidsAges, kids)
     const roomType = res.roomType || res.room_type?.label || res.room || 'N/D'
 
-    const quote = calculateQuotePrice(checkin, addDaysISO(checkin, duration), roomType, 'hotel', adults + children, {
+    const quote = calculateQuotePrice(checkin, addDaysISO(checkin, duration), roomType, 'hotel', adults + kids, {
       board: String(res.board || 'bb').toLowerCase(),
       adults,
-      children,
+      kids,
       kidAges: kidsAges
     })
 
-    const hotelNetTotal = res.fixedPrice != null ? Number(res.fixedPrice) : Number(quote?.totalCalculated || 0)
-    const overnightTax = getOvernightTaxSnapshotFromReservation(res) || calculateOvernightTax({ checkin, checkout: addDaysISO(checkin, duration), adults, children, kidsAges })
+    const dailyTotal = Array.isArray(res.price_per_day)
+      ? res.price_per_day.reduce((sum, day) => sum + Number(day?.day_total ?? day?.price ?? day?.price_per_room ?? 0), 0)
+      : 0
+    const storedTotal = Number(res.price_per_room ?? res.price_total ?? res.total_price ?? res.amount ?? 0)
+    const hotelNetTotal = res.fixedPrice != null
+      ? Number(res.fixedPrice)
+      : (dailyTotal > 0 ? dailyTotal : (storedTotal > 0 ? storedTotal : Number(quote?.totalCalculated || 0)))
+    const overnightTax = getOvernightTaxSnapshotFromReservation(res) || calculateOvernightTax({ checkin, checkout: addDaysISO(checkin, duration), adults, kids, kidsAges })
     const services = Array.isArray(res.services) ? res.services : []
     const servicesTotal = Number(services.reduce((sum, svc) => sum + getServiceLineTotal(svc), 0).toFixed(2))
 
@@ -348,7 +381,7 @@ const loadReservationAccount = async () => {
       duration,
       guest: `${res.accountholder?.firstname || ''} ${res.accountholder?.lastname || ''}`.trim() || 'N/D',
       adults,
-      children,
+      kids,
       board: String(res.board || 'bb').toLowerCase(),
       services,
       servicesTotal,
@@ -358,8 +391,6 @@ const loadReservationAccount = async () => {
     }
 
     payments.value = normalizeDeposits(res)
-    const existingProgressive = Number(res?.accounting?.progressive)
-    reservedProgressive.value = Number.isFinite(existingProgressive) && existingProgressive > 0 ? existingProgressive : null
   } catch (error) {
     console.error('Errore caricamento conto dedicato:', error)
     account.value = null
@@ -384,150 +415,50 @@ const addPayment = () => {
   paymentDraft.value = { amount: '', paymentDate: toISODate(new Date()), paymentMode: 'Contanti', type: 'acconto' }
 }
 
-const reserveProgressive = async () => {
-  if (!account.value) return
-  isReserving.value = true
-  try {
-    const response = await axios.post('/api/pms/hotel/account/reserve_progressive', {
-      reservationId: account.value.id
-    })
-    const progressive = Number(response.data?.progressive)
-    if (Number.isFinite(progressive)) {
-      reservedProgressive.value = progressive
-    }
-    await loadCounter()
-  } catch (error) {
-    console.error('Errore riserva progressivo:', error)
-    alert('Errore riserva progressivo')
-  } finally {
-    isReserving.value = false
-  }
-}
+const printA4 = async () => {
+  if (!account.value?.id) return
 
-const printA4 = () => {
-  if (!receiptRef.value) return
-
-  const printWindow = window.open('', '_blank', 'width=900,height=1200')
+  const printWindow = window.open('', '_blank')
   if (!printWindow) {
     alert('Impossibile aprire la finestra di stampa')
     return
   }
 
-  const receiptHtml = receiptRef.value.innerHTML
-  const guestName = account.value?.guest || 'N/D'
-  const title = `Conto prenotazione ${reservationId.value}`
-  const headerName = escapeHtml(structureInfo.value.name || 'Struttura')
-  const headerAddress = escapeHtml(structureInfo.value.address || '')
-  const headerCity = escapeHtml(structureInfo.value.city || '')
-  const headerVat = escapeHtml(structureInfo.value.vatNumber || 'N/D')
-  const logoHtml = structureInfo.value.logoUrl
-    ? `<img src="${escapeHtml(structureInfo.value.logoUrl)}" alt="Logo struttura" class="print-logo" />`
-    : ''
-
-  printWindow.document.write(`
-    <html>
-      <head>
-        <title>${title}</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            color: #111827;
-            margin: 20mm;
-            font-size: 12px;
-          }
-          h2, h3 {
-            margin: 0 0 10px 0;
-            color: #0f172a;
-          }
-          .print-header {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: flex-start;
-            margin-bottom: 14px;
-            border-bottom: 1px solid #cbd5e1;
-            padding-bottom: 10px;
-          }
-          .print-header-left {
-            flex: 1;
-          }
-          .print-logo {
-            width: 120px;
-            max-height: 70px;
-            object-fit: contain;
-          }
-          .print-header p {
-            margin: 4px 0;
-          }
-          .info-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(200px, 1fr));
-            gap: 8px;
-          }
-          .info-item .label {
-            color: #64748b;
-            font-size: 11px;
-          }
-          .info-item .value {
-            font-weight: 600;
-          }
-          .line-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 6px 0;
-            border-bottom: 1px dashed #e2e8f0;
-          }
-          .total-row {
-            font-weight: 700;
-          }
-          .counter-row,
-          .payment-entry-form,
-          .payment-actions-row {
-            display: none !important;
-          }
-          @page {
-            size: A4;
-            margin: 14mm;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="print-header">
-          <div class="print-header-left">
-            <h2>${headerName}</h2>
-            <p>${headerAddress}${headerAddress && headerCity ? ', ' : ''}${headerCity}</p>
-            <p>P.IVA: ${headerVat}</p>
-            <p>${title}</p>
-            <p>Cliente: ${escapeHtml(guestName)}</p>
-            <p>Data stampa: ${new Date().toLocaleString('it-IT')}</p>
-          </div>
-          ${logoHtml}
-        </div>
-        ${receiptHtml}
-      </body>
-    </html>
-  `)
-
-  printWindow.document.close()
-  printWindow.focus()
-  printWindow.print()
-  printWindow.close()
+  try {
+    const response = await axios.post('/api/pms/hotel/account/proforma', {
+      reservationId: account.value.id
+    }, {
+      responseType: 'blob',
+      mbarDirect: true
+    })
+    const pdfUrl = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+    printWindow.addEventListener('load', () => {
+      window.setTimeout(() => {
+        printWindow.focus()
+        printWindow.print()
+      }, 500)
+    }, { once: true })
+    printWindow.location.replace(pdfUrl)
+    window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000)
+  } catch (error) {
+    printWindow.close()
+    console.error('Errore stampa conto A4:', error)
+    alert('Impossibile generare il conto A4')
+  }
 }
 
 const closeAccount = async () => {
   if (!account.value) return
-  if (!Number.isFinite(Number(reservedProgressive.value)) || Number(reservedProgressive.value) <= 0) {
-    alert('Riserva prima un numero progressivo')
-    return
-  }
 
   isClosing.value = true
   try {
     const response = await axios.post('/api/pms/hotel/account/close', {
       reservationId: account.value.id,
-      progressive: Number(reservedProgressive.value),
-      account: account.value,
+      account: {
+        ...account.value,
+        barTotal: barConsumptionsTotal.value,
+        accountTotal: accountTotalWithBar.value
+      },
       payments: payments.value,
       barConsumptions: barConsumptions.value,
       operator: 0
@@ -537,9 +468,8 @@ const closeAccount = async () => {
       return
     }
 
-    alert(`Conto chiuso con progressivo ${reservedProgressive.value}. Comando stampa fiscale inviato al backend.`)
+    alert('Conto chiuso. Comando stampa fiscale inviato al backend.')
     await loadReservationAccount()
-    await loadCounter()
   } catch (error) {
     console.error('Errore chiusura conto:', error)
     alert('Errore durante la chiusura conto')
@@ -552,7 +482,7 @@ const goBack = () => router.push('/')
 const goToAccounts = () => router.push('/accounts')
 
 onMounted(async () => {
-  await Promise.all([loadReservationAccount(), loadCounter(), loadStructureInfo()])
+  await loadReservationAccount()
   if (account.value?.id) {
     await loadBarConsumptions()
   }
@@ -759,58 +689,77 @@ onMounted(async () => {
   border-color: rgba(148, 163, 184, 0.18);
 }
 
-.bar-section {
+.bar-total-row {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.24);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: var(--ds-text);
+}
+
+.bar-total-row--active {
+  color: #b45309;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.bar-total-row--active:hover { background: rgba(255, 251, 235, 0.92); }
+
+.bar-empty-section {
   margin-top: 12px;
   padding: 16px;
-  background: rgba(255, 251, 235, 0.92);
   border: 1px solid rgba(245, 158, 11, 0.2);
   border-left: 4px solid #f59e0b;
   border-radius: 20px;
-}
-
-.bar-section h4 {
-  margin: 0 0 10px 0;
-  color: #92400e;
-  font-size: 0.98rem;
-  font-weight: 800;
-}
-
-.bar-loading,
-.bar-empty {
+  background: rgba(255, 251, 235, 0.92);
   color: #b45309;
-  font-size: 0.9rem;
-  padding: 8px 0;
 }
 
-.bars-list {
-  margin-bottom: 10px;
+.bar-empty-section h4 { margin: 0 0 10px; color: #92400e; }
+
+.bar-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.45);
 }
 
-.bar-item {
+.bar-modal {
+  width: min(620px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+  padding: 24px;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+
+.bar-modal-header,
+.bar-account-row,
+.bar-account-total,
+.bar-modal-actions {
   display: flex;
   justify-content: space-between;
-  padding: 6px 0;
-  font-size: 0.9rem;
-  color: #92400e;
-  border-bottom: 1px solid rgba(245, 158, 11, 0.16);
+  gap: 16px;
 }
 
-.bar-name {
-  font-weight: 500;
-}
+.bar-modal-header h2 { margin: 0 0 4px; }
+.bar-modal-header p { margin: 0; color: var(--ds-text-soft); }
+.bar-modal-close { border: 0; background: transparent; font-size: 2rem; cursor: pointer; color: var(--ds-text-soft); }
+.bar-account-list { margin-top: 20px; }
+.bar-account-row { align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.2); }
+.bar-account-row div { display: flex; flex-direction: column; gap: 3px; }
+.bar-account-row div span { color: var(--ds-text-soft); font-size: 0.78rem; }
+.bar-account-row > span { font-weight: 700; white-space: nowrap; }
+.bar-account-total { padding: 18px 0 4px; font-size: 1.1rem; }
+.bar-modal-actions { justify-content: flex-end; margin-top: 24px; }
 
-.bar-price {
-  font-weight: 600;
-}
-
-.bar-total {
-  display: flex;
-  justify-content: space-between;
-  padding-top: 8px;
-  border-top: 2px solid #f59e0b;
-  color: #d97706;
-  font-weight: 700;
-}
 
 @media (max-width: 900px) {
   .header,

@@ -1,7 +1,12 @@
 <template>
   <div class="stats-sales-container">
     <div class="header">
-      <h1>📊 Ordinato</h1>
+      <h1>
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M18 20V10M12 20V4M6 20v-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Ordinato</span>
+      </h1>
     </div>
 
     <!-- Filtri -->
@@ -334,11 +339,21 @@ const formatCurrency = (value) => {
 }
 
 .header h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 1.8rem;
   font-weight: 800;
   letter-spacing: -0.04em;
   color: var(--ds-text);
   margin: 0;
+}
+
+.header h1 svg {
+  width: 28px;
+  height: 28px;
+  color: var(--ds-primary);
+  flex-shrink: 0;
 }
 
 .filters-section {

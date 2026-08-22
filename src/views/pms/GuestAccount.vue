@@ -83,7 +83,7 @@
           <span class="label">Ospiti</span>
           <span class="value">
             {{ selectedAccount.adults }} adult{{ selectedAccount.adults !== 1 ? 'i' : 'o' }}
-            <template v-if="selectedAccount.children > 0">, {{ selectedAccount.children }} bambin{{ selectedAccount.children !== 1 ? 'i' : 'o' }}</template>
+            <template v-if="selectedAccount.kids > 0">, {{ selectedAccount.kids }} bambin{{ selectedAccount.kids !== 1 ? 'i' : 'o' }}</template>
           </span>
         </div>
         <div class="info-item">
@@ -161,14 +161,6 @@
 
       <div class="lines-block">
         <h3>Gestione pagamento checkout</h3>
-        <div class="counter-row">
-          <span>Prossimo progressivo backend</span>
-          <strong>{{ counterInfo?.nextProgressive ?? '-' }}</strong>
-        </div>
-        <div class="counter-row">
-          <span>Progressivo riservato per questo conto</span>
-          <strong>{{ selectedReservedProgressive ?? 'non riservato' }}</strong>
-        </div>
 
         <div class="payment-entry-form">
           <input v-model.number="paymentDraft.amount" type="number" min="0" step="0.01" placeholder="Importo" />
@@ -182,9 +174,6 @@
         </div>
 
         <div class="payment-actions-row">
-          <button type="button" class="btn btn-secondary" :disabled="isReservingProgressive" @click="reserveProgressive">
-            {{ isReservingProgressive ? 'Riserva in corso...' : 'Riserva progressivo' }}
-          </button>
           <button type="button" class="btn btn-secondary" @click="printA4Receipt">
             Stampa ricevuta A4
           </button>
@@ -221,9 +210,6 @@ const fromDate = ref(toISODate(defaultFrom))
 const toDate = ref(toISODate(defaultTo))
 const paymentEntriesByReservation = ref({})
 const paymentDraft = ref({ amount: '', paymentDate: toISODate(new Date()), paymentMode: 'Contanti', type: 'acconto' })
-const counterInfo = ref(null)
-const reservedProgressiveByReservation = ref({})
-const isReservingProgressive = ref(false)
 const isClosingAccount = ref(false)
 
 const accounts = computed(() => {
@@ -236,11 +222,11 @@ const accounts = computed(() => {
       booking.checkout,
       roomType,
       'hotel',
-      booking.adults + booking.children,
+      booking.adults + booking.kids,
       {
         board: booking.board,
         adults: booking.adults,
-        children: booking.children,
+        kids: booking.kids,
         kidAges: booking.kidsAges
       }
     )
@@ -254,7 +240,7 @@ const accounts = computed(() => {
       checkin: booking.checkin,
       checkout: booking.checkout,
       adults: booking.adults,
-      children: booking.children,
+      kids: booking.kids,
       kidsAges: booking.kidsAges
     })
 
@@ -299,11 +285,6 @@ const selectedAccountPaymentTotal = computed(() => {
 const selectedAccountRemaining = computed(() => {
   if (!selectedAccount.value) return 0
   return Number((Number(selectedAccount.value.accountTotal || 0) - selectedAccountPaymentTotal.value).toFixed(2))
-})
-
-const selectedReservedProgressive = computed(() => {
-  if (!selectedAccount.value) return null
-  return reservedProgressiveByReservation.value[selectedAccount.value.id] || null
 })
 
 function toISODate(date) {
@@ -465,7 +446,7 @@ const normalizeBookings = (apiPayload) => {
     const checkin = typeof res.checkin === 'string' ? res.checkin : ''
     const duration = Math.max(1, Number(res.duration || 1))
     const adults = Math.max(0, Number(res.adults ?? res.pax ?? 1))
-    const children = Math.max(0, Number(res.kids ?? res.children ?? 0))
+    const kids = Math.max(0, Number(res.kids ?? 0))
     const overnightTaxInfo = getOvernightTaxSnapshotFromReservation(res)
     const deposits = normalizeDeposits(res)
 
@@ -475,8 +456,8 @@ const normalizeBookings = (apiPayload) => {
       roomType: res.room_type?.label || '',
       guest: `${res.accountholder?.firstname || ''} ${res.accountholder?.lastname || ''}`.trim() || 'N/D',
       adults,
-      children,
-      kidsAges: normalizeKidsAges(res.kidsAges ?? res.childrenAges ?? res.kids_ages ?? res.children_ages, children),
+      kids,
+      kidsAges: normalizeKidsAges(res.kidsAges, kids),
       overnightTaxSnapshot: overnightTaxInfo?.snapshot || null,
       overnightTaxSource: overnightTaxInfo?.source || 'calcolo locale (fallback)',
       checkin,
@@ -562,39 +543,6 @@ const removePaymentEntry = (index) => {
   }
 }
 
-const loadProgressiveCounter = async () => {
-  try {
-    const response = await axios.get('/api/pms/hotel/account/counter')
-    counterInfo.value = response.data || null
-  } catch (error) {
-    console.error('Errore caricamento contatore progressivo:', error)
-    alert('Errore caricamento contatore progressivo')
-  }
-}
-
-const reserveProgressive = async () => {
-  if (!selectedAccount.value) return
-  isReservingProgressive.value = true
-  try {
-    const response = await axios.post('/api/pms/hotel/account/reserve_progressive', {
-      reservationId: selectedAccount.value.id
-    })
-    const progressive = Number(response.data?.progressive)
-    if (Number.isFinite(progressive)) {
-      reservedProgressiveByReservation.value = {
-        ...reservedProgressiveByReservation.value,
-        [selectedAccount.value.id]: progressive
-      }
-    }
-    await loadProgressiveCounter()
-  } catch (error) {
-    console.error('Errore riserva progressivo:', error)
-    alert('Errore riserva progressivo')
-  } finally {
-    isReservingProgressive.value = false
-  }
-}
-
 const printA4Receipt = () => {
   window.print()
 }
@@ -602,17 +550,10 @@ const printA4Receipt = () => {
 const closeAccountAndPrintFiscal = async () => {
   if (!selectedAccount.value) return
 
-  const progressive = selectedReservedProgressive.value
-  if (!Number.isFinite(Number(progressive)) || Number(progressive) <= 0) {
-    alert('Riserva prima un numero progressivo')
-    return
-  }
-
   isClosingAccount.value = true
   try {
     const payload = {
       reservationId: selectedAccount.value.id,
-      progressive: Number(progressive),
       account: selectedAccount.value,
       payments: selectedAccountPayments.value,
       operator: 0
@@ -624,9 +565,8 @@ const closeAccountAndPrintFiscal = async () => {
       return
     }
 
-    alert(`Conto chiuso con progressivo ${progressive}. Comando stampa fiscale inviato al backend.`)
+    alert('Conto chiuso. Comando stampa fiscale inviato al backend.')
     await loadAccounts()
-    await loadProgressiveCounter()
   } catch (error) {
     console.error('Errore chiusura conto:', error)
     alert('Errore durante la chiusura conto')
@@ -681,7 +621,6 @@ watch(
 
 onMounted(async () => {
   await loadAccounts()
-  await loadProgressiveCounter()
 })
 </script>
 

@@ -52,7 +52,7 @@
             <div v-if="quote.type === 'hotel'" class="detail-row">
               <span class="label">Ospiti:</span>
               <span class="value">{{ quote.adults }} adult{{ quote.adults !== 1 ? 'i' : 'o' }}
-                <span v-if="quote.children > 0">, {{ quote.children }} bambin{{ quote.children !== 1 ? 'i' : 'o' }}</span>
+                <span v-if="quote.kids > 0">, {{ quote.kids }} bambin{{ quote.kids !== 1 ? 'i' : 'o' }}</span>
               </span>
             </div>
             <div v-if="quote.type === 'hotel' && getQuoteKidsAgesLabel(quote)" class="detail-row">
@@ -138,7 +138,7 @@
             </div>
             <div class="info-item">
               <span class="info-label">Bambini:</span>
-              <span class="info-value">{{ currentQuote.children || '0' }}</span>
+              <span class="info-value">{{ currentQuote.kids || '0' }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Trattamento:</span>
@@ -377,7 +377,7 @@ const getQuoteTotal = (quote) => {
 
 const getQuoteKidsAgesLabel = (quote) => {
   if (!quote) return ''
-  const raw = quote.kidsAges ?? quote.childrenAges ?? quote.kids_ages ?? quote.children_ages ?? []
+  const raw = quote.kidsAges ?? []
   if (!Array.isArray(raw) || raw.length === 0) return ''
 
   const normalized = raw

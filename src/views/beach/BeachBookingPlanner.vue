@@ -1253,10 +1253,10 @@ watch(selectedBooking, (id) => {
                 <label>Quantità</label>
                 <input v-model.number="addServiceForm.quantity" type="number" min="1" />
               </div>
-              <div class="form-section">
-                <label>Note</label>
-                <input v-model="addServiceForm.note" type="text" placeholder="Opzionale" />
-              </div>
+            </div>
+            <div class="form-section add-service-note">
+              <label>Note</label>
+              <textarea v-model="addServiceForm.note" rows="2" placeholder="Opzionale"></textarea>
             </div>
           </div>
 
@@ -1725,7 +1725,7 @@ watch(selectedBooking, (id) => {
 .form-row { display: flex; gap: 15px; margin-bottom: 15px; }
 .form-section { flex: 1; display: flex; flex-direction: column; margin-bottom: 15px; }
 .form-section label { font-size: 12px; font-weight: 700; color: var(--beach-text-soft); margin-bottom: 5px; text-transform: uppercase; }
-.form-section input, .form-section select { padding: 12px 14px; border: 1px solid var(--beach-border-strong); border-radius: 14px; font-size: 14px; background: rgba(255, 255, 255, 0.9); }
+.form-section input, .form-section select, .form-section textarea { padding: 12px 14px; border: 1px solid var(--beach-border-strong); border-radius: 14px; font-size: 14px; background: rgba(255, 255, 255, 0.9); }
 
 .modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
 .btn-save { background: linear-gradient(180deg, var(--beach-primary), var(--beach-primary-strong)); color: white; border: none; padding: 10px 20px; border-radius: 14px; cursor: pointer; font-weight: 700; box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18); }
@@ -1815,6 +1815,9 @@ watch(selectedBooking, (id) => {
 .modal-title { margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--beach-text); }
 .modal-sub { font-size: 0.85rem; color: var(--beach-text-soft); margin: 0 0 0.75rem; }
 .form-row-inline { display: flex; gap: 1rem; margin-bottom: 1rem; }
+.form-row-inline .form-section { min-width: 0; }
+.form-row-inline input { width: 100%; }
+.add-service-note textarea { width: 100%; min-height: 0; resize: vertical; }
 .modal-footer-row { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; }
 .btn-save { background: linear-gradient(180deg, var(--beach-primary), var(--beach-primary-strong)); color: white; border: none; padding: 0.5rem 1.1rem; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 0.875rem; box-shadow: 0 18px 28px rgba(29, 140, 242, 0.18); }
 .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }

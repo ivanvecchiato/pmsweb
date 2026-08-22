@@ -223,7 +223,7 @@ const normalizeForm = (value) => {
         .sort((a, b) => a.minAge - b.minAge)
     : []
 
-  const rawTax = value?.overnightTax || value?.overnight_tax || {}
+  const rawTax = value?.overnightTax || {}
   let amountPerPerson = Number(rawTax?.amountPerPerson)
   if (!Number.isFinite(amountPerPerson)) amountPerPerson = 0
 
