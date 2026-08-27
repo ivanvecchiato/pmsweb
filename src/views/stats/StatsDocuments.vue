@@ -183,6 +183,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
 
 const toDateInputValue = (date) => {
   const y = date.getFullYear()
@@ -596,8 +599,10 @@ const closeDetailDialog = () => {
   selectedDocumentDetail.value = null
 }
 
-onMounted(() => {
-  fetchDocuments()
+onMounted(async () => {
+  await fetchDocuments()
+  const progressivo = String(route.query.progressivo || '').trim()
+  if (progressivo) await openDocumentDetail({ progressivo })
 })
 </script>
 

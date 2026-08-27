@@ -244,7 +244,7 @@ const accounts = computed(() => {
       kidsAges: booking.kidsAges
     })
 
-    const services = Array.isArray(booking.services) ? booking.services : []
+    const services = Array.isArray(booking.extra?.services) ? booking.extra.services : []
     const servicesTotal = Number(
       services
         .reduce((sum, service) => sum + getServiceLineTotal(service), 0)
@@ -465,7 +465,7 @@ const normalizeBookings = (apiPayload) => {
       duration,
       board: String(res.board || 'bb').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
-      services: Array.isArray(res.services) ? res.services : [],
+      services: Array.isArray(res.extra?.services) ? res.extra.services : [],
       deposits
     }
   })

@@ -23,7 +23,6 @@
       </div>
 
       <div class="lines-block">
-        <h3>Righe conto</h3>
         <div class="line-row"><span>Totale soggiorno</span><span>{{ formatCurrency(account.hotelNetTotal) }}</span></div>
 
         <template v-if="account.services.length">
@@ -52,32 +51,77 @@
           </div>
         </template>
 
-        <div class="line-row tax-row"><span>Tassa di soggiorno</span><span>{{ formatCurrency(account.overnightTax.total) }}</span></div>
+        <div class="line-row tax-row">
+          <span>Tassa di soggiorno</span>
+          <select
+            v-model="taxPaymentMethodId"
+            :disabled="isAccountPaid || !hotelPaymentMethods.length"
+            @change="changeOvernightTaxPaymentMethod"
+          >
+            <option v-for="method in hotelPaymentMethods" :key="method.id" :value="String(method.id)">
+              {{ method.name }}
+            </option>
+          </select>
+          <span>{{ formatCurrency(account.overnightTax.total) }}</span>
+        </div>
         <div class="line-row"><span>Residuo da incassare</span><span>{{ formatCurrency(remaining) }}</span></div>
       </div>
 
       <div class="lines-block">
-        <h3>Gestione pagamento checkout</h3>
+        <h3>Pagamento a saldo</h3>
+
+        <div v-if="isAccountPaid" class="checkout-payment-summary checkout-payment-summary--paid">
+          <span>Stato conto</span>
+          <strong>Pagato</strong>
+        </div>
 
         <div v-if="!isLoadingBar && !barConsumptions.length" class="bar-empty-section">
           <h4>Consumazioni Bar</h4>
           <span>Nessuna consumazione bar</span>
         </div>
 
-        <div class="payment-entry-form">
-          <input v-model.number="paymentDraft.amount" type="number" min="0" step="0.01" placeholder="Importo" />
-          <input v-model="paymentDraft.paymentDate" type="date" />
-          <input v-model="paymentDraft.paymentMode" type="text" placeholder="Modalita'" />
-          <select v-model="paymentDraft.type">
-            <option value="caparra">Caparra</option>
-            <option value="acconto">Acconto</option>
+        <div v-if="!isAccountPaid" class="payment-entry-form">
+          <input
+            v-model.number="paymentDraft.amount"
+            type="number"
+            min="0.01"
+            :max="checkoutRemaining"
+            step="0.01"
+            :placeholder="`Importo massimo ${formatCurrency(checkoutRemaining)}`"
+          />
+          <select v-model="paymentDraft.paymentMethodId">
+            <option value="" disabled>Metodo di pagamento</option>
+            <option v-for="method in hotelPaymentMethods" :key="method.id" :value="String(method.id)">
+              {{ method.name }}
+            </option>
           </select>
-          <button type="button" class="btn btn-secondary" @click="addPayment">Aggiungi</button>
+          <button
+            type="button"
+            class="btn btn-secondary"
+            :disabled="checkoutRemaining <= 0 || !paymentDraft.paymentMethodId"
+            @click="addPayment"
+          >Aggiungi pagamento</button>
+        </div>
+
+        <div v-if="checkoutPayments.length" class="checkout-payment-list">
+          <div v-for="(payment, index) in checkoutPayments" :key="`checkout-${index}`" class="checkout-payment-row">
+            <span>{{ payment.paymentMode }}</span>
+            <strong>{{ formatCurrency(payment.amount) }}</strong>
+            <button
+              v-if="!payment.overnightTax || payment.amount > payment.overnightTaxAmount"
+              type="button"
+              @click="removeCheckoutPayment(index)"
+            >Rimuovi saldo</button>
+          </div>
+        </div>
+        <div v-if="!isAccountPaid" class="checkout-payment-summary" :class="{ 'checkout-payment-summary--paid': isCheckoutPaid }">
+          <span>Residuo da coprire</span>
+          <strong>{{ formatCurrency(checkoutRemaining) }}</strong>
         </div>
 
         <div class="payment-actions-row">
           <button type="button" class="btn btn-secondary" @click="printA4">Stampa ricevuta A4</button>
-          <button type="button" class="btn btn-primary" :disabled="isClosing" @click="closeAccount">
+          <button v-if="!isAccountPaid" type="button" class="btn btn-primary" :disabled="isClosing || !isCheckoutPaid" @click="closeAccount">
             {{ isClosing ? 'Chiusura in corso...' : 'Chiudi conto e stampa fiscale' }}
           </button>
         </div>
@@ -120,14 +164,17 @@ import { usePricing } from '@/composables/usePricing'
 
 const route = useRoute()
 const router = useRouter()
-const { calculateQuotePrice, calculateOvernightTax, loadHotelPricingPolicy } = usePricing()
+const { calculateQuotePrice, calculateOvernightTax, hotelPricingPolicy, loadHotelPricingPolicy } = usePricing()
 
 const reservationId = computed(() => String(route.params.reservationId || ''))
 const isLoading = ref(false)
 const account = ref(null)
 const isClosing = ref(false)
-const paymentDraft = ref({ amount: '', paymentDate: toISODate(new Date()), paymentMode: 'Contanti', type: 'acconto' })
+const paymentDraft = ref({ amount: '', paymentMethodId: '' })
 const payments = ref([])
+const checkoutPayments = ref([])
+const hotelPaymentMethods = ref([])
+const taxPaymentMethodId = ref('')
 
 const isLoadingBar = ref(false)
 const barConsumptions = ref([])
@@ -138,7 +185,13 @@ const barConsumptionsTotal = computed(() =>
   Number(barConsumptions.value.reduce((sum, item) => sum + getBarLineTotal(item), 0).toFixed(2))
 )
 const accountTotalWithBar = computed(() => Number((Number(account.value?.accountTotal || 0) + barConsumptionsTotal.value).toFixed(2)))
-const remaining = computed(() => Number((accountTotalWithBar.value - paymentTotal.value).toFixed(2)))
+const remaining = computed(() => account.value?.paymentStatus === 'paid'
+  ? 0
+  : Number((accountTotalWithBar.value - paymentTotal.value).toFixed(2)))
+const checkoutPaymentsTotal = computed(() => Number(checkoutPayments.value.reduce((sum, payment) => sum + Number(payment.amount || 0), 0).toFixed(2)))
+const checkoutRemaining = computed(() => Math.max(0, Number((remaining.value - checkoutPaymentsTotal.value).toFixed(2))))
+const isCheckoutPaid = computed(() => remaining.value >= 0 && Math.abs(remaining.value - checkoutPaymentsTotal.value) < 0.01)
+const isAccountPaid = computed(() => account.value?.paymentStatus === 'paid')
 
 function toISODate(date) {
   const y = date.getFullYear()
@@ -371,7 +424,7 @@ const loadReservationAccount = async () => {
       ? Number(res.fixedPrice)
       : (dailyTotal > 0 ? dailyTotal : (storedTotal > 0 ? storedTotal : Number(quote?.totalCalculated || 0)))
     const overnightTax = getOvernightTaxSnapshotFromReservation(res) || calculateOvernightTax({ checkin, checkout: addDaysISO(checkin, duration), adults, kids, kidsAges })
-    const services = Array.isArray(res.services) ? res.services : []
+    const services = Array.isArray(res.extra?.services) ? res.extra.services : []
     const servicesTotal = Number(services.reduce((sum, svc) => sum + getServiceLineTotal(svc), 0).toFixed(2))
 
     account.value = {
@@ -387,6 +440,7 @@ const loadReservationAccount = async () => {
       servicesTotal,
       overnightTax,
       hotelNetTotal,
+      paymentStatus: Number(res.sub_status) === 9 || res.payment_status === 'paid' ? 'paid' : String(res.payment_status || ''),
       accountTotal: Number((hotelNetTotal + Number(overnightTax.total || 0) + servicesTotal).toFixed(2))
     }
 
@@ -402,17 +456,126 @@ const loadReservationAccount = async () => {
 
 const addPayment = () => {
   const amount = Number(paymentDraft.value.amount)
-  if (!Number.isFinite(amount) || amount < 0) {
+  if (!Number.isFinite(amount) || amount <= 0) {
     alert('Inserisci un importo valido')
     return
   }
-  payments.value.push({
-    amount: Number(amount.toFixed(2)),
-    paymentDate: paymentDraft.value.paymentDate || '',
-    paymentMode: (paymentDraft.value.paymentMode || '').trim(),
-    type: paymentDraft.value.type || 'acconto'
-  })
-  paymentDraft.value = { amount: '', paymentDate: toISODate(new Date()), paymentMode: 'Contanti', type: 'acconto' }
+  if (amount - checkoutRemaining.value > 0.001) {
+    alert(`L'importo non puo' superare il residuo di ${formatCurrency(checkoutRemaining.value)}`)
+    return
+  }
+  const paymentMethod = hotelPaymentMethods.value.find(method => String(method.id) === String(paymentDraft.value.paymentMethodId))
+  if (!paymentMethod) {
+    alert('Seleziona un metodo di pagamento')
+    return
+  }
+  const existingPayment = checkoutPayments.value.find(payment => String(payment.paymentMethodId) === String(paymentMethod.id))
+  if (existingPayment) {
+    existingPayment.amount = Number((Number(existingPayment.amount || 0) + amount).toFixed(2))
+  } else {
+    checkoutPayments.value.push({
+      amount: Number(amount.toFixed(2)),
+      paymentDate: toISODate(new Date()),
+      paymentMode: paymentMethod.name,
+      paymentMethodId: paymentMethod.id,
+      electronic: paymentMethod.electronic,
+      type: 'saldo'
+    })
+  }
+  paymentDraft.value.amount = ''
+}
+
+const removeCheckoutPayment = (index) => {
+  const payment = checkoutPayments.value[index]
+  if (payment?.overnightTax) {
+    payment.amount = payment.overnightTaxAmount
+    return
+  }
+  checkoutPayments.value.splice(index, 1)
+}
+
+const loadHotelPaymentMethods = async () => {
+  try {
+    const response = await axios.get('/api/pms/getconfigs?section=payments', { mbarDirect: true })
+    const configured = Array.isArray(response.data?.hotel)
+      ? response.data.hotel
+      : (Array.isArray(response.data?.payments?.hotel) ? response.data.payments.hotel : [])
+    hotelPaymentMethods.value = configured
+      .map(method => ({
+        id: Number(method?.id),
+        name: String(method?.name || '').trim(),
+        electronic: Boolean(method?.electronic)
+      }))
+      .filter(method => Number.isInteger(method.id) && method.id >= 0 && method.name)
+    paymentDraft.value.paymentMethodId = hotelPaymentMethods.value.length
+      ? String(hotelPaymentMethods.value[0].id)
+      : ''
+  } catch (error) {
+    console.error('Errore caricamento metodi di pagamento:', error)
+    hotelPaymentMethods.value = []
+  }
+}
+
+const prepareOvernightTaxPayment = () => {
+  const taxAmount = Math.min(
+    Math.max(0, Number(account.value?.overnightTax?.total || 0)),
+    Math.max(0, remaining.value)
+  )
+  if (taxAmount <= 0) return
+
+  const configuredMethodId = hotelPricingPolicy.value?.overnightTax?.defaultPaymentMethodId
+  const paymentMethod = hotelPaymentMethods.value.find(method => String(method.id) === String(configuredMethodId))
+    || hotelPaymentMethods.value.find(method => method.name.toLowerCase() === 'contanti')
+    || hotelPaymentMethods.value[0]
+  if (!paymentMethod) return
+
+  taxPaymentMethodId.value = String(paymentMethod.id)
+  checkoutPayments.value = [{
+    amount: Number(taxAmount.toFixed(2)),
+    paymentDate: toISODate(new Date()),
+    paymentMode: paymentMethod.name,
+    paymentMethodId: paymentMethod.id,
+    electronic: paymentMethod.electronic,
+    type: 'saldo',
+    overnightTax: true,
+    overnightTaxAmount: Number(taxAmount.toFixed(2))
+  }]
+  paymentDraft.value.amount = checkoutRemaining.value || ''
+}
+
+const changeOvernightTaxPaymentMethod = () => {
+  const paymentMethod = hotelPaymentMethods.value.find(method => String(method.id) === taxPaymentMethodId.value)
+  const taxPaymentIndex = checkoutPayments.value.findIndex(payment => payment.overnightTax)
+  if (!paymentMethod || taxPaymentIndex < 0) return
+
+  const taxPayment = checkoutPayments.value[taxPaymentIndex]
+  const taxAmount = Number(taxPayment.overnightTaxAmount || 0)
+  const generalAmount = Number((Number(taxPayment.amount || 0) - taxAmount).toFixed(2))
+  if (generalAmount > 0) {
+    taxPayment.amount = generalAmount
+    delete taxPayment.overnightTax
+    delete taxPayment.overnightTaxAmount
+  } else {
+    checkoutPayments.value.splice(taxPaymentIndex, 1)
+  }
+
+  const existingPayment = checkoutPayments.value.find(payment => String(payment.paymentMethodId) === String(paymentMethod.id))
+  if (existingPayment) {
+    existingPayment.amount = Number((Number(existingPayment.amount || 0) + taxAmount).toFixed(2))
+    existingPayment.overnightTax = true
+    existingPayment.overnightTaxAmount = taxAmount
+  } else {
+    checkoutPayments.value.push({
+      amount: taxAmount,
+      paymentDate: toISODate(new Date()),
+      paymentMode: paymentMethod.name,
+      paymentMethodId: paymentMethod.id,
+      electronic: paymentMethod.electronic,
+      type: 'saldo',
+      overnightTax: true,
+      overnightTaxAmount: taxAmount
+    })
+  }
 }
 
 const printA4 = async () => {
@@ -449,6 +612,8 @@ const printA4 = async () => {
 
 const closeAccount = async () => {
   if (!account.value) return
+  if (isAccountPaid.value) return
+  if (!isCheckoutPaid.value) return
 
   isClosing.value = true
   try {
@@ -459,16 +624,17 @@ const closeAccount = async () => {
         barTotal: barConsumptionsTotal.value,
         accountTotal: accountTotalWithBar.value
       },
-      payments: payments.value,
+      payments: [...payments.value, ...checkoutPayments.value],
       barConsumptions: barConsumptions.value,
       operator: 0
-    })
+    }, { mbarDirect: true })
     if (!response.data?.success) {
       alert(response.data?.error || 'Errore chiusura conto')
       return
     }
 
-    alert('Conto chiuso. Comando stampa fiscale inviato al backend.')
+    alert('Documento fiscale stampato e conto chiuso.')
+    checkoutPayments.value = []
     await loadReservationAccount()
   } catch (error) {
     console.error('Errore chiusura conto:', error)
@@ -482,7 +648,8 @@ const goBack = () => router.push('/')
 const goToAccounts = () => router.push('/accounts')
 
 onMounted(async () => {
-  await loadReservationAccount()
+  await Promise.all([loadReservationAccount(), loadHotelPaymentMethods()])
+  prepareOvernightTaxPayment()
   if (account.value?.id) {
     await loadBarConsumptions()
   }
@@ -599,7 +766,21 @@ onMounted(async () => {
 }
 
 .tax-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(180px, 320px) auto;
+  align-items: center;
   color: var(--ds-primary-strong);
+}
+
+.tax-row select {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(29, 140, 242, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
+  font: inherit;
 }
 
 .total-row {
@@ -618,7 +799,6 @@ onMounted(async () => {
 }
 
 .service-line {
-  padding-left: 12px;
   color: var(--ds-text);
   font-size: 0.875rem;
 }
@@ -634,7 +814,7 @@ onMounted(async () => {
 .payment-entry-form {
   margin-top: 12px;
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr) auto;
   gap: 10px;
 }
 
@@ -656,6 +836,49 @@ onMounted(async () => {
   box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
 }
 
+.checkout-payment-list {
+  margin-top: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.checkout-payment-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.checkout-payment-row:last-child {
+  border-bottom: 0;
+}
+
+.checkout-payment-row button {
+  border: 0;
+  background: transparent;
+  color: #dc2626;
+  font: inherit;
+  cursor: pointer;
+}
+
+.checkout-payment-summary {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(254, 242, 242, 0.9);
+  color: #b91c1c;
+}
+
+.checkout-payment-summary--paid {
+  background: rgba(236, 253, 245, 0.92);
+  color: #166534;
+}
+
 .payment-actions-row {
   margin-top: 14px;
   display: flex;
@@ -675,6 +898,13 @@ onMounted(async () => {
 
 .btn:hover {
   transform: translateY(-1px);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-primary {

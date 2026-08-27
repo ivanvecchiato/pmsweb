@@ -28,6 +28,7 @@
               € {{ Number(service.price).toFixed(2) }}
             </span>
             <span class="service-price free" v-else>Gratuito</span>
+            <span class="service-vat">IVA {{ formatVatRate(service.vatRate) }}%</span>
           </div>
         </div>
         <div class="service-actions">
@@ -58,10 +59,27 @@
               </div>
             </div>
             <div class="form-row">
+              <div class="form-section form-section--narrow">
+                <label>Aliquota IVA *</label>
+                <select v-model.number="form.vatRate" required>
+                  <option disabled value="">Seleziona</option>
+                  <option v-for="rate in vatRates" :key="rate" :value="rate">
+                    {{ formatVatRate(rate) }}%
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
               <div class="form-section">
                 <label>Descrizione</label>
                 <input v-model="form.description" type="text" placeholder="Breve descrizione opzionale" />
               </div>
+            </div>
+            <div class="form-row">
+              <label class="form-checkbox">
+                <input v-model="form.printOnDelivery" type="checkbox" />
+                <span>Stampa ricevuta</span>
+              </label>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-cancel" @click="cancelForm">Annulla</button>
@@ -84,21 +102,43 @@ import axios from 'axios'
 const SERVICES_ENDPOINT = '/api/pms/services'
 
 const services = ref([])
+const vatRates = ref([10, 22])
 const loading = ref(true)
 const saving = ref(false)
 const showForm = ref(false)
 const editingIndex = ref(null)
 
-const emptyForm = () => ({ name: '', description: '', price: '' })
+const defaultVatRate = () => vatRates.value.includes(10) ? 10 : (vatRates.value[0] ?? '')
+const emptyForm = () => ({ name: '', description: '', price: '', vatRate: defaultVatRate(), printOnDelivery: false })
 const form = ref(emptyForm())
+
+const formatVatRate = (value) => Number(value).toLocaleString('it-IT', {
+  maximumFractionDigits: 2
+})
 
 onMounted(loadServices)
 
 async function loadServices() {
   loading.value = true
   try {
-    const { data } = await axios.get(SERVICES_ENDPOINT)
-    services.value = Array.isArray(data) ? data : []
+    const [servicesResponse, configsResponse] = await Promise.all([
+      axios.get(SERVICES_ENDPOINT),
+      axios.get('/api/configs')
+    ])
+    const configuredVatRates = configsResponse?.data?.vatRates
+    vatRates.value = Array.isArray(configuredVatRates)
+      ? [...new Set(configuredVatRates
+          .map((rate) => Number(rate))
+          .filter((rate) => Number.isFinite(rate) && rate >= 0 && rate <= 100))].sort((a, b) => a - b)
+      : [10, 22]
+    services.value = Array.isArray(servicesResponse.data)
+      ? servicesResponse.data.map((service) => ({
+          ...service,
+          vatRate: vatRates.value.includes(Number(service?.vatRate))
+            ? Number(service.vatRate)
+            : defaultVatRate()
+        }))
+      : []
   } catch (e) {
     console.error('Errore caricamento servizi:', e)
     services.value = []
@@ -119,7 +159,9 @@ function openEditForm(idx) {
   form.value = {
     name: s.name ?? '',
     description: s.description ?? '',
-    price: s.price ?? ''
+    price: s.price ?? '',
+    vatRate: vatRates.value.includes(Number(s.vatRate)) ? Number(s.vatRate) : defaultVatRate(),
+    printOnDelivery: s.printOnDelivery === true
   }
   showForm.value = true
 }
@@ -131,6 +173,11 @@ function cancelForm() {
 
 async function saveService() {
   if (!form.value.name.trim()) return
+  const vatRate = Number(form.value.vatRate)
+  if (!vatRates.value.includes(vatRate)) {
+    alert('Seleziona un\'aliquota IVA configurata.')
+    return
+  }
   saving.value = true
   try {
     const updated = [...services.value]
@@ -138,7 +185,9 @@ async function saveService() {
       id: editingIndex.value !== null ? updated[editingIndex.value].id : Date.now(),
       name: form.value.name.trim(),
       description: form.value.description.trim(),
-      price: form.value.price !== '' && form.value.price !== null ? Number(form.value.price) : null
+      price: form.value.price !== '' && form.value.price !== null ? Number(form.value.price) : null,
+      vatRate,
+      printOnDelivery: form.value.printOnDelivery
     }
 
     if (editingIndex.value !== null) {
@@ -260,6 +309,15 @@ async function deleteService(idx) {
 .service-price.free {
   font-weight: 500;
   color: var(--ds-text-muted);
+}
+
+.service-vat {
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: rgba(29, 140, 242, 0.1);
+  color: var(--ds-primary-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .service-actions {
@@ -397,13 +455,30 @@ async function deleteService(idx) {
   margin-bottom: 6px;
 }
 
-.form-section input {
+.form-section input,
+.form-section select {
   min-height: 48px;
   border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(255, 255, 255, 0.9);
   padding: 0 14px;
   font: inherit;
+}
+
+.form-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ds-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.form-checkbox input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--ds-primary);
 }
 
 .modal-footer {

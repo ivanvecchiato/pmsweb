@@ -131,7 +131,7 @@ const router = createRouter({
     {
       path: '/accounts',
       name: 'GuestAccount',
-      component: () => import('@/views/pms/GuestAccount.vue'),
+      component: () => import('@/views/pms/HotelAccountDocuments.vue'),
       meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {

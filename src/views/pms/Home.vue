@@ -183,19 +183,8 @@ const getCustomerName = (booking) => {
 
 const getReservationNotes = (reservation) => {
   if (!reservation) return ''
-
-  const rawNotes = reservation.notes
-    ?? reservation.note
-    ?? reservation.booking_notes
-    ?? reservation.booking_note
-    ?? reservation.note_booking
-    ?? reservation.internal_notes
-    ?? reservation.internal_note
-    ?? reservation.accountholder?.notes
-    ?? reservation.accountholder?.note
-    ?? ''
-
-  return String(rawNotes).trim()
+  if (!Array.isArray(reservation.notes)) return ''
+  return reservation.notes.map((note) => String(note).trim()).filter(Boolean).join('\n')
 }
 
 const getHousekeepingNotes = (reservation) => {

@@ -18,7 +18,8 @@ const hotelPricingPolicy = ref({
     endDate: '',
     amountPerPerson: 0,
     childExemptUnderAge: 3,
-    maxDays: 10
+    maxDays: 10,
+    defaultPaymentMethodId: null
   },
   ageBands: []
 })
@@ -45,6 +46,9 @@ const normalizeOvernightTax = (rawTax = {}) => {
 
   const startDate = isValidISODate(rawTax?.startDate) ? rawTax.startDate : ''
   const endDate = isValidISODate(rawTax?.endDate) ? rawTax.endDate : ''
+  const defaultPaymentMethodId = rawTax?.defaultPaymentMethodId === null || rawTax?.defaultPaymentMethodId === ''
+    ? NaN
+    : Number(rawTax?.defaultPaymentMethodId)
 
   return {
     enabled,
@@ -53,7 +57,10 @@ const normalizeOvernightTax = (rawTax = {}) => {
     endDate,
     amountPerPerson: Math.max(0, Number(amountPerPerson.toFixed(2))),
     childExemptUnderAge: Math.max(0, Math.floor(childExemptUnderAge)),
-    maxDays: Math.max(1, Math.floor(maxDays))
+    maxDays: Math.max(1, Math.floor(maxDays)),
+    defaultPaymentMethodId: Number.isInteger(defaultPaymentMethodId) && defaultPaymentMethodId >= 0
+      ? defaultPaymentMethodId
+      : null
   }
 }
 

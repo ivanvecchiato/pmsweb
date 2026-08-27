@@ -147,6 +147,18 @@
             :disabled="!form.overnightTax.enabled || form.overnightTax.allYear"
           />
         </label>
+
+        <label class="full-width tax-payment-method">
+          Modalità di pagamento predefinita
+          <select
+            v-model="form.overnightTax.defaultPaymentMethodId"
+            :disabled="!form.overnightTax.enabled"
+          >
+            <option v-for="method in hotelPaymentMethods" :key="method.id" :value="method.id">
+              {{ method.name }}
+            </option>
+          </select>
+        </label>
       </div>
       <p class="hint tax-hint">
         La tassa viene salvata in policy ma non compare nei preventivi. Sara mostrata solo nel conto dedicato.
@@ -188,12 +200,14 @@ const form = ref({
     endDate: '',
     amountPerPerson: 0,
     childExemptUnderAge: 3,
-    maxDays: 10
+    maxDays: 10,
+    defaultPaymentMethodId: null
   },
   ageBands: []
 })
 
 const loadedHotelSection = ref({})
+const hotelPaymentMethods = ref([])
 
 const normalizeForm = (value) => {
   let fallbackKidDiscountPct = Number(value?.fallbackKidDiscountPct)
@@ -233,6 +247,14 @@ const normalizeForm = (value) => {
   let maxDays = Number(rawTax?.maxDays)
   if (!Number.isFinite(maxDays) || maxDays <= 0) maxDays = 10
 
+  const configuredPaymentMethodId = rawTax?.defaultPaymentMethodId === null || rawTax?.defaultPaymentMethodId === ''
+    ? NaN
+    : Number(rawTax?.defaultPaymentMethodId)
+  const cashPaymentMethod = hotelPaymentMethods.value.find(method => method.name.toLowerCase() === 'contanti')
+  const defaultPaymentMethod = hotelPaymentMethods.value.find(method => method.id === configuredPaymentMethodId)
+    || cashPaymentMethod
+    || hotelPaymentMethods.value[0]
+
   const overnightTax = {
     enabled: Boolean(rawTax?.enabled),
     allYear: rawTax?.allYear !== false,
@@ -240,7 +262,8 @@ const normalizeForm = (value) => {
     endDate: typeof rawTax?.endDate === 'string' ? rawTax.endDate : '',
     amountPerPerson: Math.max(0, Number(amountPerPerson.toFixed(2))),
     childExemptUnderAge: Math.max(0, Math.floor(childExemptUnderAge)),
-    maxDays: Math.max(1, Math.floor(maxDays))
+    maxDays: Math.max(1, Math.floor(maxDays)),
+    defaultPaymentMethodId: defaultPaymentMethod?.id ?? null
   }
 
   return {
@@ -250,6 +273,24 @@ const normalizeForm = (value) => {
     extraBedDiscountPct: Math.max(0, Math.min(100, extraBedDiscountPct)),
     overnightTax,
     ageBands
+  }
+}
+
+const loadHotelPaymentMethods = async () => {
+  try {
+    const response = await axios.get('/api/pms/getconfigs?section=payments', { mbarDirect: true })
+    const configured = Array.isArray(response.data?.hotel)
+      ? response.data.hotel
+      : (Array.isArray(response.data?.payments?.hotel) ? response.data.payments.hotel : [])
+    hotelPaymentMethods.value = configured
+      .map(method => ({
+        id: Number(method?.id),
+        name: String(method?.name || '').trim()
+      }))
+      .filter(method => Number.isInteger(method.id) && method.id >= 0 && method.name)
+  } catch (err) {
+    console.error('Errore caricamento metodi di pagamento hotel:', err)
+    hotelPaymentMethods.value = []
   }
 }
 
@@ -310,7 +351,10 @@ const save = async () => {
   }
 }
 
-onMounted(loadForm)
+onMounted(async () => {
+  await loadHotelPaymentMethods()
+  await loadForm()
+})
 </script>
 
 <style scoped>
@@ -463,6 +507,11 @@ onMounted(loadForm)
 
 .full-width {
   grid-column: 1 / -1;
+}
+
+.tax-payment-method select {
+  width: 100%;
+  max-width: 260px;
 }
 
 .actions-inline {

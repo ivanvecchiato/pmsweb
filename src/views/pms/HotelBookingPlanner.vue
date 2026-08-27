@@ -102,7 +102,7 @@
                   'booking-conflict': hasConflict(booking)
                 }"
                 :style="getBookingStyle(booking)"
-                :title="booking.notes || ''"
+                :title="getReservationNotes(booking)"
                 @mousedown="handleMouseDown($event, booking, 'move')"
                 @click.prevent.stop="openBookingActions($event, booking)"
               >
@@ -283,7 +283,12 @@
               </div>
               <div class="form-section">
                 <label>Metodo</label>
-                <input type="text" v-model="depositDraft.paymentMode" placeholder="es. Bonifico" />
+                <select v-model="depositDraft.paymentMethodId">
+                  <option value="" disabled>Metodo di pagamento</option>
+                  <option v-for="method in hotelPaymentMethods" :key="method.id" :value="String(method.id)">
+                    {{ method.name }}
+                  </option>
+                </select>
               </div>
               <div class="form-section deposit-add-wrap">
                 <button type="button" class="btn btn-secondary" @click="addDeposit">+ Aggiungi Deposit</button>
@@ -304,7 +309,39 @@
                   <span>{{ dep.paymentDate }}</span>
                   <span>{{ dep.paymentMode || 'N/D' }}</span>
                 </div>
-                <button v-if="!isModalReadOnly" type="button" class="deposit-remove" @click="removeDeposit(index)">Rimuovi</button>
+                <div class="deposit-actions">
+                  <button
+                    type="button"
+                    class="deposit-print deposit-print-fiscal"
+                    :disabled="depositFiscalPrinting !== null || Boolean(dep.documentId) || Number(dep.invoiceProgressive) > 0"
+                    title="Stampa documento fiscale"
+                    aria-label="Stampa documento fiscale"
+                    @click="printDepositFiscal(dep, index)"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-4a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v4a2 2 0 0 1-2 2h-2M7 14h10v7H7z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="deposit-print deposit-print-proforma"
+                    :disabled="depositProformaPrinting === index"
+                    title="Stampa proforma A4"
+                    aria-label="Stampa proforma A4"
+                    @click="printDepositProforma(dep, index)"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-4a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v4a2 2 0 0 1-2 2h-2M7 14h10v7H7z" />
+                    </svg>
+                  </button>
+                  <button
+                    v-if="!isModalReadOnly"
+                    type="button"
+                    class="deposit-remove"
+                    :disabled="depositAnnulPrinting !== null"
+                    @click="removeDeposit(dep, index)"
+                  >Rimuovi</button>
+                </div>
               </div>
             </div>
           </section>
@@ -316,8 +353,8 @@
             <h4 class="section-title">Servizi extra</h4>
             <button type="button" class="text-action" @click="openAddServiceFromDetails">Aggiungi</button>
           </div>
-          <div v-if="editingBooking.services?.length" class="existing-services reservation-services-list">
-            <div v-for="(svc, i) in editingBooking.services" :key="i" class="existing-service-row">
+          <div v-if="editingBooking.extra?.services?.length" class="existing-services reservation-services-list">
+            <div v-for="(svc, i) in editingBooking.extra.services" :key="i" class="existing-service-row">
               <div class="existing-service-info">
                 <span class="existing-service-name">{{ svc.name }} × {{ svc.quantity || 1 }}</span>
                 <span v-if="svc.addedAt" class="existing-service-date">{{ formatServiceDate(svc.addedAt) }}</span>
@@ -447,9 +484,9 @@
       </p>
 
       <!-- Lista servizi già aggiunti -->
-      <div v-if="addServiceTarget?.services?.length" class="existing-services">
+      <div v-if="addServiceTarget?.extra?.services?.length" class="existing-services">
         <div class="existing-services-title">Servizi aggiunti</div>
-        <div v-for="(svc, i) in addServiceTarget.services" :key="i" class="existing-service-row">
+        <div v-for="(svc, i) in addServiceTarget.extra.services" :key="i" class="existing-service-row">
           <div class="existing-service-info">
             <span class="existing-service-name">{{ svc.name }} × {{ svc.quantity || 1 }}</span>
             <span v-if="svc.note" class="existing-service-note"> &mdash; {{ svc.note }}</span>
@@ -782,7 +819,10 @@ function removeServiceFromDetails(index) {
   if (!editingBooking.value || isModalReadOnly.value) return;
   editingBooking.value = {
     ...editingBooking.value,
-    services: editingBooking.value.services.filter((_, serviceIndex) => serviceIndex !== index)
+    extra: {
+      ...editingBooking.value.extra,
+      services: editingBooking.value.extra.services.filter((_, serviceIndex) => serviceIndex !== index)
+    }
   };
 }
 
@@ -809,11 +849,15 @@ async function confirmAddService() {
       reservationId: addServiceTarget.value.id,
       service: serviceEntry
     });
+    if (!result.data?.success) {
+      alert(result.data?.error || 'Errore durante l\'aggiunta del servizio.');
+      return;
+    }
     // aggiorna i servizi visibili nella modale senza chiuderla
     if (result.data?.services) {
-      addServiceTarget.value = { ...addServiceTarget.value, services: result.data.services };
+      addServiceTarget.value = { ...addServiceTarget.value, extra: { ...addServiceTarget.value.extra, services: result.data.services } };
       if (editingBooking.value?.id === addServiceTarget.value.id) {
-        editingBooking.value = { ...editingBooking.value, services: result.data.services };
+        editingBooking.value = { ...editingBooking.value, extra: { ...editingBooking.value.extra, services: result.data.services } };
       }
     }
     addServiceForm.value = { serviceId: '', price: null, quantity: 1, note: '' };
@@ -840,8 +884,12 @@ watch(() => addServiceForm.value.serviceId, (serviceId) => {
 const depositDraft = ref({
   amount: null,
   paymentDate: '',
-  paymentMode: 'Bonifico'
+  paymentMethodId: ''
 });
+const hotelPaymentMethods = ref([]);
+const depositFiscalPrinting = ref(null);
+const depositProformaPrinting = ref(null);
+const depositAnnulPrinting = ref(null);
 const newBookingData = ref({
   roomId: '',
   guestName: '',
@@ -864,6 +912,14 @@ const normalizeDeposits = (deposits) => {
     .map(dep => ({
       amount: Number(dep?.amount ?? 0),
       paymentMode: dep?.payment_mode || dep?.paymentMode || '',
+      paymentMethodId: dep?.payment_method_id ?? dep?.paymentMethodId ?? '',
+      electronic: Boolean(dep?.electronic),
+      type: dep?.type || 'acconto',
+      progressivo: Number(dep?.progressivo ?? 0),
+      chiusura: Number(dep?.chiusura ?? 0),
+      fiscalTimestamp: Number(dep?.fiscal_timestamp ?? dep?.fiscalTimestamp ?? dep?.timestamp ?? 0),
+      documentId: String(dep?.document_id ?? dep?.documentId ?? ''),
+      invoiceProgressive: dep?.invoice_progressive == null ? undefined : Number(dep.invoice_progressive),
       paymentDate: dep?.payment_date || dep?.paymentDate || ''
     }))
     .filter(dep => Number.isFinite(dep.amount) && dep.amount > 0 && dep.paymentDate);
@@ -889,27 +945,40 @@ const getReservationDeposits = (reservation) => {
 
 const getReservationNotes = (reservation) => {
   if (!reservation) return '';
-
-  const rawNotes = reservation.notes
-    ?? reservation.note
-    ?? reservation.booking_notes
-    ?? reservation.booking_note
-    ?? reservation.note_booking
-    ?? reservation.internal_notes
-    ?? reservation.internal_note
-    ?? reservation.accountholder?.notes
-    ?? reservation.accountholder?.note
-    ?? '';
-
-  return String(rawNotes).trim();
+  if (!Array.isArray(reservation.notes)) return '';
+  return reservation.notes.map(note => String(note).trim()).filter(Boolean).join('\n');
 };
 
 const resetDepositDraft = (defaultDate = '') => {
   depositDraft.value = {
     amount: null,
     paymentDate: defaultDate || '',
-    paymentMode: 'Bonifico'
+    paymentMethodId: hotelPaymentMethods.value.length
+      ? String(hotelPaymentMethods.value[0].id)
+      : ''
   };
+};
+
+const loadHotelPaymentMethods = async () => {
+  try {
+    const response = await axios.get('/api/pms/getconfigs?section=payments', { mbarDirect: true });
+    const configured = Array.isArray(response.data?.hotel)
+      ? response.data.hotel
+      : (Array.isArray(response.data?.payments?.hotel) ? response.data.payments.hotel : []);
+    hotelPaymentMethods.value = configured
+      .map(method => ({
+        id: Number(method?.id),
+        name: String(method?.name || '').trim(),
+        electronic: Boolean(method?.electronic)
+      }))
+      .filter(method => Number.isInteger(method.id) && method.id >= 0 && method.name);
+    depositDraft.value.paymentMethodId = hotelPaymentMethods.value.length
+      ? String(hotelPaymentMethods.value[0].id)
+      : '';
+  } catch (error) {
+    console.error('Errore caricamento metodi di pagamento:', error);
+    hotelPaymentMethods.value = [];
+  }
 };
 
 const totalDeposits = computed(() => {
@@ -975,7 +1044,8 @@ const resolveBookedDisplayStatus = (reservation, hasDeposit) => {
 
 const isCheckoutPaid = (reservation) => {
   if (!reservation || typeof reservation !== 'object') return false;
-  return Number(reservation.sub_status) === SUB_STATUS_PAID;
+  return Number(reservation.sub_status) === SUB_STATUS_PAID
+    || reservation.payment_status === 'paid';
 };
 
 const resolveDisplayBookingStatus = (reservation, hasDeposit) => {
@@ -1016,18 +1086,141 @@ const addDeposit = () => {
     alert('Inserisci la data del deposito');
     return;
   }
+  const paymentMethod = hotelPaymentMethods.value.find(method => String(method.id) === String(depositDraft.value.paymentMethodId));
+  if (!paymentMethod) {
+    alert('Seleziona un metodo di pagamento');
+    return;
+  }
 
   newBookingData.value.deposits.push({
     amount,
-    paymentMode: (depositDraft.value.paymentMode || '').trim(),
+    paymentMode: paymentMethod.name,
+    paymentMethodId: paymentMethod.id,
+    electronic: paymentMethod.electronic,
+    type: 'acconto',
+    progressivo: 0,
+    chiusura: 0,
+    fiscalTimestamp: 0,
+    documentId: '',
     paymentDate: depositDraft.value.paymentDate
   });
 
   resetDepositDraft(newBookingData.value.checkin || '');
 };
 
-const removeDeposit = (index) => {
-  newBookingData.value.deposits.splice(index, 1);
+const removeDeposit = async (deposit, index) => {
+  const hasFiscalDocument = Boolean(deposit.documentId);
+  if (!hasFiscalDocument) {
+    if (!window.confirm('Confermi la rimozione del deposito?')) return;
+    newBookingData.value.deposits.splice(index, 1);
+    return;
+  }
+
+  if (!window.confirm(`Il deposito è associato al documento fiscale ${deposit.progressivo}/${deposit.chiusura}. Confermi l’annullo fiscale?`)) return;
+  depositAnnulPrinting.value = index;
+  try {
+    const response = await axios.post('/api/pms/hotel/deposit/annul', {
+      documentId: deposit.documentId,
+      progressivo: deposit.progressivo,
+      chiusura: deposit.chiusura,
+      timestamp: deposit.fiscalTimestamp
+    }, { mbarDirect: true });
+    if (!response.data?.success) {
+      alert(response.data?.error || 'Annullamento fiscale non riuscito');
+      return;
+    }
+    newBookingData.value.deposits.splice(index, 1);
+    alert('Documento fiscale annullato e deposito rimosso.');
+  } catch (error) {
+    console.error('Errore annullamento fiscale deposito:', error);
+    alert(error.response?.data?.error || 'Annullamento fiscale non riuscito');
+  } finally {
+    depositAnnulPrinting.value = null;
+  }
+};
+
+const printDepositFiscal = async (deposit, index) => {
+  if (depositFiscalPrinting.value !== null) return;
+  const room = rooms.value.find(item => String(item.id) === String(newBookingData.value.roomId));
+  depositFiscalPrinting.value = index;
+  try {
+    const response = await axios.post('/api/pms/hotel/deposit/fiscal', {
+      reservationId: editingBooking.value?.id || null,
+      customerName: `${newBookingData.value.guestName || ''} ${newBookingData.value.guestSurname || ''}`.trim(),
+      room: room?.code || room?.name || newBookingData.value.roomId,
+      checkin: newBookingData.value.checkin,
+      checkout: newBookingData.value.checkout,
+      deposit: {
+        amount: deposit.amount,
+        payment_date: deposit.paymentDate,
+        payment_mode: deposit.paymentMode,
+        type: deposit.type || 'acconto',
+        payment_method_id: deposit.paymentMethodId,
+        electronic: deposit.electronic
+      }
+    }, { mbarDirect: true });
+    if (!response.data?.success) {
+      alert(response.data?.error || 'Stampa fiscale del deposito non riuscita');
+      return;
+    }
+    deposit.progressivo = Number(response.data.progressivo || 0);
+    deposit.chiusura = Number(response.data.chiusura || 0);
+    deposit.fiscalTimestamp = Number(response.data.timestamp || 0);
+    deposit.documentId = String(response.data.documentId || '');
+    alert('Documento fiscale del deposito stampato.');
+  } catch (error) {
+    console.error('Errore stampa fiscale deposito:', error);
+    alert(error.response?.data?.error || 'Stampa fiscale del deposito non riuscita');
+  } finally {
+    depositFiscalPrinting.value = null;
+  }
+};
+
+const printDepositProforma = async (deposit, index) => {
+  if (depositProformaPrinting.value !== null) return;
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Impossibile aprire la finestra di stampa');
+    return;
+  }
+
+  const room = rooms.value.find(item => String(item.id) === String(newBookingData.value.roomId));
+  depositProformaPrinting.value = index;
+  try {
+    const response = await axios.post('/api/pms/hotel/deposit/proforma', {
+      reservationId: editingBooking.value?.id || null,
+      customerName: `${newBookingData.value.guestName || ''} ${newBookingData.value.guestSurname || ''}`.trim(),
+      room: room?.code || room?.name || newBookingData.value.roomId,
+      checkin: newBookingData.value.checkin,
+      checkout: newBookingData.value.checkout,
+      deposit: {
+        amount: deposit.amount,
+        payment_date: deposit.paymentDate,
+        payment_mode: deposit.paymentMode,
+        type: deposit.type || 'acconto',
+        payment_method_id: deposit.paymentMethodId,
+        electronic: deposit.electronic
+      }
+    }, {
+      responseType: 'blob',
+      mbarDirect: true
+    });
+    const pdfUrl = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+    printWindow.addEventListener('load', () => {
+      window.setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 500);
+    }, { once: true });
+    printWindow.location.replace(pdfUrl);
+    window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
+  } catch (error) {
+    printWindow.close();
+    console.error('Errore stampa proforma deposito:', error);
+    alert('Impossibile generare il proforma del deposito');
+  } finally {
+    depositProformaPrinting.value = null;
+  }
 };
 
 // 1. AUTOMAZIONE DATE: Il checkout segue il checkin
@@ -1063,6 +1256,14 @@ const getBookingStatus = (booking) => {
 
 const getBookingStatusMeta = (booking) => {
   const status = getBookingStatus(booking);
+  if (status === STATUS_CHECKED_IN && isCheckoutPaid(booking)) {
+    return {
+      label: 'In check-in · pagato',
+      color: '#1565C0',
+      borderColor: '#0D47A1',
+      textColor: '#FFFFFF'
+    };
+  }
   return BOOKING_STATUS_META[status] || BOOKING_STATUS_FALLBACK_META;
 };
 
@@ -1386,8 +1587,17 @@ const submitNewBooking = async () => {
   const backendDeposits = normalizedDeposits.map(dep => ({
     amount: dep.amount,
     payment_mode: dep.paymentMode || '',
+    payment_method_id: dep.paymentMethodId,
     payment_date: dep.paymentDate,
     paymentMode: dep.paymentMode || '',
+    paymentMethodId: dep.paymentMethodId,
+    electronic: dep.electronic,
+    type: dep.type || 'acconto',
+    progressivo: Number(dep.progressivo || 0),
+    chiusura: Number(dep.chiusura || 0),
+    fiscal_timestamp: Number(dep.fiscalTimestamp || 0),
+    document_id: dep.documentId || '',
+    ...(dep.invoiceProgressive == null ? {} : { invoice_progressive: Number(dep.invoiceProgressive) }),
     paymentDate: dep.paymentDate
   }));
   const overnightTax = buildOvernightTaxSnapshot();
@@ -1410,10 +1620,7 @@ const submitNewBooking = async () => {
     board: normalizeBoardForBackend(newBookingData.value.board),
     fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null,
     pricingModeSnapshot: bookingQuote.value?.pricingMode || null,
-    note: bookingNotes,
-    notes: bookingNotes,
-    booking_note: bookingNotes,
-    booking_notes: bookingNotes,
+    notes: bookingNotes ? [bookingNotes] : [],
     overnight_tax: overnightTax,
     overnightTax,
     taxes: taxesSnapshot,
@@ -1423,11 +1630,17 @@ const submitNewBooking = async () => {
     deposits_json: JSON.stringify(backendDeposits.map(dep => ({
       amount: dep.amount,
       payment_mode: dep.payment_mode,
+      payment_method_id: dep.payment_method_id,
+      electronic: dep.electronic,
+      type: dep.type,
+      progressivo: dep.progressivo,
+      chiusura: dep.chiusura,
+      fiscal_timestamp: dep.fiscal_timestamp,
+      document_id: dep.document_id,
+      ...(dep.invoice_progressive == null ? {} : { invoice_progressive: dep.invoice_progressive }),
       payment_date: dep.payment_date
     }))),
-    services: editingBooking.value && Array.isArray(editingBooking.value.services)
-      ? editingBooking.value.services
-      : []
+    extra: editingBooking.value?.extra || { services: [], bar: [], restaurant: [], hotel: [] }
   };
 
   try {
@@ -2034,9 +2247,16 @@ const convertReservations = (apiReservations) => {
       rawStatus,
       displayStatus,
       status: displayStatus,
+      sub_status: res.sub_status,
+      payment_status: res.payment_status,
       hasDeposit,
       deposits,
-      services: Array.isArray(res.services) ? res.services : [],
+      extra: {
+        services: Array.isArray(res.extra?.services) ? res.extra.services : [],
+        bar: Array.isArray(res.extra?.bar) ? res.extra.bar : [],
+        restaurant: Array.isArray(res.extra?.restaurant) ? res.extra.restaurant : [],
+        hotel: Array.isArray(res.extra?.hotel) ? res.extra.hotel : []
+      },
       guestName,
       guestSurname,
       adults: res.adults ?? res.pax ?? 1,
@@ -2044,11 +2264,12 @@ const convertReservations = (apiReservations) => {
       kidsAges: normalizeKidsAges(res.kidsAges, res.kids ?? 0),
       board: (res.board || 'BB').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
-      notes: getReservationNotes(res),
+      notes: Array.isArray(res.notes) ? res.notes : [],
       guest: `${guestName} ${guestSurname}`.trim(),
       color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
     };
   }).filter(booking => getBookingStatus(booking) !== STATUS_CANCELLED);
+
 };
 
 const getRooms = () =>{
@@ -2109,13 +2330,13 @@ const handlePmsEvent = (event) => {
   const data = event.data || {};
   if (event.type === 'reservation_services_updated' && Array.isArray(data.services)) {
     bookings.value = bookings.value.map(booking => String(booking.id) === String(data.id)
-      ? { ...booking, services: data.services }
+      ? { ...booking, extra: { ...booking.extra, services: data.services } }
       : booking);
     if (editingBooking.value && String(editingBooking.value.id) === String(data.id)) {
-      editingBooking.value = { ...editingBooking.value, services: data.services };
+      editingBooking.value = { ...editingBooking.value, extra: { ...editingBooking.value.extra, services: data.services } };
     }
     if (addServiceTarget.value && String(addServiceTarget.value.id) === String(data.id)) {
-      addServiceTarget.value = { ...addServiceTarget.value, services: data.services };
+      addServiceTarget.value = { ...addServiceTarget.value, extra: { ...addServiceTarget.value.extra, services: data.services } };
     }
   }
   if (pmsRefreshTimeout) clearTimeout(pmsRefreshTimeout);
@@ -2169,6 +2390,7 @@ onMounted(() => {
   loadPricelists('hotel');
   loadTimetable('hotel');
   loadAvailableServices();
+  loadHotelPaymentMethods();
   const pmsApiBaseUrl = String(import.meta.env.VITE_PMS_API_BASE_URL || '').trim().replace(/\/+$/, '');
   const eventNode = `pmsweb-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   pmsEventsUrl = `${pmsApiBaseUrl}/api/pms/events?node=${encodeURIComponent(eventNode)}&agent=web`;
@@ -2956,6 +3178,51 @@ onUnmounted(() => {
   align-items: center;
   color: var(--planner-text);
   font-size: 0.88rem;
+}
+
+.deposit-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.deposit-print {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.deposit-print svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.deposit-print-fiscal {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.deposit-print-proforma {
+  color: #0284c7;
+  background: #f0f9ff;
+}
+
+.deposit-print:disabled {
+  cursor: wait;
+  opacity: 0.5;
 }
 
 .deposit-remove {
