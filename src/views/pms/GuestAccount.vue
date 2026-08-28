@@ -482,9 +482,10 @@ const normalizeDeposits = (reservation) => {
       amount: Number(dep?.amount ?? 0),
       paymentDate: String(dep?.payment_date ?? dep?.paymentDate ?? '').trim(),
       paymentMode: String(dep?.payment_mode ?? dep?.paymentMode ?? '').trim(),
-      type: String(dep?.type || 'caparra')
+      type: String(dep?.type || 'caparra'),
+      annulled: Boolean(dep?.annulled)
     }))
-    .filter((dep) => Number.isFinite(dep.amount) && dep.amount >= 0)
+    .filter((dep) => Number.isFinite(dep.amount) && dep.amount >= 0 && !dep.annulled)
 }
 
 const ensureReservationPayments = (account) => {

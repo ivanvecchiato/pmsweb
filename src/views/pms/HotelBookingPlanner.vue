@@ -247,21 +247,18 @@
 
               <div class="form-section" v-if="newBookingData.isManualPrice">
                 <label>Totale Concordato (€)</label>
-                <input type="number" v-model.number="newBookingData.manualPrice" class="input-manual-highlight">
+                <input type="number" v-model.number="newBookingData.manualPrice">
               </div>
             </div>
 
-            <div v-if="bookingQuote" class="quote-box" :class="{ 'manual-active': newBookingData.isManualPrice }">
-              <div class="quote-details">
+            <div v-if="bookingQuote" class="quote-box">
+              <div v-if="!newBookingData.isManualPrice" class="quote-details">
                 <div v-for="day in bookingQuote.days" :key="day.date" class="quote-line">
                   <span>{{ day.date }}</span>
                   <span>€{{ day.dayTotal }}</span>
                 </div>
               </div>
               <div class="quote-summary-footer">
-                <div v-if="newBookingData.isManualPrice" class="price-strikethrough">
-                  Calcolato: €{{ bookingQuote.totalCalculated }}
-                </div>
                 <div class="final-price-display">
                   TOTALE: €{{ bookingQuote.finalTotal }}
                 </div>
@@ -308,12 +305,19 @@
                   <strong>€{{ Number(dep.amount).toFixed(2) }}</strong>
                   <span>{{ dep.paymentDate }}</span>
                   <span>{{ dep.paymentMode || 'N/D' }}</span>
+                  <span v-if="dep.annulled">Stornata · {{ formatServiceDate(dep.annulledAt) }}</span>
                 </div>
                 <div class="deposit-actions">
                   <button
+                    v-if="dep.documentId"
+                    type="button"
+                    class="deposit-document-link"
+                    @click="openDepositDocument(dep)"
+                  >Documento {{ dep.progressivo || '' }}</button>
+                  <button
                     type="button"
                     class="deposit-print deposit-print-fiscal"
-                    :disabled="depositFiscalPrinting !== null || Boolean(dep.documentId) || Number(dep.invoiceProgressive) > 0"
+                    :disabled="depositFiscalPrinting !== null || Boolean(dep.documentId) || Number(dep.invoiceProgressive) > 0 || dep.annulled"
                     title="Stampa documento fiscale"
                     aria-label="Stampa documento fiscale"
                     @click="printDepositFiscal(dep, index)"
@@ -325,7 +329,7 @@
                   <button
                     type="button"
                     class="deposit-print deposit-print-proforma"
-                    :disabled="depositProformaPrinting === index"
+                    :disabled="depositProformaPrinting === index || dep.annulled"
                     title="Stampa proforma A4"
                     aria-label="Stampa proforma A4"
                     @click="printDepositProforma(dep, index)"
@@ -335,7 +339,7 @@
                     </svg>
                   </button>
                   <button
-                    v-if="!isModalReadOnly"
+                    v-if="!isModalReadOnly && !dep.annulled"
                     type="button"
                     class="deposit-remove"
                     :disabled="depositAnnulPrinting !== null"
@@ -467,8 +471,50 @@
         Paga conto
       </button>
     </template>
+    <button type="button" class="booking-action-item" @click="openGuestRegistrationFromMenu">
+      Registra ospiti
+    </button>
   </div>
 </Teleport>
+
+<transition name="fade">
+  <Teleport to="body">
+    <div v-if="showGuestRegistration" class="modal-overlay" @click.self="closeGuestRegistration">
+      <div class="guest-registration-dialog">
+        <aside class="guest-registration-sidebar">
+          <div class="guest-registration-heading">
+            <h3>Ospiti</h3>
+            <button type="button" class="guest-add-button" @click="addRegisteredGuest">+</button>
+          </div>
+          <button
+            v-for="(guest, index) in registeredGuests"
+            :key="guest.customer_id || index"
+            type="button"
+            class="guest-registration-item"
+            :class="{ active: selectedGuestIndex === index }"
+            @click="selectRegisteredGuest(index)"
+          >
+            <strong>{{ guest.firstname }} {{ guest.lastname }}</strong>
+            <span>{{ guest.document?.id || 'Documento non inserito' }}</span>
+          </button>
+          <p v-if="!registeredGuests.length" class="guest-registration-empty">Nessun ospite registrato</p>
+        </aside>
+        <section class="guest-registration-form">
+          <CustomerDialog
+            :open="showGuestRegistration"
+            :customer="selectedRegisteredGuest"
+            :title="selectedGuestIndex === null ? 'Nuovo ospite' : 'Anagrafica ospite'"
+            submit-label="Salva ospite"
+            embedded
+            :require-contacts="false"
+            @close="closeGuestRegistration"
+            @save="saveRegisteredGuest"
+          />
+        </section>
+      </div>
+    </div>
+  </Teleport>
+</transition>
 
 <!-- Modale Aggiungi Servizio (hotel) -->
 <transition name="fade">
@@ -557,6 +603,7 @@ import axios from 'axios';
 import { watch } from 'vue';
 import { useRouter } from 'vue-router'
 import QuoteBuilder from '../quotes/QuoteBuilder.vue'
+import CustomerDialog from '@/components/CustomerDialog.vue'
 import { usePricing } from '@/composables/usePricing'
 import { useAuth } from '@/composables/useAuth'
 
@@ -699,6 +746,15 @@ const isModalReadOnly = ref(false);
 const showBookingActionMenu = ref(false);
 const actionMenuBooking = ref(null);
 const actionMenuPosition = ref({ x: 0, y: 0 });
+const showGuestRegistration = ref(false);
+const guestRegistrationBooking = ref(null);
+const registeredGuests = ref([]);
+const selectedGuestIndex = ref(null);
+
+const selectedRegisteredGuest = computed(() => {
+  if (selectedGuestIndex.value === null) return null;
+  return registeredGuests.value[selectedGuestIndex.value] || null;
+});
 
 const showCancelDialog = ref(false);
 const cancelReason = ref('');
@@ -919,6 +975,8 @@ const normalizeDeposits = (deposits) => {
       chiusura: Number(dep?.chiusura ?? 0),
       fiscalTimestamp: Number(dep?.fiscal_timestamp ?? dep?.fiscalTimestamp ?? dep?.timestamp ?? 0),
       documentId: String(dep?.document_id ?? dep?.documentId ?? ''),
+      annulled: Boolean(dep?.annulled),
+      annulledAt: String(dep?.annulled_at ?? dep?.annulledAt ?? ''),
       invoiceProgressive: dep?.invoice_progressive == null ? undefined : Number(dep.invoice_progressive),
       paymentDate: dep?.payment_date || dep?.paymentDate || ''
     }))
@@ -982,7 +1040,7 @@ const loadHotelPaymentMethods = async () => {
 };
 
 const totalDeposits = computed(() => {
-  return (newBookingData.value.deposits || []).reduce((sum, dep) => sum + Number(dep.amount || 0), 0);
+  return (newBookingData.value.deposits || []).reduce((sum, dep) => dep.annulled ? sum : sum + Number(dep.amount || 0), 0);
 });
 
 const normalizedChildrenCount = computed(() => {
@@ -1111,8 +1169,9 @@ const addDeposit = () => {
 const removeDeposit = async (deposit, index) => {
   const hasFiscalDocument = Boolean(deposit.documentId);
   if (!hasFiscalDocument) {
-    if (!window.confirm('Confermi la rimozione del deposito?')) return;
-    newBookingData.value.deposits.splice(index, 1);
+    if (!window.confirm('Confermi lo storno del deposito?')) return;
+    deposit.annulled = true;
+    deposit.annulledAt = new Date().toISOString();
     return;
   }
 
@@ -1129,14 +1188,25 @@ const removeDeposit = async (deposit, index) => {
       alert(response.data?.error || 'Annullamento fiscale non riuscito');
       return;
     }
-    newBookingData.value.deposits.splice(index, 1);
-    alert('Documento fiscale annullato e deposito rimosso.');
+    deposit.annulled = true;
+    deposit.annulledAt = response.data.annulledAt || new Date().toISOString();
+    alert('Documento fiscale annullato e deposito stornato.');
   } catch (error) {
     console.error('Errore annullamento fiscale deposito:', error);
     alert(error.response?.data?.error || 'Annullamento fiscale non riuscito');
   } finally {
     depositAnnulPrinting.value = null;
   }
+};
+
+const openDepositDocument = (deposit) => {
+  if (!deposit.documentId) return;
+  router.push({
+    name: 'GuestAccount',
+    query: {
+      documentId: deposit.documentId
+    }
+  });
 };
 
 const printDepositFiscal = async (deposit, index) => {
@@ -1330,7 +1400,7 @@ const openBookingActions = (event, booking) => {
   actionMenuBooking.value = booking;
 
   const menuWidth = 180;
-  const menuHeight = 92;
+  const menuHeight = 240;
   const viewportPadding = 8;
   const x = Math.min(event.clientX, window.innerWidth - menuWidth - viewportPadding);
   const y = Math.min(event.clientY + 8, window.innerHeight - menuHeight - viewportPadding);
@@ -1348,6 +1418,70 @@ const openEditFromMenu = () => {
   const booking = actionMenuBooking.value;
   closeBookingActions();
   openEditBooking(booking);
+};
+
+const guestForDialog = (guest) => ({
+  ...guest,
+  email: Array.isArray(guest.email) ? (guest.email[0] || '') : (guest.email || ''),
+  phone: Array.isArray(guest.phone) ? (guest.phone[0] || '') : (guest.phone || '')
+});
+
+const openGuestRegistrationFromMenu = () => {
+  if (!actionMenuBooking.value) return;
+  guestRegistrationBooking.value = actionMenuBooking.value;
+  registeredGuests.value = (actionMenuBooking.value.guests || []).map(guestForDialog);
+  selectedGuestIndex.value = registeredGuests.value.length ? 0 : null;
+  closeBookingActions();
+  showGuestRegistration.value = true;
+};
+
+const closeGuestRegistration = () => {
+  showGuestRegistration.value = false;
+  guestRegistrationBooking.value = null;
+  registeredGuests.value = [];
+  selectedGuestIndex.value = null;
+};
+
+const selectRegisteredGuest = (index) => {
+  selectedGuestIndex.value = index;
+};
+
+const addRegisteredGuest = () => {
+  selectedGuestIndex.value = null;
+};
+
+const saveRegisteredGuest = async (guest) => {
+  if (!guestRegistrationBooking.value) return;
+  const savedGuest = {
+    ...guest,
+    email: guest.email ? [guest.email] : [],
+    phone: guest.phone ? [guest.phone] : []
+  };
+  const guests = registeredGuests.value.map(item => ({
+    ...item,
+    email: item.email ? [item.email] : [],
+    phone: item.phone ? [item.phone] : []
+  }));
+  const savedIndex = selectedGuestIndex.value === null ? guests.length : selectedGuestIndex.value;
+  if (selectedGuestIndex.value === null) {
+    guests.push(savedGuest);
+  } else {
+    guests[selectedGuestIndex.value] = savedGuest;
+  }
+
+  try {
+    await axios.post('/api/pms/hotel/update_reservation', {
+      id: guestRegistrationBooking.value.id,
+      guests
+    });
+    guestRegistrationBooking.value.guests = guests;
+    registeredGuests.value = guests.map(guestForDialog);
+    selectedGuestIndex.value = savedIndex;
+    showPlannerToast('Ospite registrato');
+  } catch (error) {
+    console.error('Errore registrazione ospite:', error);
+    showPlannerToast('Errore durante la registrazione ospite', 'error');
+  }
 };
 
 const runBookingStatusAction = async () => {
@@ -1597,6 +1731,8 @@ const submitNewBooking = async () => {
     chiusura: Number(dep.chiusura || 0),
     fiscal_timestamp: Number(dep.fiscalTimestamp || 0),
     document_id: dep.documentId || '',
+    annulled: dep.annulled,
+    annulled_at: dep.annulledAt || '',
     ...(dep.invoiceProgressive == null ? {} : { invoice_progressive: Number(dep.invoiceProgressive) }),
     paymentDate: dep.paymentDate
   }));
@@ -1637,6 +1773,8 @@ const submitNewBooking = async () => {
       chiusura: dep.chiusura,
       fiscal_timestamp: dep.fiscal_timestamp,
       document_id: dep.document_id,
+      annulled: dep.annulled,
+      annulled_at: dep.annulled_at,
       ...(dep.invoice_progressive == null ? {} : { invoice_progressive: dep.invoice_progressive }),
       payment_date: dep.payment_date
     }))),
@@ -2231,7 +2369,7 @@ const convertReservations = (apiReservations) => {
     }
 
     const deposits = normalizeDeposits(getReservationDeposits(res));
-    const hasDeposit = deposits.some(dep => Number(dep?.amount || 0) > 0) || deposits.length > 0;
+    const hasDeposit = deposits.some(dep => !dep.annulled && Number(dep?.amount || 0) > 0);
     const rawStatus = getRawBookingStatus(res);
     const displayStatus = resolveDisplayBookingStatus(res, hasDeposit);
     const accountHolder = res.accountholder || {};
@@ -2259,6 +2397,8 @@ const convertReservations = (apiReservations) => {
       },
       guestName,
       guestSurname,
+      guests: Array.isArray(res.guests) ? res.guests : [],
+      accountholder: accountHolder,
       adults: res.adults ?? res.pax ?? 1,
       kids: res.kids ?? 0,
       kidsAges: normalizeKidsAges(res.kidsAges, res.kids ?? 0),
@@ -2938,6 +3078,93 @@ onUnmounted(() => {
   background: #fef2f2;
 }
 
+.guest-registration-dialog {
+  width: min(1080px, 94vw);
+  height: min(760px, 92vh);
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  overflow: hidden;
+  background: white;
+  border: 1px solid var(--planner-border);
+  border-radius: 28px;
+  box-shadow: var(--planner-shadow-lg);
+}
+
+.guest-registration-sidebar {
+  padding: 20px 14px;
+  overflow-y: auto;
+  background: var(--planner-muted-surface);
+  border-right: 1px solid var(--planner-border);
+}
+
+.guest-registration-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 6px 14px;
+}
+
+.guest-registration-heading h3 {
+  margin: 0;
+}
+
+.guest-add-button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--planner-primary);
+  color: white;
+  cursor: pointer;
+  font-size: 1.4rem;
+}
+
+.guest-registration-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--planner-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.guest-registration-item span,
+.guest-registration-empty {
+  color: var(--planner-text-soft);
+  font-size: 0.8rem;
+}
+
+.guest-registration-item:hover,
+.guest-registration-item.active {
+  border-color: var(--planner-border);
+  background: white;
+}
+
+.guest-registration-form {
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 720px) {
+  .guest-registration-dialog {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .guest-registration-sidebar {
+    max-height: 180px;
+    border-right: 0;
+    border-bottom: 1px solid var(--planner-border);
+  }
+}
+
 /* Modale servizi */
 .modal-card {
   background: rgba(255, 255, 255, 0.86);
@@ -3186,6 +3413,15 @@ onUnmounted(() => {
   gap: 6px;
 }
 
+.deposit-document-link {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 0.82rem;
+  text-decoration: underline;
+}
+
 .deposit-print {
   display: inline-flex;
   align-items: center;
@@ -3347,25 +3583,6 @@ onUnmounted(() => {
   display: none;
 }
 
-/* Prezzo Manuale */
-.input-manual-highlight {
-  border: 2px solid rgba(220, 77, 77, 0.55) !important;
-  background: rgba(254, 242, 242, 0.96);
-  font-weight: 800;
-  font-size: 1.1rem;
-}
-
-.quote-box.manual-active {
-  border-left: 4px solid var(--planner-danger);
-  background: rgba(255, 245, 245, 0.92);
-}
-
-.price-strikethrough {
-  text-decoration: line-through;
-  color: #94a3b8;
-  font-size: 0.8rem;
-}
-
 .final-price-display {
   font-size: 1.3rem;
   font-weight: 800;
@@ -3474,12 +3691,6 @@ onUnmounted(() => {
   transition: all 0.3s ease;
 }
 
-/* Evidenziazione quando il prezzo è manuale */
-.quote-box.manual-active {
-  border-left: 5px solid var(--planner-danger);
-  background: rgba(255, 245, 245, 0.92);
-}
-
 /* Area scrollabile con l'elenco delle notti */
 .quote-details {
   max-height: 150px;
@@ -3520,18 +3731,6 @@ onUnmounted(() => {
   align-items: flex-end;
 }
 
-.quote-box.manual-active .quote-summary-footer {
-  background: rgba(254, 226, 226, 0.92);
-}
-
-/* Prezzo originale barrato (quando c'è il manuale) */
-.price-strikethrough {
-  text-decoration: line-through;
-  color: #94a3b8;
-  font-size: 0.8rem;
-  margin-bottom: 2px;
-}
-
 /* Prezzo finale grande */
 .final-price-display {
   font-size: 1.4rem;
@@ -3539,7 +3738,4 @@ onUnmounted(() => {
   color: var(--planner-text);
 }
 
-.quote-box.manual-active .final-price-display {
-  color: #b91c1c;
-}
 </style>

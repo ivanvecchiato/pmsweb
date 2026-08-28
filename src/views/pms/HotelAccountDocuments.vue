@@ -3,16 +3,17 @@
     <div class="header">
       <div>
         <h1>Documenti Hotel</h1>
-        <p>Archivio dei conti e dei depositi fiscalizzati.</p>
       </div>
       <div class="header-actions">
-        <div class="filters">
-          <label>Dal<input v-model="fromDate" type="date" /></label>
-          <label>Al<input v-model="toDate" type="date" /></label>
-          <button type="button" class="btn btn-primary" @click="loadAccounts" :disabled="isLoading">
-            {{ isLoading ? 'Caricamento...' : 'Aggiorna' }}
+        <form class="filters" @submit.prevent="searchAccounts">
+          <label class="account-search">Camera o cliente<input v-model="searchText" type="search" placeholder="Camera o nome cliente" /></label>
+          <label>Dal<input v-model="fromDate" type="date" :disabled="currentYear" /></label>
+          <label>Al<input v-model="toDate" type="date" :disabled="currentYear" /></label>
+          <label class="current-year-filter"><input v-model="currentYear" type="checkbox" /> Anno corrente</label>
+          <button type="submit" class="btn btn-primary" :disabled="isLoading">
+            {{ isLoading ? 'Caricamento...' : 'Cerca' }}
           </button>
-        </div>
+        </form>
         <div class="fiscal-close-action">
           <button type="button" class="btn btn-danger" @click="closeFiscalDay" :disabled="isClosingFiscalDay">
             {{ isClosingFiscalDay ? 'Chiusura in corso...' : 'Chiusura giornaliera' }}
@@ -107,12 +108,11 @@
         <div v-for="(deposit, index) in selectedAccount.deposits || []" :key="`deposit-${index}`" class="line-row">
           <span>
             Caparra · {{ formatDate(deposit.payment_date) }} · {{ deposit.payment_mode || '-' }}
-            · <button v-if="deposit.invoice_progressive" type="button" class="document-link" @click="openDepositDocument(deposit)">Documento {{ deposit.invoice_progressive }}</button>
+            · <span v-if="deposit.invoice_progressive">Documento H5S {{ deposit.invoice_progressive }}</span>
             <span v-else class="document-error">documento non trovato</span>
           </span>
           <span>{{ formatCurrency(deposit.amount) }}</span>
         </div>
-        <div v-if="depositDocumentError" class="document-error-row">documento non trovato</div>
         <div v-for="(payment, index) in selectedAccount.payments || []" :key="`payment-${index}`" class="line-row">
           <span>Saldo · {{ formatDate(payment.payment_date) }} · {{ payment.payment_mode || '-' }}</span>
           <span>{{ formatCurrency(payment.amount) }}</span>
@@ -183,7 +183,12 @@
                   <strong>{{ formatCurrency(deposit.amount) }}</strong>
                   <span>{{ formatDate(deposit.payment_date || deposit.paymentDate) }}</span>
                   <span>{{ deposit.payment_mode || deposit.paymentMode || '-' }}</span>
-                  <span v-if="deposit.document_id || deposit.documentId" class="issued-badge">Emesso</span>
+                  <button
+                    v-if="deposit.document_id || deposit.documentId"
+                    type="button"
+                    class="deposit-document-link"
+                    @click="showDepositDocument(deposit)"
+                  >Documento {{ deposit.progressivo || '' }}</button>
                 </div>
               </div>
             </section>
@@ -213,14 +218,12 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const router = useRouter()
 const isLoading = ref(false)
-const accounts = ref([])
+const loadedAccounts = ref([])
 const selectedAccountId = ref(null)
-const depositDocumentError = ref(false)
 const isClosingFiscalDay = ref(false)
 const showReservationDialog = ref(false)
 const isLoadingReservation = ref(false)
@@ -233,6 +236,19 @@ const defaultFrom = new Date(today)
 defaultFrom.setDate(defaultFrom.getDate() - 30)
 const fromDate = ref(toISODate(defaultFrom))
 const toDate = ref(toISODate(today))
+const searchText = ref('')
+const appliedSearchText = ref('')
+const currentYear = ref(false)
+
+const accounts = computed(() => {
+  const query = appliedSearchText.value.trim().toLocaleLowerCase('it-IT')
+  if (!query) return loadedAccounts.value
+  return loadedAccounts.value.filter((account) => {
+    const room = String(account.room || '').toLocaleLowerCase('it-IT')
+    const customer = guestName(account).toLocaleLowerCase('it-IT')
+    return room.includes(query) || customer.includes(query)
+  })
+})
 
 const selectedAccount = computed(() => {
   if (!accounts.value.length) return null
@@ -324,6 +340,13 @@ const closeReservationDialog = () => {
   reservationSource.value = null
 }
 
+const showDepositDocument = (deposit) => {
+  const documentId = String(deposit.document_id || deposit.documentId || '')
+  if (!documentId || !accounts.value.some(account => String(account.id) === documentId)) return
+  selectedAccountId.value = documentId
+  closeReservationDialog()
+}
+
 const saveReservation = async () => {
   const form = reservationForm.value
   if (!form) return
@@ -369,17 +392,6 @@ const saveReservation = async () => {
   }
 }
 
-const openDepositDocument = async (deposit) => {
-  depositDocumentError.value = false
-  try {
-    await axios.get('/api/mbar/document_detail', { params: { progressivo: deposit.invoice_progressive } })
-    const url = router.resolve({ name: 'StatsDocuments', query: { progressivo: deposit.invoice_progressive } }).href
-    window.open(url, '_blank', 'noopener')
-  } catch {
-    depositDocumentError.value = true
-  }
-}
-
 const applyRouteSelection = () => {
   const documentId = String(route.query.documentId || '').trim()
   const reservationId = String(route.query.reservationId || '').trim()
@@ -390,8 +402,11 @@ const applyRouteSelection = () => {
 const loadAccounts = async () => {
   isLoading.value = true
   try {
-    const response = await axios.get('/api/pms/hotel/account/documents', { params: { from: fromDate.value, to: toDate.value } })
-    accounts.value = Array.isArray(response.data) ? response.data : []
+    const year = today.getFullYear()
+    const from = currentYear.value ? `${year}-01-01` : fromDate.value
+    const to = currentYear.value ? `${year}-12-31` : toDate.value
+    const response = await axios.get('/api/pms/hotel/account/documents', { params: { from, to } })
+    loadedAccounts.value = Array.isArray(response.data) ? response.data : []
     if (!accounts.value.some((account) => account.id === selectedAccountId.value)) selectedAccountId.value = accounts.value[0]?.id || null
     applyRouteSelection()
   } catch (error) {
@@ -400,6 +415,11 @@ const loadAccounts = async () => {
   } finally {
     isLoading.value = false
   }
+}
+
+const searchAccounts = async () => {
+  appliedSearchText.value = searchText.value
+  await loadAccounts()
 }
 
 const closeFiscalDay = async () => {
@@ -438,6 +458,10 @@ onMounted(loadAccounts)
 .filters { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
 .filters label { display: flex; flex-direction: column; gap: 6px; color: var(--ds-text-soft); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
 .filters input { min-width: 150px; padding: 12px 14px; border: 1px solid var(--ds-border); border-radius: 16px; background: var(--ds-surface); color: var(--ds-text); }
+.filters input:disabled { opacity: 0.55; cursor: not-allowed; }
+.filters .account-search input { min-width: 220px; }
+.filters .current-year-filter { flex-direction: row; align-items: center; min-height: 43px; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+.filters .current-year-filter input { min-width: 0; }
 .btn { border: 0; border-radius: 16px; padding: 13px 18px; font-weight: 800; cursor: pointer; }
 .btn-primary { color: white; background: var(--ds-primary); }
 .btn-danger { color: white; background: #b91c1c; }
@@ -480,7 +504,7 @@ onMounted(loadAccounts)
 .dialog-list-row:first-child { border-top: 0; }
 .dialog-list-row strong:last-child { margin-left: auto; }
 .empty-dialog-row { padding: 18px; border-radius: 14px; background: #ffffff; color: var(--ds-text-soft); text-align: center; }
-.issued-badge { margin-left: auto; padding: 4px 9px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 0.75rem; font-weight: 800; }
+.deposit-document-link { margin-left: auto; padding: 0; border: 0; background: none; color: var(--ds-primary); font: inherit; font-size: 0.82rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .service-note { color: var(--ds-text-soft); }
 .modal-footer { justify-content: flex-end; border-top: 1px solid var(--ds-border); border-bottom: 0; }
 .lines-block { overflow: hidden; border: 1px solid var(--ds-border); border-radius: 18px; }
@@ -488,9 +512,7 @@ onMounted(loadAccounts)
 .line-row { display: flex; justify-content: space-between; gap: 20px; padding: 12px 16px; border-top: 1px solid var(--ds-border); }
 .tax-row, .muted { color: var(--ds-text-soft); }
 .total-row { background: var(--ds-primary-soft); }
-.document-link { padding: 0; border: 0; background: none; color: var(--ds-primary); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
-.document-error, .document-error-row { color: #b91c1c; font-weight: 700; }
-.document-error-row { padding: 12px 16px; border-top: 1px solid var(--ds-border); }
+.document-error { color: #b91c1c; font-weight: 700; }
 @media (max-width: 700px) {
   .header, .card { padding: 16px; border-radius: 20px; }
   .filters, .filters label, .filters input, .filters button { width: 100%; }

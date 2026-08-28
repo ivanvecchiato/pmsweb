@@ -63,10 +63,10 @@
           >
             <div class="customer-header">
               <div class="customer-avatar">
-                {{ getInitials(customer.name) }}
+                {{ getInitials(customer.firstname, customer.lastname) }}
               </div>
               <div class="customer-info">
-                <h3 class="customer-name">{{ customer.name }}</h3>
+                <h3 class="customer-name">{{ customer.firstname }} {{ customer.lastname }}</h3>
                 <p class="customer-email">{{ customer.email }}</p>
               </div>
             </div>
@@ -110,11 +110,11 @@
           >
             <div class="list-col col-avatar">
               <div class="customer-avatar-small">
-                {{ getInitials(customer.name) }}
+                {{ getInitials(customer.firstname, customer.lastname) }}
               </div>
             </div>
             <div class="list-col col-name">
-              <span class="list-name">{{ customer.name }}</span>
+              <span class="list-name">{{ customer.firstname }} {{ customer.lastname }}</span>
             </div>
             <div class="list-col col-email">
               <span class="list-email">{{ customer.email }}</span>
@@ -137,107 +137,27 @@
       </div>
     </div>
 
-    <!-- Modal for Add/Edit Customer -->
-    <Teleport to="body">
-      <div v-if="showModal" class="modal-overlay" @click="closeModal">
-        <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h2 class="modal-title">
-            {{ isEditMode ? 'Modifica Cliente' : 'Nuovo Cliente' }}
-          </h2>
-          <button @click="closeModal" class="btn-close">×</button>
-        </div>
-
-        <div class="modal-body">
-          <div class="form-group">
-            <label class="input-label">Nome Completo *</label>
-            <input
-              v-model="formData.name"
-              type="text"
-              class="input-field"
-              placeholder="Mario Rossi"
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="input-label">Email *</label>
-            <input
-              v-model="formData.email"
-              type="email"
-              class="input-field"
-              placeholder="mario.rossi@email.com"
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="input-label">Telefono *</label>
-            <input
-              v-model="formData.phone"
-              type="tel"
-              class="input-field"
-              placeholder="+39 333 1234567"
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="input-label">Città</label>
-            <input
-              v-model="formData.city"
-              type="text"
-              class="input-field"
-              placeholder="Roma"
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="input-label">Indirizzo</label>
-            <input
-              v-model="formData.address"
-              type="text"
-              class="input-field"
-              placeholder="Via Roma 123"
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="input-label">Note</label>
-            <textarea
-              v-model="formData.notes"
-              class="textarea-field"
-              rows="3"
-              placeholder="Note aggiuntive sul cliente..."
-            ></textarea>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button @click="closeModal" class="btn btn-secondary">
-            Annulla
-          </button>
-          <button
-            v-if="isEditMode"
-            @click="deleteCustomer"
-            class="btn btn-danger"
-          >
-            Elimina
-          </button>
-          <button @click="saveCustomer" class="btn btn-primary">
-            {{ isEditMode ? 'Salva Modifiche' : 'Aggiungi Cliente' }}
-          </button>
-        </div>
-        </div>
-      </div>
-    </Teleport>
+    <CustomerDialog
+      :open="showModal"
+      :customer="selectedCustomer"
+      :title="isEditMode ? 'Modifica Cliente' : 'Nuovo Cliente'"
+      :show-delete="isEditMode"
+      @close="closeModal"
+      @save="saveCustomer"
+      @delete="deleteCustomer"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
+import CustomerDialog from '@/components/CustomerDialog.vue';
 
 const customers = ref([
   {
     id: 1,
-    name: 'Mario Rossi',
+    firstname: 'Mario',
+    lastname: 'Rossi',
     email: 'mario.rossi@email.com',
     phone: '+39 333 1234567',
     city: 'Roma',
@@ -247,7 +167,8 @@ const customers = ref([
   },
   {
     id: 2,
-    name: 'Laura Bianchi',
+    firstname: 'Laura',
+    lastname: 'Bianchi',
     email: 'laura.bianchi@email.com',
     phone: '+39 340 7654321',
     city: 'Milano',
@@ -257,7 +178,8 @@ const customers = ref([
   },
   {
     id: 3,
-    name: 'Giovanni Verdi',
+    firstname: 'Giovanni',
+    lastname: 'Verdi',
     email: 'g.verdi@email.com',
     phone: '+39 349 9876543',
     city: 'Napoli',
@@ -267,7 +189,8 @@ const customers = ref([
   },
   {
     id: 4,
-    name: 'Anna Neri',
+    firstname: 'Anna',
+    lastname: 'Neri',
     email: 'anna.neri@email.com',
     phone: '+39 338 5551234',
     city: 'Firenze',
@@ -277,7 +200,8 @@ const customers = ref([
   },
   {
     id: 5,
-    name: 'Paolo Gialli',
+    firstname: 'Paolo',
+    lastname: 'Gialli',
     email: 'paolo.gialli@email.com',
     phone: '+39 347 8889999',
     city: 'Venezia',
@@ -292,16 +216,7 @@ const showModal = ref(false);
 const isEditMode = ref(false);
 const selectedCustomerId = ref(null);
 const viewMode = ref('grid'); // 'grid' or 'list'
-
-const formData = ref({
-  name: '',
-  email: '',
-  phone: '',
-  city: '',
-  address: '',
-  notes: '',
-  bookingsCount: 0
-});
+const selectedCustomer = computed(() => customers.value.find(customer => customer.id === selectedCustomerId.value) || null);
 
 const filteredCustomers = computed(() => {
   if (!searchQuery.value) {
@@ -310,41 +225,27 @@ const filteredCustomers = computed(() => {
   
   const query = searchQuery.value.toLowerCase();
   return customers.value.filter(customer =>
-    customer.name.toLowerCase().includes(query) ||
+    customer.firstname.toLowerCase().includes(query) ||
+    customer.lastname.toLowerCase().includes(query) ||
     customer.email.toLowerCase().includes(query) ||
     customer.phone.toLowerCase().includes(query) ||
     customer.city.toLowerCase().includes(query)
   );
 });
 
-const getInitials = (name) => {
-  return name
-    .split(' ')
-    .map(word => word[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2);
+const getInitials = (firstname, lastname) => {
+  return `${firstname.charAt(0)}${lastname.charAt(0)}`.toUpperCase();
 };
 
 const openAddCustomer = () => {
   isEditMode.value = false;
   selectedCustomerId.value = null;
-  formData.value = {
-    name: '',
-    email: '',
-    phone: '',
-    city: '',
-    address: '',
-    notes: '',
-    bookingsCount: 0
-  };
   showModal.value = true;
 };
 
 const selectCustomer = (customer) => {
   isEditMode.value = true;
   selectedCustomerId.value = customer.id;
-  formData.value = { ...customer };
   showModal.value = true;
 };
 
@@ -353,21 +254,16 @@ const closeModal = () => {
   selectedCustomerId.value = null;
 };
 
-const saveCustomer = () => {
-  if (!formData.value.name || !formData.value.email || !formData.value.phone) {
-    alert('Compila tutti i campi obbligatori (Nome, Email, Telefono)');
-    return;
-  }
-
+const saveCustomer = (customer) => {
   if (isEditMode.value) {
     const index = customers.value.findIndex(c => c.id === selectedCustomerId.value);
     if (index !== -1) {
-      customers.value[index] = { ...formData.value };
+      customers.value[index] = { ...customer };
     }
   } else {
     const maxId = Math.max(...customers.value.map(c => c.id), 0);
     customers.value.push({
-      ...formData.value,
+      ...customer,
       id: maxId + 1
     });
   }
@@ -750,129 +646,6 @@ const deleteCustomer = () => {
   border-radius: 24px;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(36, 49, 66, 0.24);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.modal-content {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 28px;
-  width: 100%;
-  max-width: 600px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--ds-shadow-soft);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  backdrop-filter: blur(24px);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-}
-
-.modal-title {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: var(--ds-text);
-  margin: 0;
-}
-
-.btn-close {
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  font-size: 1.8rem;
-  color: var(--ds-text-soft);
-  cursor: pointer;
-  line-height: 1;
-  padding: 0;
-  width: 42px;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  transition: background-color 0.16s ease;
-}
-
-.btn-close:hover {
-  background: rgba(248, 250, 252, 0.92);
-}
-
-.modal-body {
-  padding: 1.5rem;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.form-group {
-  margin-bottom: 1.25rem;
-}
-
-.input-label {
-  display: block;
-  font-size: 0.74rem;
-  font-weight: 800;
-  color: var(--ds-text-soft);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-bottom: 0.5rem;
-}
-
-.input-field {
-  width: 100%;
-  min-height: 48px;
-  padding: 0 14px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 16px;
-  font-size: 1rem;
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--ds-text);
-}
-
-.input-field:focus {
-  outline: none;
-  border-color: rgba(29, 140, 242, 0.45);
-  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
-}
-
-.textarea-field {
-  width: 100%;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 16px;
-  font-size: 1rem;
-  font-family: inherit;
-  resize: vertical;
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--ds-text);
-}
-
-.textarea-field:focus {
-  outline: none;
-  border-color: rgba(29, 140, 242, 0.45);
-  box-shadow: 0 0 0 4px rgba(29, 140, 242, 0.12);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.16);
-}
-
 @media (max-width: 1024px) {
   .list-col {
     font-size: 0.875rem;
@@ -886,8 +659,7 @@ const deleteCustomer = () => {
 
 @media (max-width: 768px) {
   .header,
-  .header-actions,
-  .modal-footer {
+  .header-actions {
     flex-direction: column;
     align-items: stretch;
   }
@@ -903,10 +675,6 @@ const deleteCustomer = () => {
   .list-header,
   .list-row {
     min-width: 800px;
-  }
-
-  .modal-footer {
-    flex-direction: column;
   }
 
   .btn {
