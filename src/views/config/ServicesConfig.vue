@@ -8,6 +8,33 @@
       <button class="btn btn-primary" @click="openAddForm">+ Nuovo Servizio</button>
     </div>
 
+    <section class="pending-returns">
+      <div class="pending-returns-header">
+        <div>
+          <h2>Servizi da restituire</h2>
+        </div>
+        <span class="pending-returns-count">{{ pendingReturns.length }}</span>
+      </div>
+      <div v-if="pendingLoading" class="pending-returns-empty">Caricamento...</div>
+      <div v-else-if="pendingReturns.length === 0" class="pending-returns-empty">Nessun servizio in sospeso.</div>
+      <div v-else class="pending-returns-list">
+        <div v-for="item in pendingReturns" :key="`${item.reservationId}-${item.serviceIndex}`" class="pending-return-row">
+          <div class="pending-return-info">
+            <strong>{{ item.service.name }}<span v-if="Number(item.service.quantity) > 1"> × {{ item.service.quantity }}</span></strong>
+            <span>Camera {{ item.room }}<span v-if="item.reservationName"> · {{ item.reservationName }}</span></span>
+            <span>Erogato il {{ formatDateTime(item.service.addedAt) }}<template v-if="item.operatorName"> da {{ item.operatorName }}</template></span>
+            <span v-if="item.service.deposit">Cauzione € {{ Number(item.service.deposit).toFixed(2) }}</span>
+          </div>
+          <button
+            type="button"
+            class="btn btn-sm btn-return"
+            :disabled="returningKey !== ''"
+            @click="returnService(item)"
+          >{{ returningKey === `${item.reservationId}-${item.serviceIndex}` ? 'Restituzione...' : 'Restituisci' }}</button>
+        </div>
+      </div>
+    </section>
+
     <div v-if="loading" class="loading-state">Caricamento...</div>
 
     <div v-else-if="services.length === 0 && !showForm" class="empty-state">
@@ -29,6 +56,7 @@
             </span>
             <span class="service-price free" v-else>Gratuito</span>
             <span class="service-vat">IVA {{ formatVatRate(service.vatRate) }}%</span>
+            <span v-if="service.deposit" class="service-vat">Cauzione € {{ Number(service.deposit).toFixed(2) }}</span>
           </div>
         </div>
         <div class="service-actions">
@@ -81,6 +109,12 @@
                 <span>Stampa ricevuta</span>
               </label>
             </div>
+            <div v-if="form.printOnDelivery" class="form-row">
+              <div class="form-section form-section--narrow">
+                <label>Cauzione (€)</label>
+                <input v-model.number="form.deposit" type="number" min="0" step="0.01" placeholder="0.00" />
+              </div>
+            </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-cancel" @click="cancelForm">Annulla</button>
               <button type="submit" class="btn btn-save" :disabled="saving">
@@ -102,19 +136,27 @@ import axios from 'axios'
 const SERVICES_ENDPOINT = '/api/pms/services'
 
 const services = ref([])
+const pendingReturns = ref([])
 const vatRates = ref([10, 22])
 const loading = ref(true)
+const pendingLoading = ref(true)
 const saving = ref(false)
+const returningKey = ref('')
 const showForm = ref(false)
 const editingIndex = ref(null)
 
 const defaultVatRate = () => vatRates.value.includes(10) ? 10 : (vatRates.value[0] ?? '')
-const emptyForm = () => ({ name: '', description: '', price: '', vatRate: defaultVatRate(), printOnDelivery: false })
+const emptyForm = () => ({ name: '', description: '', price: '', vatRate: defaultVatRate(), printOnDelivery: false, deposit: '' })
 const form = ref(emptyForm())
 
 const formatVatRate = (value) => Number(value).toLocaleString('it-IT', {
   maximumFractionDigits: 2
 })
+
+const formatDateTime = (value) => {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('it-IT')
+}
 
 onMounted(loadServices)
 
@@ -145,6 +187,39 @@ async function loadServices() {
   } finally {
     loading.value = false
   }
+  await loadPendingReturns()
+}
+
+async function loadPendingReturns() {
+  pendingLoading.value = true
+  try {
+    const response = await axios.get('/api/pms/hotel/services/pending_returns')
+    pendingReturns.value = Array.isArray(response.data) ? response.data : []
+  } catch (e) {
+    console.error('Errore caricamento servizi da restituire:', e)
+    pendingReturns.value = []
+  } finally {
+    pendingLoading.value = false
+  }
+}
+
+async function returnService(item) {
+  if (returningKey.value) return
+  if (!confirm(`Confermi la restituzione di "${item.service.name}" dalla camera ${item.room}?`)) return
+  returningKey.value = `${item.reservationId}-${item.serviceIndex}`
+  try {
+    const response = await axios.post('/api/pms/hotel/return_service', {
+      reservationId: item.reservationId,
+      serviceIndex: item.serviceIndex
+    })
+    if (!response.data?.success) throw new Error(response.data?.error || 'Restituzione non confermata dal server')
+    await loadPendingReturns()
+  } catch (e) {
+    console.error('Errore restituzione servizio:', e)
+    alert(e.response?.data?.error || e.message || 'Errore durante la restituzione del servizio.')
+  } finally {
+    returningKey.value = ''
+  }
 }
 
 function openAddForm() {
@@ -161,7 +236,8 @@ function openEditForm(idx) {
     description: s.description ?? '',
     price: s.price ?? '',
     vatRate: vatRates.value.includes(Number(s.vatRate)) ? Number(s.vatRate) : defaultVatRate(),
-    printOnDelivery: s.printOnDelivery === true
+    printOnDelivery: s.printOnDelivery === true,
+    deposit: s.deposit ?? ''
   }
   showForm.value = true
 }
@@ -187,7 +263,8 @@ async function saveService() {
       description: form.value.description.trim(),
       price: form.value.price !== '' && form.value.price !== null ? Number(form.value.price) : null,
       vatRate,
-      printOnDelivery: form.value.printOnDelivery
+      printOnDelivery: form.value.printOnDelivery,
+      deposit: form.value.printOnDelivery && Number(form.value.deposit) > 0 ? Number(form.value.deposit) : null
     }
 
     if (editingIndex.value !== null) {
@@ -196,8 +273,11 @@ async function saveService() {
       updated.push(entry)
     }
 
-    await axios.post(SERVICES_ENDPOINT, updated)
-    services.value = updated
+    const response = await axios.post(SERVICES_ENDPOINT, updated)
+    if (!response.data?.success || !Array.isArray(response.data.services)) {
+      throw new Error(response.data?.error || 'Salvataggio non confermato dal server')
+    }
+    services.value = response.data.services
     cancelForm()
   } catch (e) {
     console.error('Errore salvataggio servizio:', e)
@@ -211,8 +291,11 @@ async function deleteService(idx) {
   if (!confirm(`Eliminare il servizio "${services.value[idx].name}"?`)) return
   try {
     const updated = services.value.filter((_, i) => i !== idx)
-    await axios.post(SERVICES_ENDPOINT, updated)
-    services.value = updated
+    const response = await axios.post(SERVICES_ENDPOINT, updated)
+    if (!response.data?.success || !Array.isArray(response.data.services)) {
+      throw new Error(response.data?.error || 'Eliminazione non confermata dal server')
+    }
+    services.value = response.data.services
   } catch (e) {
     console.error('Errore eliminazione servizio:', e)
     alert('Errore durante l\'eliminazione.')
@@ -267,6 +350,31 @@ async function deleteService(idx) {
   flex-direction: column;
   gap: 1rem;
 }
+
+.pending-returns {
+  margin-bottom: 2rem;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  border-radius: 24px;
+  background: rgba(255, 251, 235, 0.78);
+  padding: 1.2rem 1.35rem;
+}
+
+.pending-returns-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 1rem;
+}
+
+.pending-returns-header h2 { margin: 0; color: var(--ds-text); font-size: 1.05rem; }
+.pending-returns-count { min-width: 32px; padding: 5px 9px; border-radius: 999px; background: #f59e0b; color: white; font-weight: 800; text-align: center; }
+.pending-returns-list { display: flex; flex-direction: column; }
+.pending-return-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid rgba(245, 158, 11, 0.18); }
+.pending-return-info { display: flex; flex-direction: column; gap: 3px; color: var(--ds-text-soft); font-size: 0.8rem; }
+.pending-return-info strong { color: var(--ds-text); font-size: 0.92rem; }
+.pending-returns-empty { color: var(--ds-text-soft); font-size: 0.88rem; }
+.btn-return { background: rgba(22, 163, 74, 0.1); border-color: rgba(22, 163, 74, 0.22); color: #15803d; }
 
 .service-card {
   background: rgba(255, 255, 255, 0.78);
