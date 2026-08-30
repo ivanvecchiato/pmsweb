@@ -35,27 +35,53 @@
           </div>
         </div>
 
-        <form @submit.prevent="handleLogin">
-          <div class="form-group">
-            <label>Utente</label>
-            <input 
-              v-model="username" 
-              type="text" 
-              placeholder="Inserisci username"
-              class="form-input"
-            >
-            <small class="hint">Demo: admin, staff</small>
+        <div v-if="isLoadingUsers" class="login-status">Caricamento utenti...</div>
+        <div v-else-if="!selectedUser" class="user-selector">
+          <button
+            v-for="user in users"
+            :key="user.id"
+            type="button"
+            class="user-card"
+            @click="selectUser(user)"
+          >
+            <span class="user-avatar">{{ getInitials(user.name) }}</span>
+            <span class="user-copy">
+              <strong>{{ user.name }}</strong>
+              <small>{{ user.permissions?.admin ? 'Amministratore' : 'Operatore' }}</small>
+            </span>
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+
+          <div v-if="!users.length" class="error-message">
+            {{ errorMessage || 'Nessun utente disponibile.' }}
           </div>
+        </div>
+
+        <form v-else @submit.prevent="handleLogin">
+          <button type="button" class="selected-user" @click="resetSelection">
+            <span class="user-avatar">{{ getInitials(selectedUser.name) }}</span>
+            <span class="user-copy">
+              <small>Accesso come</small>
+              <strong>{{ selectedUser.name }}</strong>
+            </span>
+            <span class="change-user">Cambia</span>
+          </button>
 
           <div class="form-group">
-            <label>Password</label>
-            <input 
-              v-model="password" 
+            <label for="login-pin">PIN</label>
+            <input
+              id="login-pin"
+              ref="pinInput"
+              v-model="pin"
               type="password" 
-              placeholder="Inserisci password"
+              inputmode="numeric"
+              autocomplete="current-password"
+              pattern="[0-9]*"
+              placeholder="Inserisci il PIN"
               class="form-input"
             >
-            <small class="hint">Demo password: 123456</small>
           </div>
 
           <div v-if="errorMessage" class="error-message">
@@ -64,53 +90,77 @@
 
           <button type="submit" class="btn-login">
             <span v-if="!isLoading">Accedi</span>
-            <span v-else>Caricamento...</span>
+            <span v-else>Verifica...</span>
           </button>
         </form>
-
-        <div class="demo-info">
-          <h3>Account Demo</h3>
-          <div class="demo-user">
-            <strong>Admin:</strong> admin / 123456
-            <span class="badge admin">Accesso totale</span>
-          </div>
-          <div class="demo-user">
-            <strong>Staff:</strong> staff / 123456
-            <span class="badge staff">PMS + Configurazione</span>
-          </div>
-        </div>
       </section>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth.js'
 
 const router = useRouter()
-const { login } = useAuth()
+const { getLoginUsers, login } = useAuth()
 
-const username = ref('')
-const password = ref('')
+const users = ref([])
+const selectedUser = ref(null)
+const pin = ref('')
+const pinInput = ref(null)
 const errorMessage = ref('')
 const isLoading = ref(false)
+const isLoadingUsers = ref(true)
+
+const getInitials = (name) => String(name || '')
+  .split(' ')
+  .filter(Boolean)
+  .slice(0, 2)
+  .map((part) => part.charAt(0).toUpperCase())
+  .join('')
+
+const selectUser = async (user) => {
+  selectedUser.value = user
+  pin.value = ''
+  errorMessage.value = ''
+  await nextTick()
+  pinInput.value?.focus()
+}
+
+const resetSelection = () => {
+  selectedUser.value = null
+  pin.value = ''
+  errorMessage.value = ''
+}
 
 const handleLogin = async () => {
   errorMessage.value = ''
   isLoading.value = true
 
-  await new Promise(resolve => setTimeout(resolve, 500))
-
-  if (await login(username.value, password.value)) {
+  if (await login(selectedUser.value, pin.value)) {
     router.push('/')
   } else {
-    errorMessage.value = 'Username o password non validi'
+    errorMessage.value = 'PIN non valido'
+    pin.value = ''
+    await nextTick()
+    pinInput.value?.focus()
   }
 
   isLoading.value = false
 }
+
+onMounted(async () => {
+  try {
+    users.value = await getLoginUsers()
+  } catch (error) {
+    console.error('Unable to load login users:', error)
+    errorMessage.value = 'Impossibile caricare gli utenti dal server'
+  } finally {
+    isLoadingUsers.value = false
+  }
+})
 </script>
 
 <style scoped>
@@ -253,6 +303,94 @@ const handleLogin = async () => {
   margin-bottom: 20px;
 }
 
+.login-status {
+  padding: 28px 0;
+  color: var(--ds-text-soft);
+  text-align: center;
+}
+
+.user-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 430px;
+  overflow-y: auto;
+}
+
+.user-card,
+.selected-user {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.user-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(29, 140, 242, 0.28);
+  box-shadow: 0 12px 24px rgba(148, 163, 184, 0.12);
+}
+
+.user-card svg {
+  width: 19px;
+  height: 19px;
+  margin-left: auto;
+  color: var(--ds-text-muted);
+}
+
+.user-avatar {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(29, 140, 242, 0.12);
+  color: var(--ds-primary-strong);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.user-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.user-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-copy small {
+  color: var(--ds-text-muted);
+}
+
+.selected-user {
+  margin-bottom: 22px;
+}
+
+.change-user {
+  margin-left: auto;
+  color: var(--ds-primary-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .form-group label {
   display: block;
   font-size: 13px;
@@ -326,52 +464,6 @@ const handleLogin = async () => {
   transform: translateY(0);
 }
 
-.demo-info {
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
-  padding-top: 20px;
-}
-
-.demo-info h3 {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ds-text-soft);
-  margin: 0 0 12px 0;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.demo-user {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: var(--ds-text-soft);
-  padding: 12px 14px;
-  margin-bottom: 8px;
-  background: rgba(255, 255, 255, 0.72);
-  border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-}
-
-.badge {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 6px 10px;
-  border-radius: 999px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.badge.admin {
-  background: rgba(29, 140, 242, 0.12);
-  color: var(--ds-primary-strong);
-}
-
-.badge.staff {
-  background: rgba(39, 179, 106, 0.14);
-  color: #1b7d4d;
-}
-
 @media (max-width: 960px) {
   .login-shell {
     grid-template-columns: 1fr;
@@ -397,10 +489,5 @@ const handleLogin = async () => {
     border-radius: 24px;
   }
 
-  .demo-user {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
 }
 </style>

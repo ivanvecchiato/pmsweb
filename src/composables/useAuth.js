@@ -1,6 +1,8 @@
 import { ref, computed } from 'vue'
 
 const PMS_API_BASE_URL = import.meta.env.VITE_PMS_API_BASE_URL || ''
+const AUTH_SESSION_HOURS = Number(import.meta.env.VITE_AUTH_SESSION_HOURS) || 12
+const AUTH_SESSION_DURATION = AUTH_SESSION_HOURS * 60 * 60 * 1000
 
 const rolePermissions = {
   admin: ['home', 'customers', 'beach-bookings', 'inventory', 'stats', 'listino', 'listino_beach', 'onda_push_products'],
@@ -89,6 +91,15 @@ const fetchJson = async (url) => {
   return response.json()
 }
 
+const getLoginUsers = async () => {
+  const users = await fetchJson(`${PMS_API_BASE_URL}/api/pms/operators`)
+  if (!Array.isArray(users)) return []
+
+  return users
+    .filter((user) => user && user.enabled !== false && user.active !== false)
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'it'))
+}
+
 const loadStoredPmsType = () => {
   const stored = localStorage.getItem('pms_type')
   pmsType.value = normalizePmsType(stored)
@@ -103,7 +114,16 @@ const loadStoredPmsType = () => {
 const loadUser = () => {
   const stored = localStorage.getItem('pms_user')
   if (stored) {
-    currentUser.value = JSON.parse(stored)
+    try {
+      const user = JSON.parse(stored)
+      if (Number(user.expiresAt) > Date.now()) {
+        currentUser.value = user
+      } else {
+        localStorage.removeItem('pms_user')
+      }
+    } catch {
+      localStorage.removeItem('pms_user')
+    }
   }
 }
 
@@ -151,18 +171,18 @@ const loadPmsType = async (forceRefresh = false) => {
   }
 }
 
-const login = async (username, password) => {
-  const validUsers = {
-    admin: { role: 'admin', name: 'Amministratore' },
-    staff: { role: 'staff', name: 'Staff' }
-  }
-
-  if (validUsers[username] && password === '123456') {
+const login = async (user, pin) => {
+  const normalizedPin = String(pin ?? '').trim()
+  if (user && normalizedPin && String(user.code ?? '') === normalizedPin) {
+    const isAdmin = user.permissions?.admin === true
     currentUser.value = {
-      username,
-      role: validUsers[username].role,
-      name: validUsers[username].name,
-      loginTime: new Date()
+      id: user.id,
+      username: user.username || String(user.name || '').toLowerCase(),
+      role: isAdmin ? 'admin' : 'staff',
+      name: user.name,
+      permissions: user.permissions || {},
+      loginTime: new Date().toISOString(),
+      expiresAt: Date.now() + AUTH_SESSION_DURATION
     }
     localStorage.setItem('pms_user', JSON.stringify(currentUser.value))
     await loadPmsType(true)
@@ -180,6 +200,14 @@ const logout = () => {
   pmsType.value = null
   pmsEnabled.value = false
   pmsIntegrationType.value = null
+}
+
+const validateSession = () => {
+  if (!currentUser.value) return false
+  if (Number(currentUser.value.expiresAt) > Date.now()) return true
+
+  logout()
+  return false
 }
 
 const hasPermission = (page) => {
@@ -221,9 +249,11 @@ export const useAuth = () => ({
   canShowHotelBeachMenus,
   userRole,
   userName,
+  getLoginUsers,
   login,
   loadPmsType,
   logout,
+  validateSession,
   hasPermission,
   isPmsTypeAllowed,
   rolePermissions

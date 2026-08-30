@@ -4,6 +4,9 @@ import axios from 'axios';
 import BeachMap from './BeachMap.vue';
 import { useRouter } from 'vue-router'
 import QuoteBuilder from '../quotes/QuoteBuilder.vue'
+import { useAuth } from '@/composables/useAuth'
+
+const { currentUser } = useAuth();
 
 const places = ref([]);
 const bookings = ref([]);
@@ -838,7 +841,8 @@ async function confirmAddServiceBeach() {
       price: svc.price,
       quantity: addServiceForm.value.quantity || 1,
       note: addServiceForm.value.note || '',
-      addedAt: new Date().toISOString()
+      addedAt: new Date().toISOString(),
+      operator: currentUser.value.id
     };
     const result = await axios.post('/api/pms/beach/add_service', {
       reservationId: addServiceTarget.value.id,

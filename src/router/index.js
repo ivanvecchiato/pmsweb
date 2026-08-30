@@ -144,7 +144,7 @@ const router = createRouter({
       path: '/services',
       name: 'ServicesConfig',
       component: () => import('@/views/config/ServicesConfig.vue'),
-      meta: { requiresAuth: true, permission: 'listino', requiresHospitalityStudioPms: true }
+      meta: { requiresAuth: true, permissions: ['listino', 'listino_beach'], requiresHospitalityStudioPms: true }
     },
     {
       path: '/payments/checkout/:reservationId',
@@ -157,7 +157,9 @@ const router = createRouter({
 
 // Navigation guard per proteggere le rotte
 router.beforeEach(async (to, from, next) => {
-  const { isAuthenticated, hasPermission, isPmsTypeAllowed, loadPmsType, pmsType, canShowHotelBeachMenus } = useAuth()
+  const { isAuthenticated, hasPermission, isPmsTypeAllowed, loadPmsType, pmsType, canShowHotelBeachMenus, validateSession } = useAuth()
+
+  validateSession()
 
   if (isAuthenticated.value) {
     await loadPmsType()
