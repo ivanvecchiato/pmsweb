@@ -44,7 +44,7 @@
             class="user-card"
             @click="selectUser(user)"
           >
-            <span class="user-avatar">{{ getInitials(user.name) }}</span>
+            <span class="user-avatar" :style="getAvatarStyle(user.color)">{{ getInitials(user.name) }}</span>
             <span class="user-copy">
               <strong>{{ user.name }}</strong>
               <small>{{ user.permissions?.admin ? 'Amministratore' : 'Operatore' }}</small>
@@ -61,7 +61,7 @@
 
         <form v-else @submit.prevent="handleLogin">
           <button type="button" class="selected-user" @click="resetSelection">
-            <span class="user-avatar">{{ getInitials(selectedUser.name) }}</span>
+            <span class="user-avatar" :style="getAvatarStyle(selectedUser.color)">{{ getInitials(selectedUser.name) }}</span>
             <span class="user-copy">
               <small>Accesso come</small>
               <strong>{{ selectedUser.name }}</strong>
@@ -120,6 +120,21 @@ const getInitials = (name) => String(name || '')
   .slice(0, 2)
   .map((part) => part.charAt(0).toUpperCase())
   .join('')
+
+const getAvatarStyle = (color) => {
+  const hex = String(color || '').trim().replace('#', '')
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null
+  const red = parseInt(hex.slice(0, 2), 16)
+  const green = parseInt(hex.slice(2, 4), 16)
+  const blue = parseInt(hex.slice(4, 6), 16)
+  const luminance = (red * 0.299 + green * 0.587 + blue * 0.114) / 255
+  const darkText = `rgb(${Math.round(red * 0.38)}, ${Math.round(green * 0.38)}, ${Math.round(blue * 0.38)})`
+  return {
+    backgroundColor: color,
+    color: luminance < 0.55 ? '#ffffff' : darkText,
+    textShadow: luminance < 0.55 ? '0 1px 2px rgba(0, 0, 0, 0.24)' : 'none'
+  }
+}
 
 const selectUser = async (user) => {
   selectedUser.value = user

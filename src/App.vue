@@ -258,7 +258,7 @@
           </div>
 
           <!-- AREA CONFIGURAZIONE -->
-          <div v-if="hasPermission('listino') || (canShowHotelBeachMenus && hasPermission('listino_beach')) || hasPermission('onda_push_products')" class="menu-section">
+          <div v-if="hasPermission('listino') || (canShowHotelBeachMenus && hasPermission('listino_beach')) || hasPermission('onda_push_products') || hasPermission('users')" class="menu-section">
             <div class="section-label">CONFIGURAZIONE</div>
 
             <router-link
@@ -273,6 +273,20 @@
                 </svg>
               </span>
               <span class="label">Generale</span>
+            </router-link>
+
+            <router-link
+              v-if="hasPermission('users')"
+              to="/settings/users"
+              :class="['menu-item', { active: route.path === '/settings/users' }]"
+              aria-label="Utenti"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Utenti</span>
             </router-link>
             
             <router-link
@@ -402,6 +416,7 @@ const sectionContent = {
   '/listino-prodotti': { title: 'Catalogo Prodotti', description: 'Listini, categorie e prodotti in evidenza.' },
   '/inventory': { title: 'Magazzino', description: 'Stock, movimenti e carichi fornitori in un’unica vista.' },
   '/settings/configurations': { title: 'Configurazioni', description: 'Impostazioni globali e attivazione moduli del PMS.' },
+  '/settings/users': { title: 'Utenti', description: 'Accessi e permessi delle applicazioni MBAR.' },
   '/listino': { title: 'Listino Hotel', description: 'Tariffe, fasce e struttura dei prezzi hotel.' },
   '/menu-del-giorno': { title: 'Menu del Giorno', description: 'Composizione del menu stampabile per il servizio hotel.' },
   '/settings/hotel-pricing': { title: 'Policy Prezzi', description: 'Regole tariffarie per camere, ospiti e stagionalita.' },

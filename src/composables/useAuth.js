@@ -5,7 +5,7 @@ const AUTH_SESSION_HOURS = Number(import.meta.env.VITE_AUTH_SESSION_HOURS) || 12
 const AUTH_SESSION_DURATION = AUTH_SESSION_HOURS * 60 * 60 * 1000
 
 const rolePermissions = {
-  admin: ['home', 'customers', 'beach-bookings', 'inventory', 'stats', 'listino', 'listino_beach', 'onda_push_products'],
+  admin: ['home', 'customers', 'beach-bookings', 'inventory', 'stats', 'listino', 'listino_beach', 'onda_push_products', 'users'],
   staff: ['home', 'customers', 'beach-bookings', 'listino', 'listino_beach', 'onda_push_products']
 }
 
@@ -92,7 +92,7 @@ const fetchJson = async (url) => {
 }
 
 const getLoginUsers = async () => {
-  const users = await fetchJson(`${PMS_API_BASE_URL}/api/pms/operators`)
+  const users = await fetchJson(`${PMS_API_BASE_URL}/api/pms/web-users`)
   if (!Array.isArray(users)) return []
 
   return users
@@ -116,7 +116,7 @@ const loadUser = () => {
   if (stored) {
     try {
       const user = JSON.parse(stored)
-      if (Number(user.expiresAt) > Date.now()) {
+      if (user.token && Number(user.expiresAt) > Date.now()) {
         currentUser.value = user
       } else {
         localStorage.removeItem('pms_user')
@@ -173,16 +173,24 @@ const loadPmsType = async (forceRefresh = false) => {
 
 const login = async (user, pin) => {
   const normalizedPin = String(pin ?? '').trim()
-  if (user && normalizedPin && String(user.code ?? '') === normalizedPin) {
-    const isAdmin = user.permissions?.admin === true
+  if (user && normalizedPin) {
+    const response = await fetch(`${PMS_API_BASE_URL}/api/pms/web-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: user.id, pin: normalizedPin })
+    })
+    if (!response.ok) return false
+    const data = await response.json()
+    const isAdmin = data.user.permissions?.admin === true
     currentUser.value = {
-      id: user.id,
-      username: user.username || String(user.name || '').toLowerCase(),
+      id: data.user.id,
+      username: String(data.user.name || '').toLowerCase(),
       role: isAdmin ? 'admin' : 'staff',
-      name: user.name,
-      permissions: user.permissions || {},
+      name: data.user.name,
+      permissions: data.user.permissions?.web || [],
+      token: data.token,
       loginTime: new Date().toISOString(),
-      expiresAt: Date.now() + AUTH_SESSION_DURATION
+      expiresAt: data.expiresAt || Date.now() + AUTH_SESSION_DURATION
     }
     localStorage.setItem('pms_user', JSON.stringify(currentUser.value))
     await loadPmsType(true)
@@ -212,6 +220,8 @@ const validateSession = () => {
 
 const hasPermission = (page) => {
   if (!currentUser.value) return false
+  if (currentUser.value.permissions?.includes('*')) return true
+  if (currentUser.value.permissions?.includes(page)) return true
   const permissions = rolePermissions[currentUser.value.role] || []
   return permissions.includes(page)
 }
