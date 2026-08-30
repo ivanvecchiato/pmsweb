@@ -5,7 +5,7 @@ const AUTH_SESSION_HOURS = Number(import.meta.env.VITE_AUTH_SESSION_HOURS) || 12
 const AUTH_SESSION_DURATION = AUTH_SESSION_HOURS * 60 * 60 * 1000
 
 const rolePermissions = {
-  admin: ['inventory', 'stats', 'listino', 'listino_beach', 'onda_push_products', 'users', 'daily-close'],
+  admin: ['inventory', 'stats', 'listino', 'listino_beach', 'onda_push_products', 'users', 'daily_close'],
   staff: []
 }
 
@@ -190,7 +190,7 @@ const login = async (user, pin) => {
       username: String(data.user.name || '').toLowerCase(),
       role: isAdmin ? 'admin' : 'staff',
       name: data.user.name,
-      permissions: data.user.permissions?.web || [],
+      permissions: data.user.permissions?.web || {},
       token: data.token,
       loginTime: new Date().toISOString(),
       expiresAt: data.expiresAt || Date.now() + AUTH_SESSION_DURATION
@@ -223,10 +223,10 @@ const validateSession = () => {
 
 const hasPermission = (page) => {
   if (!currentUser.value) return false
+  if (currentUser.value.role === 'admin') return true
   if (adminPermissions.includes(page) && currentUser.value.role !== 'admin') return false
   if (pmsPermissions.includes(page)) return true
-  if (Array.isArray(currentUser.value.permissions) && currentUser.value.permissions.includes('*')) return true
-  if (Array.isArray(currentUser.value.permissions) && currentUser.value.permissions.includes(page)) return true
+  if (currentUser.value.permissions?.[page] === true) return true
   const permissions = rolePermissions[currentUser.value.role] || []
   return permissions.includes(page)
 }

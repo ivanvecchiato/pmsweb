@@ -14,7 +14,7 @@
             {{ isLoading ? 'Caricamento...' : 'Cerca' }}
           </button>
         </form>
-        <div v-if="hasPermission('daily-close')" class="fiscal-close-action">
+        <div v-if="hasPermission('daily_close')" class="fiscal-close-action">
           <button type="button" class="btn btn-danger" @click="closeFiscalDay" :disabled="isClosingFiscalDay">
             {{ isClosingFiscalDay ? 'Chiusura in corso...' : 'Chiusura giornaliera' }}
           </button>

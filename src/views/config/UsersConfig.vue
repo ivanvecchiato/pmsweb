@@ -52,18 +52,18 @@
 
         <section v-if="!form.permissions.globalAdmin && form.access.pmsweb" class="permissions">
           <h3>Permessi PmsWeb</h3>
-          <label v-for="permission in webPermissions" :key="permission.key"><input v-model="form.permissions.web" type="checkbox" :value="permission.key"> {{ permission.label }}</label>
+          <label v-for="permission in webPermissions" :key="permission.key"><input v-model="form.permissions.web[permission.key]" type="checkbox"> {{ permission.label }}</label>
         </section>
 
         <section v-if="!form.permissions.globalAdmin && form.access.mood" class="permissions">
           <h3>Permessi Mood</h3>
-          <label><input v-model="form.permissions.mood.chiusura" type="checkbox"> Chiusura conti</label>
+          <label><input v-model="form.permissions.mood.daily_close" type="checkbox"> Chiusura conti</label>
           <label><input v-model="form.permissions.mood.delete_account" type="checkbox"> Eliminazione conti</label>
         </section>
 
         <section v-if="!form.permissions.globalAdmin && form.access.geminipos" class="permissions">
           <h3>Permessi GeminiPOS</h3>
-          <label><input v-model="form.permissions.geminipos.chiusura" type="checkbox"> Chiusura fiscale</label>
+          <label><input v-model="form.permissions.geminipos.daily_close" type="checkbox"> Chiusura fiscale</label>
           <label><input v-model="form.permissions.geminipos.delete_account" type="checkbox"> Eliminazione conti</label>
           <label><input v-model="form.permissions.geminipos.handle_sessions" type="checkbox"> Gestione sessioni</label>
         </section>
@@ -92,7 +92,7 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const webPermissions = [
   { key: 'inventory', label: 'Magazzino e prodotti' }, { key: 'stats', label: 'Statistiche' },
-  { key: 'daily-close', label: 'Chiusura giornaliera' }
+  { key: 'daily_close', label: 'Chiusura giornaliera' }
 ]
 const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.value.token}` })
 const initials = name => String(name || '').split(' ').filter(Boolean).slice(0, 2).map(value => value[0]).join('').toUpperCase()
@@ -121,11 +121,11 @@ const load = async () => {
   users.value = await response.json()
 }
 const editUser = user => {
-  const value = user ? JSON.parse(JSON.stringify(user)) : { name: '', code: '', active: true, pinEnabled: true, access: { pmsweb: true, mood: false, geminipos: false }, permissions: { web: [], mood: {}, geminipos: {} }, areas: [] }
+  const value = user ? JSON.parse(JSON.stringify(user)) : { name: '', code: '', active: true, pinEnabled: true, access: { pmsweb: true, mood: false, geminipos: false }, permissions: { web: {}, mood: {}, geminipos: {} }, areas: [] }
   value.code = ''
   value.access ||= { pmsweb: false, mood: false, geminipos: false }
-  value.permissions ||= { web: [], mood: {}, geminipos: {} }
-  value.permissions.web ||= []
+  value.permissions ||= { web: {}, mood: {}, geminipos: {} }
+  value.permissions.web ||= {}
   value.permissions.mood ||= {}
   value.permissions.geminipos ||= {}
   form.value = value
