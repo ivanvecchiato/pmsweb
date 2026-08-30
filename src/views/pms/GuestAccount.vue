@@ -191,8 +191,10 @@ import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useRoute } from 'vue-router'
 import { usePricing } from '@/composables/usePricing'
+import { useAuth } from '@/composables/useAuth'
 
 const { calculateQuotePrice, calculateOvernightTax, loadHotelPricingPolicy } = usePricing()
+const { currentUser } = useAuth()
 const route = useRoute()
 
 const isLoading = ref(false)
@@ -483,6 +485,7 @@ const normalizeDeposits = (reservation) => {
       paymentDate: String(dep?.payment_date ?? dep?.paymentDate ?? '').trim(),
       paymentMode: String(dep?.payment_mode ?? dep?.paymentMode ?? '').trim(),
       type: String(dep?.type || 'caparra'),
+      operator: dep.operator,
       annulled: Boolean(dep?.annulled)
     }))
     .filter((dep) => Number.isFinite(dep.amount) && dep.amount >= 0 && !dep.annulled)
@@ -498,7 +501,8 @@ const ensureReservationPayments = (account) => {
       amount: Number(entry.amount || 0),
       paymentDate: entry.paymentDate || '',
       paymentMode: entry.paymentMode || '',
-      type: entry.type || 'caparra'
+      type: entry.type || 'caparra',
+      operator: entry.operator
     }))
   }
 }
@@ -521,7 +525,8 @@ const addPaymentEntry = () => {
         amount: Number(amount.toFixed(2)),
         paymentDate: paymentDraft.value.paymentDate || '',
         paymentMode: (paymentDraft.value.paymentMode || '').trim(),
-        type: paymentDraft.value.type || 'acconto'
+        type: paymentDraft.value.type || 'acconto',
+        operator: currentUser.value.id
       }
     ]
   }
@@ -557,7 +562,7 @@ const closeAccountAndPrintFiscal = async () => {
       reservationId: selectedAccount.value.id,
       account: selectedAccount.value,
       payments: selectedAccountPayments.value,
-      operator: 0
+      operator: currentUser.value.id
     }
 
     const response = await axios.post('/api/pms/hotel/account/close', payload)

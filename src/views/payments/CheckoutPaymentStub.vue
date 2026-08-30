@@ -161,10 +161,12 @@ import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { useRoute, useRouter } from 'vue-router'
 import { usePricing } from '@/composables/usePricing'
+import { useAuth } from '@/composables/useAuth'
 
 const route = useRoute()
 const router = useRouter()
 const { calculateQuotePrice, calculateOvernightTax, hotelPricingPolicy, loadHotelPricingPolicy } = usePricing()
+const { currentUser } = useAuth()
 
 const reservationId = computed(() => String(route.params.reservationId || ''))
 const isLoading = ref(false)
@@ -370,6 +372,7 @@ const normalizeDeposits = (reservation) => {
     paymentDate: String(dep?.payment_date ?? dep?.paymentDate ?? '').trim(),
     paymentMode: String(dep?.payment_mode ?? dep?.paymentMode ?? '').trim(),
     type: String(dep?.type || 'caparra'),
+    operator: dep.operator,
     annulled: Boolean(dep?.annulled)
   })).filter((dep) => Number.isFinite(dep.amount) && dep.amount >= 0 && !dep.annulled)
 }
@@ -480,7 +483,8 @@ const addPayment = () => {
       paymentMode: paymentMethod.name,
       paymentMethodId: paymentMethod.id,
       electronic: paymentMethod.electronic,
-      type: 'saldo'
+      type: 'saldo',
+      operator: currentUser.value.id
     })
   }
   paymentDraft.value.amount = ''
@@ -538,6 +542,7 @@ const prepareOvernightTaxPayment = () => {
     paymentMethodId: paymentMethod.id,
     electronic: paymentMethod.electronic,
     type: 'saldo',
+    operator: currentUser.value.id,
     overnightTax: true,
     overnightTaxAmount: Number(taxAmount.toFixed(2))
   }]
@@ -573,6 +578,7 @@ const changeOvernightTaxPaymentMethod = () => {
       paymentMethodId: paymentMethod.id,
       electronic: paymentMethod.electronic,
       type: 'saldo',
+      operator: currentUser.value.id,
       overnightTax: true,
       overnightTaxAmount: taxAmount
     })
@@ -627,7 +633,7 @@ const closeAccount = async () => {
       },
       payments: [...payments.value, ...checkoutPayments.value],
       barConsumptions: barConsumptions.value,
-      operator: 0
+      operator: currentUser.value.id
     }, { mbarDirect: true })
     if (!response.data?.success) {
       alert(response.data?.error || 'Errore chiusura conto')

@@ -144,6 +144,29 @@
       </div>
       
       <form @submit.prevent="submitNewBooking" class="booking-form">
+        <div v-if="editingBooking" class="reservation-history">
+          <button type="button" class="reservation-history-toggle" @click="toggleReservationHistory">
+            <span>{{ showReservationHistory ? 'Nascondi modifiche' : 'Visualizza modifiche' }}</span>
+            <span>{{ showReservationHistory ? '−' : '+' }}</span>
+          </button>
+          <div v-if="showReservationHistory" class="reservation-history-list">
+            <div v-if="reservationHistoryLoading" class="reservation-history-empty">Caricamento...</div>
+            <div v-else-if="!reservationHistory.length" class="reservation-history-empty">Nessuna modifica registrata</div>
+            <template v-else>
+              <button
+                v-for="item in reservationHistory"
+                :key="item.id"
+                type="button"
+                class="reservation-history-row"
+                :class="{ 'is-selected': selectedReservationHistory?.id === item.id }"
+                @click="showHistoricalReservation(item)"
+              >
+                <span>{{ formatServiceDate(item.modified_at) }}</span>
+                <strong>{{ item.operator?.name || bookingOperatorName(item.operator?.id) }}</strong>
+              </button>
+            </template>
+          </div>
+        </div>
         <fieldset class="booking-form-fieldset" :disabled="isModalReadOnly">
         <div class="dialog-layout">
           <section class="dialog-section">
@@ -177,6 +200,11 @@
                   <span class="board-name">{{ mode.toUpperCase() }}</span>
                 </label>
               </div>
+            </div>
+
+            <div v-if="editingBooking" class="reservation-audit">
+              <span>Inserita: {{ bookingOperatorName(editingBooking.createdBy) }} {{ formatServiceDate(editingBooking.createdAt) || '-' }}</span>
+              <span>Ultima modifica: {{ bookingOperatorName(editingBooking.updatedBy) }} {{ formatServiceDate(editingBooking.updatedAt) || '-' }}</span>
             </div>
           </section>
 
@@ -251,7 +279,20 @@
               </div>
             </div>
 
-            <div v-if="bookingQuote" class="quote-box">
+            <div v-if="selectedReservationHistory" class="quote-box">
+              <div v-if="selectedReservationHistory.snapshot?.price_per_day?.length" class="quote-details">
+                <div v-for="day in selectedReservationHistory.snapshot.price_per_day" :key="day.date" class="quote-line">
+                  <span>{{ day.date }}</span>
+                  <span>€{{ Number(day.dayTotal ?? day.price ?? 0).toFixed(2) }}</span>
+                </div>
+              </div>
+              <div class="quote-summary-footer">
+                <div class="final-price-display">
+                  TOTALE: €{{ Number(selectedReservationHistory.snapshot?.price_total ?? selectedReservationHistory.snapshot?.amount ?? 0).toFixed(2) }}
+                </div>
+              </div>
+            </div>
+            <div v-else-if="bookingQuote" class="quote-box">
               <div v-if="!newBookingData.isManualPrice" class="quote-details">
                 <div v-for="day in bookingQuote.days" :key="day.date" class="quote-line">
                   <span>{{ day.date }}</span>
@@ -349,6 +390,7 @@
               </div>
             </div>
           </section>
+
         </div>
         </fieldset>
 
@@ -362,20 +404,28 @@
               <div class="existing-service-info">
                 <span class="existing-service-name">{{ svc.name }} × {{ svc.quantity || 1 }}</span>
                 <span v-if="svc.addedAt" class="existing-service-date">{{ formatServiceDate(svc.addedAt) }}</span>
+                <span v-if="svc.awaitingReturn" class="service-return-status">In attesa di restituzione</span>
+                <span v-else-if="svc.returnedAt" class="service-return-status service-return-status--done">Restituito il {{ formatServiceDate(svc.returnedAt) }}</span>
+                <span v-if="svc.deposit" class="existing-service-date">Cauzione €{{ Number(svc.deposit).toFixed(2) }}{{ svc.depositReturned ? ' resa' : '' }}</span>
               </div>
               <div class="existing-service-actions">
                 <span class="existing-service-price">{{ svc.price != null ? '€' + (svc.price * (svc.quantity || 1)).toFixed(2) : '—' }}</span>
                 <button
-                  v-if="!isModalReadOnly"
+                  v-if="svc.awaitingReturn && !isModalReadOnly"
+                  type="button"
+                  class="service-return"
+                  :disabled="returningServiceIndex !== null"
+                  @click="returnService(editingBooking, i)"
+                >Restituisci</button>
+                <button
+                  v-if="!isModalReadOnly && !svc.awaitingReturn"
                   type="button"
                   class="service-remove"
                   title="Elimina servizio"
                   aria-label="Elimina servizio"
                   @click="removeServiceFromDetails(i)"
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6m4-6v6" />
-                  </svg>
+                  <img :src="trashIcon" alt="" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -537,8 +587,20 @@
             <span class="existing-service-name">{{ svc.name }} × {{ svc.quantity || 1 }}</span>
             <span v-if="svc.note" class="existing-service-note"> &mdash; {{ svc.note }}</span>
             <span v-if="svc.addedAt" class="existing-service-date">{{ formatServiceDate(svc.addedAt) }}</span>
+            <span v-if="svc.awaitingReturn" class="service-return-status">In attesa di restituzione</span>
+            <span v-else-if="svc.returnedAt" class="service-return-status service-return-status--done">Restituito il {{ formatServiceDate(svc.returnedAt) }}</span>
+            <span v-if="svc.deposit" class="existing-service-date">Cauzione €{{ Number(svc.deposit).toFixed(2) }}{{ svc.depositReturned ? ' resa' : '' }}</span>
           </div>
-          <span class="existing-service-price">{{ svc.price != null ? '€' + (svc.price * (svc.quantity || 1)).toFixed(2) : '—' }}</span>
+          <div class="existing-service-actions">
+            <span class="existing-service-price">{{ svc.price != null ? '€' + (svc.price * (svc.quantity || 1)).toFixed(2) : '—' }}</span>
+            <button
+              v-if="svc.awaitingReturn"
+              type="button"
+              class="service-return"
+              :disabled="returningServiceIndex !== null"
+              @click="returnService(addServiceTarget, i)"
+            >Restituisci</button>
+          </div>
         </div>
       </div>
 
@@ -600,6 +662,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
+import trashIcon from '@/assets/trash.svg';
 import { watch } from 'vue';
 import { useRouter } from 'vue-router'
 import QuoteBuilder from '../quotes/QuoteBuilder.vue'
@@ -614,7 +677,8 @@ const {
   loadPricelists,
   loadTimetable
 } = usePricing();
-const { pmsIntegrationType: providerType } = useAuth();
+const { currentUser, getLoginUsers, pmsIntegrationType: providerType } = useAuth();
+const operators = ref([]);
 
 const rooms = ref([
   { id: 1, name: 'Camera 101 - Singola' },
@@ -743,6 +807,12 @@ const mouseLineStyle = computed(() => {
 const showModal = ref(false);
 const editingBooking = ref(null);
 const isModalReadOnly = ref(false);
+const showReservationHistory = ref(false);
+const reservationHistory = ref([]);
+const reservationHistoryLoading = ref(false);
+const selectedReservationHistory = ref(null);
+const currentDialogBooking = ref(null);
+const currentDialogReadOnly = ref(false);
 const showBookingActionMenu = ref(false);
 const actionMenuBooking = ref(null);
 const actionMenuPosition = ref({ x: 0, y: 0 });
@@ -837,6 +907,7 @@ const availableServices = ref([]);
 const showAddServiceModal = ref(false);
 const addServiceTarget = ref(null);
 const addingService = ref(false);
+const returningServiceIndex = ref(null);
 const addServiceForm = ref({ serviceId: '', price: null, quantity: 1, note: '' });
 
 async function loadAvailableServices() {
@@ -899,11 +970,14 @@ async function confirmAddService() {
       price: addServiceForm.value.price == null ? svc.price : Number(addServiceForm.value.price),
       quantity: addServiceForm.value.quantity || 1,
       note: addServiceForm.value.note || '',
-      addedAt: new Date().toISOString()
+      addedAt: new Date().toISOString(),
+      operator: currentUser.value.id
     };
     const result = await axios.post('/api/pms/hotel/add_service', {
       reservationId: addServiceTarget.value.id,
-      service: serviceEntry
+      service: serviceEntry,
+      updatedBy: currentUser.value.id,
+      updatedAt: new Date().toISOString()
     });
     if (!result.data?.success) {
       alert(result.data?.error || 'Errore durante l\'aggiunta del servizio.');
@@ -926,12 +1000,46 @@ async function confirmAddService() {
   }
 }
 
+async function returnService(reservation, serviceIndex) {
+  if (!reservation || returningServiceIndex.value !== null) return;
+  if (!window.confirm('Confermi la restituzione del servizio e della relativa cauzione?')) return;
+  returningServiceIndex.value = serviceIndex;
+  try {
+    const result = await axios.post('/api/pms/hotel/return_service', {
+      reservationId: reservation.id,
+      serviceIndex
+    });
+    if (!result.data?.success) {
+      alert(result.data?.error || 'Errore durante la restituzione del servizio.');
+      return;
+    }
+    if (String(editingBooking.value?.id) === String(reservation.id)) {
+      editingBooking.value = { ...editingBooking.value, extra: { ...editingBooking.value.extra, services: result.data.services } };
+    }
+    if (String(addServiceTarget.value?.id) === String(reservation.id)) {
+      addServiceTarget.value = { ...addServiceTarget.value, extra: { ...addServiceTarget.value.extra, services: result.data.services } };
+    }
+    getReservations();
+  } catch (e) {
+    console.error('Errore restituzione servizio:', e);
+    alert(e.response?.data?.error || 'Errore durante la restituzione del servizio.');
+  } finally {
+    returningServiceIndex.value = null;
+  }
+}
+
 function formatServiceDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d)) return String(iso);
   return d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+
+const bookingOperatorName = (operatorId) => {
+  if (operatorId == null) return 'Admin';
+  const operator = operators.value.find(item => String(item.id) === String(operatorId));
+  return operator?.name || `Operatore #${operatorId}`;
+};
 
 watch(() => addServiceForm.value.serviceId, (serviceId) => {
   const service = availableServices.value.find(item => item.id === serviceId);
@@ -978,6 +1086,7 @@ const normalizeDeposits = (deposits) => {
       annulled: Boolean(dep?.annulled),
       annulledAt: String(dep?.annulled_at ?? dep?.annulledAt ?? ''),
       invoiceProgressive: dep?.invoice_progressive == null ? undefined : Number(dep.invoice_progressive),
+      operator: dep.operator,
       paymentDate: dep?.payment_date || dep?.paymentDate || ''
     }))
     .filter(dep => Number.isFinite(dep.amount) && dep.amount > 0 && dep.paymentDate);
@@ -1160,6 +1269,7 @@ const addDeposit = () => {
     chiusura: 0,
     fiscalTimestamp: 0,
     documentId: '',
+    operator: currentUser.value.id,
     paymentDate: depositDraft.value.paymentDate
   });
 
@@ -1182,7 +1292,8 @@ const removeDeposit = async (deposit, index) => {
       documentId: deposit.documentId,
       progressivo: deposit.progressivo,
       chiusura: deposit.chiusura,
-      timestamp: deposit.fiscalTimestamp
+      timestamp: deposit.fiscalTimestamp,
+      operator: currentUser.value.id
     }, { mbarDirect: true });
     if (!response.data?.success) {
       alert(response.data?.error || 'Annullamento fiscale non riuscito');
@@ -1226,8 +1337,10 @@ const printDepositFiscal = async (deposit, index) => {
         payment_mode: deposit.paymentMode,
         type: deposit.type || 'acconto',
         payment_method_id: deposit.paymentMethodId,
-        electronic: deposit.electronic
-      }
+        electronic: deposit.electronic,
+        operator: deposit.operator
+      },
+      operator: currentUser.value.id
     }, { mbarDirect: true });
     if (!response.data?.success) {
       alert(response.data?.error || 'Stampa fiscale del deposito non riuscita');
@@ -1455,7 +1568,8 @@ const saveRegisteredGuest = async (guest) => {
   const savedGuest = {
     ...guest,
     email: guest.email ? [guest.email] : [],
-    phone: guest.phone ? [guest.phone] : []
+    phone: guest.phone ? [guest.phone] : [],
+    operator: currentUser.value.id
   };
   const guests = registeredGuests.value.map(item => ({
     ...item,
@@ -1472,6 +1586,9 @@ const saveRegisteredGuest = async (guest) => {
   try {
     await axios.post('/api/pms/hotel/update_reservation', {
       id: guestRegistrationBooking.value.id,
+      operator: currentUser.value.id,
+      updatedBy: currentUser.value.id,
+      updatedAt: new Date().toISOString(),
       guests
     });
     guestRegistrationBooking.value.guests = guests;
@@ -1500,7 +1617,9 @@ const runBookingStatusAction = async () => {
     await axios.get(`/api/pms/${endpoint}`, {
       params: {
         reservation: booking.id,
-        operator: 0
+        operator: currentUser.value.id,
+        updatedBy: currentUser.value.id,
+        updatedAt: new Date().toISOString()
       }
     });
     closeBookingActions();
@@ -1522,6 +1641,10 @@ const addBooking = (room = null, event = null) => {
   selectedBooking.value = null;
   editingBooking.value = null;
   isModalReadOnly.value = false;
+  showReservationHistory.value = false;
+  reservationHistory.value = [];
+  selectedReservationHistory.value = null;
+  currentDialogBooking.value = null;
 
   let checkin = '';
   if (room && event?.currentTarget) {
@@ -1588,9 +1711,80 @@ const loadBookingIntoDialog = (booking) => {
   showModal.value = true;
 };
 
+const historicalBookingForDialog = (snapshot) => {
+  const checkin = String(snapshot?.checkin || '').slice(0, 10);
+  const checkout = String(snapshot?.checkout || '').slice(0, 10);
+  const startDate = new Date(`${checkin}T00:00:00`);
+  const endDate = new Date(`${checkout}T00:00:00`);
+  const accountHolder = snapshot?.accountholder || {};
+  const firstGuest = Array.isArray(snapshot?.guests) ? snapshot.guests[0] : null;
+
+  return {
+    ...snapshot,
+    roomId: snapshot?.roomId != null
+      ? String(snapshot.roomId)
+      : rooms.value.find(room => room.code === String(snapshot?.room))?.id,
+    startDate,
+    duration: Number(snapshot?.duration) || Math.round((endDate - startDate) / 86400000),
+    guestName: firstGuest?.firstname || accountHolder.firstname || '',
+    guestSurname: firstGuest?.lastname || accountHolder.lastname || '',
+    guest: `${firstGuest?.firstname || accountHolder.firstname || ''} ${firstGuest?.lastname || accountHolder.lastname || ''}`.trim(),
+    board: String(snapshot?.board || 'BB').toLowerCase(),
+    fixedPrice: snapshot?.fixedPrice ?? null,
+    deposits: normalizeDeposits(getReservationDeposits(snapshot)),
+    extra: {
+      services: Array.isArray(snapshot?.extra?.services) ? snapshot.extra.services : [],
+      bar: Array.isArray(snapshot?.extra?.bar) ? snapshot.extra.bar : [],
+      restaurant: Array.isArray(snapshot?.extra?.restaurant) ? snapshot.extra.restaurant : [],
+      hotel: Array.isArray(snapshot?.extra?.hotel) ? snapshot.extra.hotel : []
+    }
+  };
+};
+
+const restoreCurrentReservation = () => {
+  if (!currentDialogBooking.value) return;
+  selectedReservationHistory.value = null;
+  isModalReadOnly.value = currentDialogReadOnly.value;
+  loadBookingIntoDialog(currentDialogBooking.value);
+};
+
+const toggleReservationHistory = async () => {
+  if (showReservationHistory.value) {
+    showReservationHistory.value = false;
+    restoreCurrentReservation();
+    return;
+  }
+
+  const reservationId = currentDialogBooking.value?.id || editingBooking.value?.id;
+  if (reservationId == null) return;
+  showReservationHistory.value = true;
+  reservationHistoryLoading.value = true;
+  try {
+    const response = await axios.get('/api/pms/hotel/reservation/history', { params: { reservationId } });
+    reservationHistory.value = Array.isArray(response.data?.history) ? response.data.history : [];
+  } catch (error) {
+    console.error('Errore caricamento storico prenotazione:', error);
+    reservationHistory.value = [];
+  } finally {
+    reservationHistoryLoading.value = false;
+  }
+};
+
+const showHistoricalReservation = (item) => {
+  if (!item?.snapshot) return;
+  selectedReservationHistory.value = item;
+  isModalReadOnly.value = true;
+  loadBookingIntoDialog(historicalBookingForDialog(item.snapshot));
+};
+
 const openViewBooking = (booking) => {
   closeBookingActions();
   isModalReadOnly.value = true;
+  currentDialogBooking.value = booking;
+  currentDialogReadOnly.value = true;
+  showReservationHistory.value = false;
+  reservationHistory.value = [];
+  selectedReservationHistory.value = null;
   loadBookingIntoDialog(booking);
 };
 
@@ -1603,6 +1797,11 @@ const openEditBooking = (booking) => {
 
   closeBookingActions();
   isModalReadOnly.value = false;
+  currentDialogBooking.value = booking;
+  currentDialogReadOnly.value = false;
+  showReservationHistory.value = false;
+  reservationHistory.value = [];
+  selectedReservationHistory.value = null;
   loadBookingIntoDialog(booking);
 };
 
@@ -1631,7 +1830,12 @@ const undoCheckoutFromMenu = async () => {
   closeBookingActions();
   try {
     await axios.get('/api/pms/checkin', {
-      params: { reservation: booking.id, operator: 0 }
+      params: {
+        reservation: booking.id,
+        operator: currentUser.value.id,
+        updatedBy: currentUser.value.id,
+        updatedAt: new Date().toISOString()
+      }
     });
     getReservations();
   } catch (error) {
@@ -1733,6 +1937,7 @@ const submitNewBooking = async () => {
     document_id: dep.documentId || '',
     annulled: dep.annulled,
     annulled_at: dep.annulledAt || '',
+    operator: dep.operator,
     ...(dep.invoiceProgressive == null ? {} : { invoice_progressive: Number(dep.invoiceProgressive) }),
     paymentDate: dep.paymentDate
   }));
@@ -1775,15 +1980,19 @@ const submitNewBooking = async () => {
       document_id: dep.document_id,
       annulled: dep.annulled,
       annulled_at: dep.annulled_at,
+      operator: dep.operator,
       ...(dep.invoice_progressive == null ? {} : { invoice_progressive: dep.invoice_progressive }),
       payment_date: dep.payment_date
     }))),
-    extra: editingBooking.value?.extra || { services: [], bar: [], restaurant: [], hotel: [] }
+    extra: editingBooking.value?.extra || { services: [], bar: [], restaurant: [], hotel: [] },
+    operator: currentUser.value.id
   };
 
   try {
     if (editingBooking.value) {
       payload.id = editingBooking.value.id;
+      payload.updatedBy = currentUser.value.id;
+      payload.updatedAt = new Date().toISOString();
       await postToFirstAvailableEndpoint([
         '/api/pms/hotel/update_reservation',
         '/api/pms/hotel/updatereservation',
@@ -1796,6 +2005,8 @@ const submitNewBooking = async () => {
       return;
     }
 
+    payload.createdBy = currentUser.value.id;
+    payload.createdAt = new Date().toISOString();
     await postToFirstAvailableEndpoint([
       '/api/pms/hotel/new_reservation',
       '/api/pms/hotel/newreservation',
@@ -2184,7 +2395,10 @@ const updateReservation = async (booking) => {
     id: booking.id,
     roomId: booking.roomId,
     checkin: toISODate(booking.startDate), // Usa l'helper invece di toISOString
-    duration: booking.duration
+    duration: booking.duration,
+    operator: currentUser.value.id,
+    updatedBy: currentUser.value.id,
+    updatedAt: new Date().toISOString()
   };
 
   try {
@@ -2405,6 +2619,10 @@ const convertReservations = (apiReservations) => {
       board: (res.board || 'BB').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
       notes: Array.isArray(res.notes) ? res.notes : [],
+      createdBy: res.createdBy,
+      createdAt: res.createdAt || res.datetime,
+      updatedBy: res.updatedBy,
+      updatedAt: res.updatedAt,
       guest: `${guestName} ${guestSurname}`.trim(),
       color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`
     };
@@ -2531,6 +2749,9 @@ onMounted(() => {
   loadTimetable('hotel');
   loadAvailableServices();
   loadHotelPaymentMethods();
+  getLoginUsers()
+    .then(data => { operators.value = data; })
+    .catch(error => console.error('Errore caricamento operatori:', error));
   const pmsApiBaseUrl = String(import.meta.env.VITE_PMS_API_BASE_URL || '').trim().replace(/\/+$/, '');
   const eventNode = `pmsweb-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   pmsEventsUrl = `${pmsApiBaseUrl}/api/pms/events?node=${encodeURIComponent(eventNode)}&agent=web`;
@@ -3225,8 +3446,54 @@ onUnmounted(() => {
 .existing-service-name { font-weight: 700; color: var(--planner-text); }
 .existing-service-note { color: var(--planner-text-soft); font-size: 0.78rem; font-style: italic; }
 .existing-service-date { color: #94a3b8; font-size: 0.72rem; }
+.service-return-status { color: #b45309; font-size: 0.72rem; font-weight: 700; }
+.service-return-status--done { color: #15803d; }
+.reservation-audit { display: flex; flex-direction: column; gap: 6px; color: var(--planner-text-soft); font-size: 0.82rem; }
+.reservation-history { border-bottom: 1px solid var(--planner-border); margin-bottom: 18px; padding-bottom: 12px; }
+.reservation-history-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  background: transparent;
+  color: var(--planner-primary);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 8px 0;
+  text-align: left;
+}
+.reservation-history-list { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+.reservation-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--planner-border);
+  border-radius: 8px;
+  background: var(--planner-surface);
+  color: var(--planner-text);
+  cursor: pointer;
+  padding: 9px 12px;
+  text-align: left;
+}
+.reservation-history-row:hover,
+.reservation-history-row.is-selected { border-color: var(--planner-primary); background: rgba(59, 130, 246, 0.08); }
+.reservation-history-empty { color: var(--planner-text-soft); font-size: 0.82rem; padding: 8px 0; }
 .existing-service-price { font-weight: 700; color: var(--planner-text); white-space: nowrap; flex-shrink: 0; }
 .existing-service-actions { display: flex; align-items: center; gap: 10px; }
+.service-return {
+  border: 1px solid rgba(22, 163, 74, 0.22);
+  border-radius: 8px;
+  background: rgba(22, 163, 74, 0.08);
+  color: #15803d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 6px 9px;
+}
+.service-return:disabled { cursor: wait; opacity: 0.5; }
 .service-remove {
   width: 30px;
   height: 30px;
@@ -3241,7 +3508,7 @@ onUnmounted(() => {
   padding: 5px;
 }
 .service-remove:hover { background: rgba(220, 77, 77, 0.1); }
-.service-remove svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.service-remove img { width: 20px; height: 20px; display: block; }
 .add-service-form { margin-top: 0.25rem; }
 .add-service-form-title {
   font-size: 0.72rem;

@@ -65,6 +65,7 @@
         </div>
         <div class="info-item"><span class="label">Progressivo fiscale</span><span class="value">{{ selectedAccount.progressivo || '-' }}</span></div>
         <div class="info-item"><span class="label">Chiusura fiscale</span><span class="value">{{ selectedAccount.chiusura || '-' }}</span></div>
+        <div class="info-item"><span class="label">Operatore</span><span class="value">{{ operatorName(selectedAccount) }}</span></div>
         <div v-if="selectedAccount.documentType === 'deposit'" class="info-item"><span class="label">Stato</span><span class="value">{{ selectedAccount.annulled ? 'Annullato' : 'Emesso' }}</span></div>
       </div>
 
@@ -219,10 +220,13 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useRoute } from 'vue-router'
+import { useAuth } from '@/composables/useAuth'
 
 const route = useRoute()
+const { currentUser, getLoginUsers } = useAuth()
 const isLoading = ref(false)
 const loadedAccounts = ref([])
+const operators = ref([])
 const selectedAccountId = ref(null)
 const isClosingFiscalDay = ref(false)
 const showReservationDialog = ref(false)
@@ -282,6 +286,12 @@ const formatCurrency = (value) => {
 }
 
 const guestName = (account) => `${account?.accountholder?.firstname || ''} ${account?.accountholder?.lastname || ''}`.trim() || account?.reservationName || account?.accountholder?.name || 'N/D'
+
+const operatorName = (account) => {
+  if (account.operator == null) return 'Admin'
+  const operator = operators.value.find(item => String(item.id) === String(account.operator))
+  return operator?.name || `Operatore #${account.operator}`
+}
 
 const itemTotal = (item) => {
   const amount = Number(item?.amount ?? item?.total)
@@ -361,6 +371,9 @@ const saveReservation = async () => {
   try {
     await axios.post('/api/pms/hotel/update_reservation', {
       id: form.id,
+      operator: currentUser.value.id,
+      updatedBy: currentUser.value.id,
+      updatedAt: new Date().toISOString(),
       roomId: form.roomId,
       firstname: form.firstname,
       lastname: form.lastname,
@@ -445,7 +458,14 @@ watch(() => reservationForm.value?.kids, (value) => {
   reservationForm.value.kidsAges = reservationForm.value.kidsAges.slice(0, count)
   while (reservationForm.value.kidsAges.length < count) reservationForm.value.kidsAges.push(1)
 })
-onMounted(loadAccounts)
+onMounted(async () => {
+  try {
+    operators.value = await getLoginUsers()
+  } catch (error) {
+    console.error('Errore caricamento operatori:', error)
+  }
+  await loadAccounts()
+})
 </script>
 
 <style scoped>
