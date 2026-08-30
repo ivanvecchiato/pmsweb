@@ -5,9 +5,12 @@ const AUTH_SESSION_HOURS = Number(import.meta.env.VITE_AUTH_SESSION_HOURS) || 12
 const AUTH_SESSION_DURATION = AUTH_SESSION_HOURS * 60 * 60 * 1000
 
 const rolePermissions = {
-  admin: ['home', 'customers', 'beach-bookings', 'inventory', 'stats', 'listino', 'listino_beach', 'onda_push_products', 'users'],
-  staff: ['home', 'customers', 'beach-bookings', 'listino', 'listino_beach', 'onda_push_products']
+  admin: ['inventory', 'stats', 'listino', 'listino_beach', 'onda_push_products', 'users', 'daily-close'],
+  staff: []
 }
+
+const adminPermissions = ['listino', 'listino_beach', 'onda_push_products', 'users']
+const pmsPermissions = ['home', 'customers', 'beach-bookings']
 
 const currentUser = ref(null)
 const pmsType = ref(null)
@@ -220,8 +223,10 @@ const validateSession = () => {
 
 const hasPermission = (page) => {
   if (!currentUser.value) return false
-  if (currentUser.value.permissions?.includes('*')) return true
-  if (currentUser.value.permissions?.includes(page)) return true
+  if (adminPermissions.includes(page) && currentUser.value.role !== 'admin') return false
+  if (pmsPermissions.includes(page)) return true
+  if (Array.isArray(currentUser.value.permissions) && currentUser.value.permissions.includes('*')) return true
+  if (Array.isArray(currentUser.value.permissions) && currentUser.value.permissions.includes(page)) return true
   const permissions = rolePermissions[currentUser.value.role] || []
   return permissions.includes(page)
 }

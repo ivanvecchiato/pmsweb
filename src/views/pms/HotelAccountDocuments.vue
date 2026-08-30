@@ -14,7 +14,7 @@
             {{ isLoading ? 'Caricamento...' : 'Cerca' }}
           </button>
         </form>
-        <div class="fiscal-close-action">
+        <div v-if="hasPermission('daily-close')" class="fiscal-close-action">
           <button type="button" class="btn btn-danger" @click="closeFiscalDay" :disabled="isClosingFiscalDay">
             {{ isClosingFiscalDay ? 'Chiusura in corso...' : 'Chiusura giornaliera' }}
           </button>
@@ -223,7 +223,7 @@ import { useRoute } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 
 const route = useRoute()
-const { currentUser, getLoginUsers } = useAuth()
+const { currentUser, getLoginUsers, hasPermission } = useAuth()
 const isLoading = ref(false)
 const loadedAccounts = ref([])
 const operators = ref([])

@@ -79,9 +79,11 @@
 
 <script setup>
 import { onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 
-const { currentUser } = useAuth()
+const router = useRouter()
+const { currentUser, logout } = useAuth()
 const apiBaseUrl = import.meta.env.VITE_PMS_API_BASE_URL || ''
 const users = ref([])
 const form = ref(null)
@@ -89,10 +91,8 @@ const saving = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 const webPermissions = [
-  { key: 'home', label: 'PMS e prenotazioni' }, { key: 'customers', label: 'Clienti' },
   { key: 'inventory', label: 'Magazzino e prodotti' }, { key: 'stats', label: 'Statistiche' },
-  { key: 'listino', label: 'Configurazione hotel' }, { key: 'listino_beach', label: 'Configurazione spiaggia' },
-  { key: 'onda_push_products', label: 'Menu e promozioni' }
+  { key: 'daily-close', label: 'Chiusura giornaliera' }
 ]
 const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.value.token}` })
 const initials = name => String(name || '').split(' ').filter(Boolean).slice(0, 2).map(value => value[0]).join('').toUpperCase()
@@ -112,6 +112,11 @@ const getAvatarStyle = color => {
 
 const load = async () => {
   const response = await fetch(`${apiBaseUrl}/api/pms/users`, { headers: headers() })
+  if (response.status === 401 || response.status === 403) {
+    logout()
+    await router.replace('/login')
+    throw new Error('Sessione non valida. Accedi nuovamente.')
+  }
   if (!response.ok) throw new Error('Impossibile caricare gli utenti')
   users.value = await response.json()
 }
@@ -130,6 +135,11 @@ const save = async () => {
   saving.value = true; errorMessage.value = ''; successMessage.value = ''
   try {
     const response = await fetch(`${apiBaseUrl}/api/pms/users`, { method: 'POST', headers: headers(), body: JSON.stringify(form.value) })
+    if (response.status === 401 || response.status === 403) {
+      logout()
+      await router.replace('/login')
+      throw new Error('Sessione non valida. Accedi nuovamente.')
+    }
     if (!response.ok) throw new Error((await response.json()).error || 'Salvataggio non riuscito')
     await load(); form.value = null; successMessage.value = 'Utente salvato'
   } catch (error) { errorMessage.value = error.message } finally { saving.value = false }

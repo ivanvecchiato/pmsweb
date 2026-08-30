@@ -59,7 +59,7 @@
           </div>
         </div>
 
-        <form v-else @submit.prevent="handleLogin">
+        <form v-else autocomplete="off" @submit.prevent="handleLogin">
           <button type="button" class="selected-user" @click="resetSelection">
             <span class="user-avatar" :style="getAvatarStyle(selectedUser.color)">{{ getInitials(selectedUser.name) }}</span>
             <span class="user-copy">
@@ -75,9 +75,10 @@
               id="login-pin"
               ref="pinInput"
               v-model="pin"
-              type="password" 
+              type="password"
+              name="pms-pin"
               inputmode="numeric"
-              autocomplete="current-password"
+              autocomplete="one-time-code"
               pattern="[0-9]*"
               placeholder="Inserisci il PIN"
               class="form-input"
