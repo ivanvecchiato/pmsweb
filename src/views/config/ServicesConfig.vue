@@ -1,14 +1,23 @@
 <template>
   <div class="services-config">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">Configurazione Servizi</h1>
-        <p class="page-subtitle">Servizi accessori aggiungibili alle prenotazioni hotel e spiaggia</p>
-      </div>
-      <button class="btn btn-primary" @click="openAddForm">+ Nuovo Servizio</button>
+    <div class="services-tabs" role="tablist" aria-label="Gestione servizi">
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === 'returns'"
+        :class="['services-tab', { active: activeTab === 'returns' }]"
+        @click="activeTab = 'returns'"
+      >Servizi da restituire</button>
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === 'configuration'"
+        :class="['services-tab', { active: activeTab === 'configuration' }]"
+        @click="activeTab = 'configuration'"
+      >Configurazione</button>
     </div>
 
-    <section class="pending-returns">
+    <section v-if="activeTab === 'returns'" class="pending-returns" role="tabpanel">
       <div class="pending-returns-header">
         <div>
           <h2>Servizi da restituire</h2>
@@ -22,8 +31,9 @@
           <div class="pending-return-info">
             <strong>{{ item.service.name }}<span v-if="Number(item.service.quantity) > 1"> × {{ item.service.quantity }}</span></strong>
             <span>Camera {{ item.room }}<span v-if="item.reservationName"> · {{ item.reservationName }}</span></span>
-            <span>Erogato il {{ formatDateTime(item.service.addedAt) }}<template v-if="item.operatorName"> da {{ item.operatorName }}</template></span>
             <span v-if="item.service.deposit">Cauzione € {{ Number(item.service.deposit).toFixed(2) }}</span>
+            <span v-if="item.service.note" class="pending-return-note">Note: {{ item.service.note }}</span>
+            <span>Erogato il {{ formatDateTime(item.service.addedAt) }}<template v-if="item.operatorName"> da {{ item.operatorName }}</template></span>
           </div>
           <button
             type="button"
@@ -35,36 +45,42 @@
       </div>
     </section>
 
-    <div v-if="loading" class="loading-state">Caricamento...</div>
+    <section v-else class="configuration-panel" role="tabpanel">
+      <div class="configuration-actions">
+        <button class="btn btn-primary" @click="openAddForm">+ Nuovo Servizio</button>
+      </div>
 
-    <div v-else-if="services.length === 0 && !showForm" class="empty-state">
-      <p>Nessun servizio configurato. Aggiungi il primo servizio.</p>
-    </div>
+      <div v-if="loading" class="loading-state">Caricamento...</div>
 
-    <div v-else class="services-list">
-      <div
-        v-for="(service, idx) in services"
-        :key="service.id"
-        class="service-card"
-      >
-        <div class="service-info">
-          <div class="service-name">{{ service.name }}</div>
-          <div class="service-desc">{{ service.description || '—' }}</div>
-          <div class="service-meta">
-            <span class="service-price" v-if="service.price != null && service.price !== ''">
-              € {{ Number(service.price).toFixed(2) }}
-            </span>
-            <span class="service-price free" v-else>Gratuito</span>
-            <span class="service-vat">IVA {{ formatVatRate(service.vatRate) }}%</span>
-            <span v-if="service.deposit" class="service-vat">Cauzione € {{ Number(service.deposit).toFixed(2) }}</span>
+      <div v-else-if="services.length === 0 && !showForm" class="empty-state">
+        <p>Nessun servizio configurato. Aggiungi il primo servizio.</p>
+      </div>
+
+      <div v-else class="services-list">
+        <div
+          v-for="(service, idx) in services"
+          :key="service.id"
+          class="service-card"
+        >
+          <div class="service-info">
+            <div class="service-name">{{ service.name }}</div>
+            <div class="service-desc">{{ service.description || '—' }}</div>
+            <div class="service-meta">
+              <span class="service-price" v-if="service.price != null && service.price !== ''">
+                € {{ Number(service.price).toFixed(2) }}
+              </span>
+              <span class="service-price free" v-else>Gratuito</span>
+              <span class="service-vat">IVA {{ formatVatRate(service.vatRate) }}%</span>
+              <span v-if="service.deposit" class="service-vat">Cauzione € {{ Number(service.deposit).toFixed(2) }}</span>
+            </div>
+          </div>
+          <div class="service-actions">
+            <button class="btn btn-sm btn-secondary" @click="openEditForm(idx)">Modifica</button>
+            <button class="btn btn-sm btn-danger" @click="deleteService(idx)">Elimina</button>
           </div>
         </div>
-        <div class="service-actions">
-          <button class="btn btn-sm btn-secondary" @click="openEditForm(idx)">Modifica</button>
-          <button class="btn btn-sm btn-danger" @click="deleteService(idx)">Elimina</button>
-        </div>
       </div>
-    </div>
+    </section>
 
     <!-- Form aggiunta / modifica -->
     <transition name="fade">
@@ -137,6 +153,7 @@ const SERVICES_ENDPOINT = '/api/pms/services'
 
 const services = ref([])
 const pendingReturns = ref([])
+const activeTab = ref('returns')
 const vatRates = ref([10, 22])
 const loading = ref(true)
 const pendingLoading = ref(true)
@@ -311,26 +328,39 @@ async function deleteService(idx) {
   font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
 }
 
-.page-header {
+.services-tabs {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 2rem;
-  gap: 16px;
+  gap: 6px;
+  margin-bottom: 1.5rem;
+  padding: 5px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  background: rgba(241, 245, 249, 0.78);
 }
 
-.page-title {
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--ds-text);
-  margin: 0 0 0.25rem;
-  letter-spacing: -0.05em;
-}
-
-.page-subtitle {
+.services-tab {
+  flex: 1;
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
   color: var(--ds-text-soft);
-  font-size: 0.95rem;
-  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.services-tab.active {
+  background: white;
+  color: var(--ds-primary-strong);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.configuration-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
 }
 
 .loading-state,
@@ -352,7 +382,6 @@ async function deleteService(idx) {
 }
 
 .pending-returns {
-  margin-bottom: 2rem;
   border: 1px solid rgba(245, 158, 11, 0.22);
   border-radius: 24px;
   background: rgba(255, 251, 235, 0.78);
@@ -373,6 +402,7 @@ async function deleteService(idx) {
 .pending-return-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid rgba(245, 158, 11, 0.18); }
 .pending-return-info { display: flex; flex-direction: column; gap: 3px; color: var(--ds-text-soft); font-size: 0.8rem; }
 .pending-return-info strong { color: var(--ds-text); font-size: 0.92rem; }
+.pending-return-note { color: var(--ds-text); font-weight: 700; }
 .pending-returns-empty { color: var(--ds-text-soft); font-size: 0.88rem; }
 .btn-return { background: rgba(22, 163, 74, 0.1); border-color: rgba(22, 163, 74, 0.22); color: #15803d; }
 
@@ -611,7 +641,7 @@ async function deleteService(idx) {
     padding: 0;
   }
 
-  .page-header,
+  .configuration-actions,
   .service-card,
   .form-row,
   .modal-footer {
