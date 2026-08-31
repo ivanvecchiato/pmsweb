@@ -117,16 +117,36 @@
               <span class="list-name">{{ customer.firstname }} {{ customer.lastname }}</span>
             </div>
             <div class="list-col col-email">
-              <span class="list-email">{{ customer.email }}</span>
+                <span class="list-email">{{ customer.email || '—' }}</span>
             </div>
             <div class="list-col col-phone">
-              <span class="list-phone">{{ customer.phone }}</span>
+                <span class="list-phone">{{ customer.phone || '—' }}</span>
             </div>
             <div class="list-col col-city">
               <span class="list-city">{{ customer.city }}</span>
             </div>
             <div class="list-col col-bookings">
-              <span class="badge">{{ customer.bookingsCount }}</span>
+              <button
+                type="button"
+                class="booking-count-button"
+                :aria-expanded="openBookingsCustomerId === customer.id"
+                @click.stop="toggleCustomerBookings(customer)"
+              >
+                {{ customer.bookingsCount }} {{ Number(customer.bookingsCount) === 1 ? 'prenotazione' : 'prenotazioni' }}
+              </button>
+              <div v-if="openBookingsCustomerId === customer.id" class="customer-bookings-dropdown" @click.stop>
+                <button
+                  v-for="reservation in customer.reservations || []"
+                  :key="reservation.id"
+                  type="button"
+                  class="customer-booking-item"
+                  @click="openCustomerReservation(reservation)"
+                >
+                  <strong>Camera {{ reservation.room || 'N/D' }}</strong>
+                  <span>{{ formatReservationPeriod(reservation) }}</span>
+                </button>
+                <span v-if="!customer.reservations?.length" class="customer-bookings-empty">Nessun riferimento disponibile</span>
+              </div>
             </div>
           </div>
 
@@ -142,80 +162,37 @@
       :customer="selectedCustomer"
       :title="isEditMode ? 'Modifica Cliente' : 'Nuovo Cliente'"
       :show-delete="isEditMode"
+      :require-contacts="false"
       @close="closeModal"
       @save="saveCustomer"
       @delete="deleteCustomer"
+    />
+
+    <HotelBookingPlanner
+      v-if="selectedReservationId"
+      :key="selectedReservationId"
+      :requested-reservation-id="selectedReservationId"
+      standalone-dialog
+      @dialog-closed="selectedReservationId = null"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import axios from 'axios';
 import CustomerDialog from '@/components/CustomerDialog.vue';
+import HotelBookingPlanner from './HotelBookingPlanner.vue';
 
-const customers = ref([
-  {
-    id: 1,
-    firstname: 'Mario',
-    lastname: 'Rossi',
-    email: 'mario.rossi@email.com',
-    phone: '+39 333 1234567',
-    city: 'Roma',
-    address: 'Via Roma 123',
-    bookingsCount: 5,
-    notes: 'Cliente abituale, preferisce camere al piano alto'
-  },
-  {
-    id: 2,
-    firstname: 'Laura',
-    lastname: 'Bianchi',
-    email: 'laura.bianchi@email.com',
-    phone: '+39 340 7654321',
-    city: 'Milano',
-    address: 'Corso Buenos Aires 45',
-    bookingsCount: 3,
-    notes: ''
-  },
-  {
-    id: 3,
-    firstname: 'Giovanni',
-    lastname: 'Verdi',
-    email: 'g.verdi@email.com',
-    phone: '+39 349 9876543',
-    city: 'Napoli',
-    address: 'Via Toledo 78',
-    bookingsCount: 8,
-    notes: 'Viaggia spesso per lavoro'
-  },
-  {
-    id: 4,
-    firstname: 'Anna',
-    lastname: 'Neri',
-    email: 'anna.neri@email.com',
-    phone: '+39 338 5551234',
-    city: 'Firenze',
-    address: 'Piazza Duomo 12',
-    bookingsCount: 2,
-    notes: ''
-  },
-  {
-    id: 5,
-    firstname: 'Paolo',
-    lastname: 'Gialli',
-    email: 'paolo.gialli@email.com',
-    phone: '+39 347 8889999',
-    city: 'Venezia',
-    address: 'Calle Larga 56',
-    bookingsCount: 12,
-    notes: 'VIP - richiedere sempre upgrade se disponibile'
-  }
-]);
+const customers = ref([]);
+const selectedReservationId = ref(null);
 
 const searchQuery = ref('');
 const showModal = ref(false);
 const isEditMode = ref(false);
 const selectedCustomerId = ref(null);
 const viewMode = ref('grid'); // 'grid' or 'list'
+const openBookingsCustomerId = ref(null);
 const selectedCustomer = computed(() => customers.value.find(customer => customer.id === selectedCustomerId.value) || null);
 
 const filteredCustomers = computed(() => {
@@ -225,16 +202,16 @@ const filteredCustomers = computed(() => {
   
   const query = searchQuery.value.toLowerCase();
   return customers.value.filter(customer =>
-    customer.firstname.toLowerCase().includes(query) ||
-    customer.lastname.toLowerCase().includes(query) ||
-    customer.email.toLowerCase().includes(query) ||
-    customer.phone.toLowerCase().includes(query) ||
-    customer.city.toLowerCase().includes(query)
+    String(customer.firstname || '').toLowerCase().includes(query) ||
+    String(customer.lastname || '').toLowerCase().includes(query) ||
+    String(customer.email || '').toLowerCase().includes(query) ||
+    String(customer.phone || '').toLowerCase().includes(query) ||
+    String(customer.city || '').toLowerCase().includes(query)
   );
 });
 
 const getInitials = (firstname, lastname) => {
-  return `${firstname.charAt(0)}${lastname.charAt(0)}`.toUpperCase();
+  return `${String(firstname || '').charAt(0)}${String(lastname || '').charAt(0)}`.toUpperCase();
 };
 
 const openAddCustomer = () => {
@@ -249,34 +226,48 @@ const selectCustomer = (customer) => {
   showModal.value = true;
 };
 
+const toggleCustomerBookings = (customer) => {
+  openBookingsCustomerId.value = openBookingsCustomerId.value === customer.id ? null : customer.id;
+};
+
+const formatReservationPeriod = (reservation) => {
+  const format = value => value ? new Date(`${value}T00:00:00`).toLocaleDateString('it-IT') : 'N/D';
+  return `${format(reservation.checkin)} – ${format(reservation.checkout)}`;
+};
+
+const openCustomerReservation = (reservation) => {
+  selectedReservationId.value = String(reservation.id);
+  openBookingsCustomerId.value = null;
+};
+
 const closeModal = () => {
   showModal.value = false;
   selectedCustomerId.value = null;
 };
 
-const saveCustomer = (customer) => {
-  if (isEditMode.value) {
-    const index = customers.value.findIndex(c => c.id === selectedCustomerId.value);
-    if (index !== -1) {
-      customers.value[index] = { ...customer };
-    }
-  } else {
-    const maxId = Math.max(...customers.value.map(c => c.id), 0);
-    customers.value.push({
-      ...customer,
-      id: maxId + 1
-    });
-  }
+const loadCustomers = async () => {
+  const response = await axios.get('/api/pms/hotel/customers');
+  customers.value = Array.isArray(response.data) ? response.data : [];
+};
 
+const saveCustomer = async (customer) => {
+  await axios.post('/api/pms/hotel/customers', {
+    ...customer,
+    id: selectedCustomerId.value || customer.id
+  });
   closeModal();
+  await loadCustomers();
 };
 
-const deleteCustomer = () => {
+const deleteCustomer = async () => {
   if (confirm('Sei sicuro di voler eliminare questo cliente?')) {
-    customers.value = customers.value.filter(c => c.id !== selectedCustomerId.value);
+    await axios.delete('/api/pms/hotel/customers', { params: { id: selectedCustomerId.value } });
     closeModal();
+    await loadCustomers();
   }
 };
+
+onMounted(loadCustomers);
 </script>
 
 <style scoped>
@@ -522,7 +513,7 @@ const deleteCustomer = () => {
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 24px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--ds-shadow-card);
   backdrop-filter: blur(18px);
 }
@@ -585,7 +576,8 @@ const deleteCustomer = () => {
 }
 
 .col-bookings {
-  width: 100px;
+  position: relative;
+  width: 180px;
   text-align: center;
   flex-shrink: 0;
 }
@@ -627,12 +619,73 @@ const deleteCustomer = () => {
   background: rgba(231, 242, 255, 0.95);
   border: 1px solid rgba(29, 140, 242, 0.18);
   color: var(--ds-primary-strong);
-  color: white;
   padding: 0.3rem 0.65rem;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 700;
   display: inline-block;
+}
+
+.booking-count-button {
+  border: 1px solid rgba(29, 140, 242, 0.28);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  background: rgba(231, 242, 255, 0.98);
+  color: var(--ds-primary-strong);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.booking-count-button:hover {
+  background: rgba(211, 231, 255, 1);
+}
+
+.customer-bookings-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: 260px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  background: white;
+  box-shadow: var(--ds-shadow-soft);
+}
+
+.customer-booking-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ds-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.customer-booking-item:hover {
+  background: rgba(231, 242, 255, 0.8);
+}
+
+.customer-booking-item span,
+.customer-bookings-empty {
+  color: var(--ds-text-soft);
+  font-size: 0.8rem;
+}
+
+
+.customer-bookings-empty {
+  display: block;
+  padding: 12px;
 }
 
 .empty-state {

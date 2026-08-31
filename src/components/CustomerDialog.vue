@@ -43,11 +43,11 @@
           </div>
           <div class="form-group">
               <label class="input-label">Email{{ requireContacts ? ' *' : '' }}</label>
-            <input v-model="formData.email" type="email" class="input-field" placeholder="mario.rossi@email.com" />
+            <input v-model="formData.email" type="email" class="input-field" placeholder="Email non disponibile" />
           </div>
           <div class="form-group">
               <label class="input-label">Telefono{{ requireContacts ? ' *' : '' }}</label>
-            <input v-model="formData.phone" type="tel" class="input-field" placeholder="+39 333 1234567" />
+            <input v-model="formData.phone" type="tel" class="input-field" placeholder="Telefono non disponibile" />
           </div>
           <div class="form-group">
             <label class="input-label">Città</label>

@@ -1,6 +1,6 @@
 <template>
-  <div class="planner-container">
-    <div class="header">
+  <div class="planner-container" :class="{ 'planner-standalone-dialog': standaloneDialog }">
+    <div v-if="!standaloneDialog" class="header">
       <h1 class="title">Planning</h1>
       <div class="header-controls">
         <button
@@ -47,7 +47,7 @@
     </div>
     </div>
 
-    <div class="content">
+    <div v-if="!standaloneDialog" class="content">
       <div class="grid-wrapper">
         <div class="grid-header">
           <div class="header-row">
@@ -397,7 +397,7 @@
         <section v-if="editingBooking" class="dialog-section dialog-section-full reservation-services-section">
           <div class="reservation-services-header">
             <h4 class="section-title">Servizi extra</h4>
-            <button type="button" class="text-action" @click="openAddServiceFromDetails">Aggiungi</button>
+            <button v-if="!isModalReadOnly" type="button" class="text-action" @click="openAddServiceFromDetails">Aggiungi</button>
           </div>
           <div v-if="editingBooking.extra?.services?.length" class="existing-services reservation-services-list">
             <div v-for="(svc, i) in editingBooking.extra.services" :key="i" class="existing-service-row">
@@ -670,6 +670,12 @@ import CustomerDialog from '@/components/CustomerDialog.vue'
 import { usePricing } from '@/composables/usePricing'
 import { useAuth } from '@/composables/useAuth'
 
+const props = defineProps({
+  requestedReservationId: { type: String, default: '' },
+  standaloneDialog: Boolean
+});
+const emit = defineEmits(['dialog-closed']);
+
 const {
   calculateQuotePrice,
   calculateOvernightTax,
@@ -723,6 +729,7 @@ let pmsReconnectTimeout = null;
 let pmsStreamStopped = false;
 let pmsRefreshTimeout = null;
 let suppressNextBookingClick = false;
+let standaloneDialogOpened = false;
 
 const showPlannerToast = (message, type = 'success') => {
   if (plannerToastTimeout) clearTimeout(plannerToastTimeout);
@@ -2636,13 +2643,36 @@ const getRooms = () =>{
     .then(response => {
       console.log('Camere caricate:', response.data);
       convertRooms(response.data);
-//      rooms.value = response.data;
-      getReservations();
+      if (props.standaloneDialog && props.requestedReservationId) loadRequestedReservation();
+      else getReservations();
     })
     .catch(error => {
       console.error('Errore nel caricamento delle camere:', error);
     });
 }
+
+const loadRequestedReservation = async () => {
+  try {
+    const response = await axios.get('/api/pms/hotel/reservation', { params: { id: props.requestedReservationId } });
+    const reservation = response.data?.reservation || response.data;
+    convertReservations([reservation]);
+    const booking = bookings.value.find(item => String(item.id) === String(props.requestedReservationId));
+    if (!booking) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkout = new Date(`${reservation.checkout}T00:00:00`);
+    if (!Number.isNaN(checkout.getTime()) && checkout < today) openViewBooking(booking);
+    else openEditBooking(booking);
+    standaloneDialogOpened = true;
+  } catch (error) {
+    console.error('Errore apertura prenotazione cliente:', error);
+    emit('dialog-closed');
+  }
+};
+
+watch(showModal, value => {
+  if (props.standaloneDialog && standaloneDialogOpened && !value) emit('dialog-closed');
+});
 
 // Funzione Helper per formattare la data senza shift UTC
 const toISODate = (date) => {
@@ -2834,6 +2864,11 @@ onUnmounted(() => {
   height: 100%;
   background: transparent;
   font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+}
+
+.planner-container.planner-standalone-dialog {
+  min-height: 0;
+  gap: 0;
 }
 
 .header {
