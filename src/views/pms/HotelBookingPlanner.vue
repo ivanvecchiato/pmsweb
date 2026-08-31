@@ -511,6 +511,9 @@
       <button type="button" class="booking-action-item" @click="openEditFromMenu">
         Modifica
       </button>
+      <button type="button" class="booking-action-item" @click="openGuestRegistrationFromMenu">
+        Registra ospiti
+      </button>
       <button v-if="bookingStatusActionLabel" type="button" class="booking-action-item" @click="runBookingStatusAction">
         {{ bookingStatusActionLabel }}
       </button>
@@ -521,9 +524,6 @@
         Paga conto
       </button>
     </template>
-    <button type="button" class="booking-action-item" @click="openGuestRegistrationFromMenu">
-      Registra ospiti
-    </button>
   </div>
 </Teleport>
 

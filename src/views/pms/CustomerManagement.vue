@@ -59,6 +59,7 @@
             v-for="customer in filteredCustomers"
             :key="customer.id"
             class="customer-card"
+            :class="{ 'customer-card-open': openBookingsCustomerId === customer.id }"
             @click="selectCustomer(customer)"
           >
             <div class="customer-header">
@@ -79,9 +80,29 @@
                 <span class="detail-label">Città:</span>
                 <span class="detail-value">{{ customer.city }}</span>
               </div>
-              <div class="detail-item">
+              <div class="detail-item card-bookings">
                 <span class="detail-label">Prenotazioni:</span>
-                <span class="detail-value badge">{{ customer.bookingsCount }}</span>
+                <button
+                  type="button"
+                  class="booking-count-button"
+                  :aria-expanded="openBookingsCustomerId === customer.id"
+                  @click.stop="toggleCustomerBookings(customer)"
+                >
+                  {{ customer.bookingsCount }}
+                </button>
+                <div v-if="openBookingsCustomerId === customer.id" class="customer-bookings-dropdown" @click.stop>
+                  <button
+                    v-for="reservation in customer.reservations || []"
+                    :key="reservation.id"
+                    type="button"
+                    class="customer-booking-item"
+                    @click="openCustomerReservation(reservation)"
+                  >
+                    <strong>Camera {{ reservation.room || 'N/D' }}</strong>
+                    <span>{{ formatReservationPeriod(reservation) }}</span>
+                  </button>
+                  <span v-if="!customer.reservations?.length" class="customer-bookings-empty">Nessun riferimento disponibile</span>
+                </div>
               </div>
             </div>
           </div>
@@ -425,6 +446,7 @@ onMounted(loadCustomers);
 }
 
 .customer-card {
+  position: relative;
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 24px;
@@ -433,6 +455,10 @@ onMounted(loadCustomers);
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
   box-shadow: var(--ds-shadow-card);
   backdrop-filter: blur(18px);
+}
+
+.customer-card-open {
+  z-index: 10;
 }
 
 .customer-card:hover {
@@ -497,6 +523,10 @@ onMounted(loadCustomers);
   justify-content: space-between;
   align-items: center;
   font-size: 0.875rem;
+}
+
+.card-bookings {
+  position: relative;
 }
 
 .detail-label {
