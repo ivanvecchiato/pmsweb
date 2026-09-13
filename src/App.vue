@@ -197,6 +197,34 @@
               <span class="label">Report colazione</span>
             </router-link>
 
+            <router-link
+              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
+              to="/ps"
+              :class="['menu-item', { active: route.path === '/ps' }]"
+              aria-label="Pubblica Sicurezza"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 3 5 6v5c0 4.6 2.8 8.1 7 10 4.2-1.9 7-5.4 7-10V6l-7-3zM9 12l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">PS</span>
+            </router-link>
+
+            <router-link
+              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
+              to="/istat"
+              :class="['menu-item', { active: route.path === '/istat' }]"
+              aria-label="Istat"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M5 20V10m5 10V4m5 16v-7m5 7V7M3 20h19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Istat</span>
+            </router-link>
+
           </div>
 
           <!-- AREA BAR -->
@@ -413,6 +441,8 @@ const sectionContent = {
   '/quotes': { title: 'Preventivi', description: 'Creazione e conversione offerte in prenotazioni operative.' },
   '/accounts': { title: 'Conti Ospiti', description: 'Saldo servizi, depositi e chiusure conto.' },
   '/breakfast-report': { title: 'Report Colazione', description: 'Report giornaliero delle colazioni e riepilogo ospiti.' },
+  '/ps': { title: 'Schedine di notifica PS', description: 'Generazione del file giornaliero per AlloggiatiWeb.' },
+  '/istat': { title: 'Istat', description: 'Rilevazione mensile dei flussi turistici per Ross1000 Veneto.' },
   '/listino-prodotti': { title: 'Catalogo Prodotti', description: 'Listini, categorie e prodotti in evidenza.' },
   '/inventory': { title: 'Magazzino', description: 'Stock, movimenti e carichi fornitori in un’unica vista.' },
   '/settings/configurations': { title: 'Configurazioni', description: 'Impostazioni globali e attivazione moduli del PMS.' },

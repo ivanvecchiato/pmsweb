@@ -599,6 +599,13 @@ const loadAccounts = async () => {
     const url = `/api/pms/getbookingsbyrange?from=${fromDate.value}&to=${toDate.value}`
     const response = await axios.get(url)
     rawBookings.value = normalizeBookings(response.data)
+    const summaries = await Promise.all(rawBookings.value.map((booking) => (
+      axios.get(`/api/pms/hotel/account/summary?reservationId=${encodeURIComponent(booking.id)}`)
+    )))
+    rawBookings.value.forEach((booking, index) => {
+      booking.overnightTaxSnapshot = summaries[index].data?.overnightTax || { total: 0 }
+      booking.overnightTaxSource = 'presenze registrate'
+    })
 
     if (!rawBookings.value.length) {
       selectedAccountId.value = null

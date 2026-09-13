@@ -147,6 +147,18 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {
+      path: '/ps',
+      name: 'PublicSecurity',
+      component: () => import('@/views/pms/PublicSecurity.vue'),
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
+    },
+    {
+      path: '/istat',
+      name: 'Istat',
+      component: () => import('@/views/pms/Istat.vue'),
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
+    },
+    {
       path: '/services',
       name: 'ServicesConfig',
       component: () => import('@/views/config/ServicesConfig.vue'),

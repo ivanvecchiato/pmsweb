@@ -399,7 +399,10 @@ const loadReservationAccount = async () => {
   isLoading.value = true
   try {
     await loadHotelPricingPolicy()
-    const bookingResponse = await axios.get(`/api/pms/hotel/reservation?id=${encodeURIComponent(reservationId.value)}`)
+    const [bookingResponse, accountResponse] = await Promise.all([
+      axios.get(`/api/pms/hotel/reservation?id=${encodeURIComponent(reservationId.value)}`),
+      axios.get(`/api/pms/hotel/account/summary?reservationId=${encodeURIComponent(reservationId.value)}`)
+    ])
     const res = bookingResponse.data?.reservation
     if (!res) {
       account.value = null
@@ -427,7 +430,7 @@ const loadReservationAccount = async () => {
     const hotelNetTotal = res.fixedPrice != null
       ? Number(res.fixedPrice)
       : (dailyTotal > 0 ? dailyTotal : (storedTotal > 0 ? storedTotal : Number(quote?.totalCalculated || 0)))
-    const overnightTax = getOvernightTaxSnapshotFromReservation(res) || calculateOvernightTax({ checkin, checkout: addDaysISO(checkin, duration), adults, kids, kidsAges })
+    const overnightTax = accountResponse.data?.overnightTax || { total: 0 }
     const services = Array.isArray(res.extra?.services) ? res.extra.services : []
     const servicesTotal = Number(services.reduce((sum, svc) => sum + getServiceLineTotal(svc), 0).toFixed(2))
 
