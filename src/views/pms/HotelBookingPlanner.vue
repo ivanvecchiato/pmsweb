@@ -1591,13 +1591,16 @@ const saveRegisteredGuest = async (guest) => {
   }
 
   try {
-    await axios.post('/api/pms/hotel/update_reservation', {
+    const response = await axios.post('/api/pms/hotel/update_reservation', {
       id: guestRegistrationBooking.value.id,
       operator: currentUser.value.id,
       updatedBy: currentUser.value.id,
       updatedAt: new Date().toISOString(),
       guests
-    });
+    }, { mbarDirect: true });
+    if (response.data?.error || response.data?.success === false) {
+      throw new Error(response.data?.error || 'Registrazione ospite non riuscita');
+    }
     guestRegistrationBooking.value.guests = guests;
     registeredGuests.value = guests.map(guestForDialog);
     selectedGuestIndex.value = savedIndex;
@@ -2825,7 +2828,7 @@ onUnmounted(() => {
   position: fixed;
   right: 24px;
   bottom: 24px;
-  z-index: 1200;
+  z-index: 2400;
   display: flex;
   align-items: center;
   gap: 16px;
