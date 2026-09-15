@@ -81,6 +81,18 @@
           Letto aggiuntivo (sconto % sul prezzo intero)
           <input v-model.number="form.extraBedDiscountPct" type="number" min="0" max="100" step="0.01" />
         </label>
+        <label>
+          Terzo adulto (sconto %)
+          <input v-model.number="form.thirdBedDiscountPct" type="number" min="0" max="100" step="0.01" />
+        </label>
+        <label>
+          Quarto adulto (sconto %)
+          <input v-model.number="form.fourthBedDiscountPct" type="number" min="0" max="100" step="0.01" />
+        </label>
+        <label>
+          Adulti successivi (sconto %)
+          <input v-model.number="form.additionalBedDiscountPct" type="number" min="0" max="100" step="0.01" />
+        </label>
       </div>
     </section>
 
@@ -193,6 +205,9 @@ const form = ref({
   boardChargeMode: 'per_person',
   fallbackKidDiscountPct: 0,
   extraBedDiscountPct: 0,
+  thirdBedDiscountPct: 0,
+  fourthBedDiscountPct: 0,
+  additionalBedDiscountPct: 0,
   overnightTax: {
     enabled: false,
     allYear: true,
@@ -215,6 +230,15 @@ const normalizeForm = (value) => {
 
   let extraBedDiscountPct = Number(value?.extraBedDiscountPct)
   if (!Number.isFinite(extraBedDiscountPct)) extraBedDiscountPct = 0
+
+  let thirdBedDiscountPct = Number(value?.thirdBedDiscountPct)
+  if (!Number.isFinite(thirdBedDiscountPct)) thirdBedDiscountPct = extraBedDiscountPct
+
+  let fourthBedDiscountPct = Number(value?.fourthBedDiscountPct)
+  if (!Number.isFinite(fourthBedDiscountPct)) fourthBedDiscountPct = extraBedDiscountPct
+
+  let additionalBedDiscountPct = Number(value?.additionalBedDiscountPct)
+  if (!Number.isFinite(additionalBedDiscountPct)) additionalBedDiscountPct = extraBedDiscountPct
 
   const ageBands = Array.isArray(value?.ageBands)
     ? value.ageBands
@@ -271,6 +295,9 @@ const normalizeForm = (value) => {
     boardChargeMode: 'per_person',
     fallbackKidDiscountPct: Math.max(0, Math.min(100, fallbackKidDiscountPct)),
     extraBedDiscountPct: Math.max(0, Math.min(100, extraBedDiscountPct)),
+    thirdBedDiscountPct: Math.max(0, Math.min(100, thirdBedDiscountPct)),
+    fourthBedDiscountPct: Math.max(0, Math.min(100, fourthBedDiscountPct)),
+    additionalBedDiscountPct: Math.max(0, Math.min(100, additionalBedDiscountPct)),
     overnightTax,
     ageBands
   }

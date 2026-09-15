@@ -140,7 +140,11 @@
       <div class="modal-content">
       <div class="modal-header">
         <h3>{{ modalDialogTitle }}</h3>
-        <button @click="showModal = false" class="close-btn">&times;</button>
+        <button type="button" class="close-btn" aria-label="Chiudi" @click="showModal = false">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </div>
       
       <form @submit.prevent="submitNewBooking" class="booking-form">
@@ -253,8 +257,9 @@
                   <span>Bambino {{ idx + 1 }}</span>
                   <input
                     type="number"
-                    min="0"
-                    max="17"
+                    :min="minimumKidAge"
+                    :max="maximumKidAge"
+                    :disabled="minimumKidAge === null || maximumKidAge === null"
                     v-model.number="newBookingData.kidsAges[idx]"
                     placeholder="Età"
                   />
@@ -278,6 +283,90 @@
                 <input type="number" v-model.number="newBookingData.manualPrice">
               </div>
             </div>
+
+            <div
+              v-if="selectedReservationHistory?.snapshot?.person_pricing?.rows?.length"
+              class="person-pricing"
+            >
+              <div class="person-pricing-heading">
+                <strong>Dettaglio per persona</strong>
+                <span>Versione storica</span>
+              </div>
+              <div class="person-pricing-scroll">
+                <table class="person-pricing-table">
+                  <thead>
+                    <tr>
+                      <th>Occupante</th>
+                      <th v-for="cell in selectedReservationHistory.snapshot.person_pricing.rows[0].cells" :key="cell.date">{{ cell.date }}</th>
+                      <th>Totale</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in selectedReservationHistory.snapshot.person_pricing.rows" :key="row.occupant_id">
+                      <th>{{ personPricingRowLabel(row) }}</th>
+                      <td v-for="cell in row.cells" :key="cell.date" :class="{ 'has-override': cell.override_price != null }">
+                        <strong>€{{ Number(cell.final_price || 0).toFixed(2) }}</strong>
+                        <small>{{ cell.rule?.label }}</small>
+                      </td>
+                      <td><strong>€{{ personPricingRowTotal(row).toFixed(2) }}</strong></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <template v-else-if="!selectedReservationHistory && !newBookingData.isManualPrice && newBookingData.person_pricing?.rows?.length">
+              <button v-if="!showPersonPricing" type="button" class="person-pricing-open" @click="showPersonPricing = true">
+                <span>{{ personPricingOverrideCount ? 'Modifica override per persona' : 'Personalizza prezzi per persona' }}</span>
+                <small v-if="personPricingOverrideCount">{{ personPricingOverrideCount }} override attivi</small>
+              </button>
+
+              <div v-else class="person-pricing">
+                <div class="person-pricing-heading">
+                  <strong>Dettaglio per persona</strong>
+                  <div class="person-pricing-heading-actions">
+                    <button type="button" class="btn btn-secondary" @click="refreshHotelPricing()">Ricalcola da listino</button>
+                    <button type="button" class="btn btn-secondary" @click="resetPersonPricingOverrides">Ripristina override</button>
+                    <button type="button" class="btn btn-secondary" @click="showPersonPricing = false">Nascondi</button>
+                  </div>
+                </div>
+                <div class="person-pricing-scroll">
+                  <table class="person-pricing-table">
+                    <thead>
+                      <tr>
+                        <th>Occupante</th>
+                        <th v-for="cell in newBookingData.person_pricing.rows[0].cells" :key="cell.date">{{ cell.date }}</th>
+                        <th>Totale</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="row in newBookingData.person_pricing.rows" :key="row.occupant_id">
+                        <th>
+                          <span>{{ personPricingRowLabel(row) }}</span>
+                          <button type="button" class="person-pricing-row-action" @click="applyPriceToPerson(row)">Applica alla riga</button>
+                        </th>
+                        <td v-for="cell in row.cells" :key="cell.date" :class="{ 'has-override': cell.override_price != null }">
+                          <input v-model.number="cell.override_price" type="number" min="0" step="0.01" :placeholder="Number(cell.calculated_price || 0).toFixed(2)" @change="refreshHotelPricing()" />
+                          <small>{{ cell.override_price == null || cell.override_price === '' ? cell.rule?.label : `Automatico €${Number(cell.calculated_price || 0).toFixed(2)}` }}</small>
+                          <div class="person-pricing-cell-actions">
+                            <button type="button" title="Imposta il prezzo a zero" aria-label="Imposta il prezzo a zero" @click="setPersonPrice(cell, 0)">Azzera</button>
+                            <button type="button" title="Ripristina il prezzo automatico" aria-label="Ripristina il prezzo automatico" @click="setPersonPrice(cell, null)">↺ Auto</button>
+                          </div>
+                        </td>
+                        <td><strong>€{{ personPricingRowTotal(row).toFixed(2) }}</strong></td>
+                      </tr>
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <th>Totale</th>
+                        <td v-for="day in newBookingData.person_pricing.day_totals" :key="day.date"><strong>€{{ Number(day.amount || 0).toFixed(2) }}</strong></td>
+                        <td><strong>€{{ Number(newBookingData.person_pricing.total || 0).toFixed(2) }}</strong></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </template>
 
             <div v-if="selectedReservationHistory" class="quote-box">
               <div v-if="selectedReservationHistory.snapshot?.price_per_day?.length" class="quote-details">
@@ -455,7 +544,11 @@
       <div class="modal-content modal-content--narrow">
       <div class="modal-header">
         <h3>Cancella Prenotazione</h3>
-        <button @click="showCancelDialog = false" class="close-btn">&times;</button>
+        <button type="button" class="close-btn" aria-label="Chiudi" @click="showCancelDialog = false">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </div>
       <div class="cancel-dialog-body">
         <p class="cancel-dialog-guest" v-if="editingBooking">
@@ -573,7 +666,11 @@
       <div class="modal-card">
       <div class="modal-header-row">
         <h3 class="modal-title">Servizi Prenotazione</h3>
-        <button class="close-btn" @click="closeAddServiceModal">&times;</button>
+        <button type="button" class="close-btn" aria-label="Chiudi" @click="closeAddServiceModal">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </div>
       <p class="modal-sub" v-if="addServiceTarget">
         <strong>{{ addServiceTarget.guest || addServiceTarget.accountholder?.firstname || addServiceTarget.id }}</strong>
@@ -677,6 +774,7 @@ const props = defineProps({
 const emit = defineEmits(['dialog-closed']);
 
 const {
+  hotelPricingPolicy,
   calculateQuotePrice,
   calculateOvernightTax,
   loadHotelPricingPolicy,
@@ -818,6 +916,7 @@ const showReservationHistory = ref(false);
 const reservationHistory = ref([]);
 const reservationHistoryLoading = ref(false);
 const selectedReservationHistory = ref(null);
+const showPersonPricing = ref(false);
 const currentDialogBooking = ref(null);
 const currentDialogReadOnly = ref(false);
 const showBookingActionMenu = ref(false);
@@ -1074,6 +1173,7 @@ const newBookingData = ref({
   board: 'bb',
   isManualPrice: false,
   manualPrice: 0,
+  person_pricing: null,
   deposits: []
 });
 
@@ -1163,6 +1263,16 @@ const normalizedChildrenCount = computed(() => {
   const count = Number(newBookingData.value.kids);
   if (!Number.isFinite(count) || count <= 0) return 0;
   return Math.floor(count);
+});
+
+const minimumKidAge = computed(() => {
+  if (!hotelPricingPolicy.value.ageBands.length) return null;
+  return Math.min(...hotelPricingPolicy.value.ageBands.map(band => band.minAge));
+});
+
+const maximumKidAge = computed(() => {
+  if (!hotelPricingPolicy.value.ageBands.length) return null;
+  return Math.max(...hotelPricingPolicy.value.ageBands.map(band => band.maxAge));
 });
 
 const normalizeKidsAges = (ages, expectedCount) => {
@@ -1435,7 +1545,7 @@ watch(() => newBookingData.value.kids, (newValue) => {
   const ages = Array.isArray(newBookingData.value.kidsAges)
     ? newBookingData.value.kidsAges.slice(0, count)
     : [];
-  while (ages.length < count) ages.push(1);
+  while (ages.length < count) ages.push(minimumKidAge.value);
   newBookingData.value.kidsAges = ages;
 });
 
@@ -1654,6 +1764,7 @@ const addBooking = (room = null, event = null) => {
   showReservationHistory.value = false;
   reservationHistory.value = [];
   selectedReservationHistory.value = null;
+  showPersonPricing.value = false;
   currentDialogBooking.value = null;
 
   let checkin = '';
@@ -1685,6 +1796,7 @@ const addBooking = (room = null, event = null) => {
     board: 'bb',
     isManualPrice: false,
     manualPrice: '',
+    person_pricing: null,
     deposits: []
   };
   resetDepositDraft(checkin);
@@ -1696,6 +1808,7 @@ const createQuote = () => {
 };
 
 const loadBookingIntoDialog = (booking) => {
+  showPersonPricing.value = false;
   selectedBooking.value = booking.id;
   editingBooking.value = booking;
   const start = new Date(booking.startDate);
@@ -1715,6 +1828,7 @@ const loadBookingIntoDialog = (booking) => {
     board: booking.board || 'bb',
     isManualPrice: booking.fixedPrice != null,
     manualPrice: booking.fixedPrice || 0,
+    person_pricing: booking.person_pricing || null,
     deposits: normalizeDeposits(booking.deposits)
   };
   resetDepositDraft(toISODate(start));
@@ -1731,9 +1845,7 @@ const historicalBookingForDialog = (snapshot) => {
 
   return {
     ...snapshot,
-    roomId: snapshot?.roomId != null
-      ? String(snapshot.roomId)
-      : rooms.value.find(room => room.code === String(snapshot?.room))?.id,
+    roomId: snapshot?.roomId == null ? '' : String(snapshot.roomId),
     startDate,
     duration: Number(snapshot?.duration) || Math.round((endDate - startDate) / 86400000),
     guestName: firstGuest?.firstname || accountHolder.firstname || '',
@@ -1919,6 +2031,15 @@ const buildOvernightTaxSnapshot = () => {
 const submitNewBooking = async () => {
   if (isModalReadOnly.value) return;
 
+  if (normalizedChildrenCount.value > 0 && (
+    minimumKidAge.value === null ||
+    maximumKidAge.value === null ||
+    newBookingData.value.kidsAges.some(age => !Number.isFinite(Number(age)) || Number(age) < minimumKidAge.value || Number(age) > maximumKidAge.value)
+  )) {
+    alert('Età bambini non valida per le fasce configurate sul server');
+    return;
+  }
+
   const start = new Date(newBookingData.value.checkin);
   const end = new Date(newBookingData.value.checkout);
   
@@ -1969,6 +2090,7 @@ const submitNewBooking = async () => {
     checkin: newBookingData.value.checkin,
     duration: duration,
     board: normalizeBoardForBackend(newBookingData.value.board),
+    person_pricing: newBookingData.value.person_pricing,
     fixedPrice: newBookingData.value.isManualPrice ? parseFloat(newBookingData.value.manualPrice) : null,
     pricingModeSnapshot: bookingQuote.value?.pricingMode || null,
     notes: bookingNotes ? [bookingNotes] : [],
@@ -2087,9 +2209,105 @@ const todayLineStyle = computed(() => {
   return { display: 'none' };
 });
 
+const serverPricing = ref(null);
+let pricingRequest = 0;
+let pricingRefreshTimeout = null;
+
+const refreshHotelPricing = async () => {
+  const data = newBookingData.value;
+  const room = rooms.value.find(item => String(item.id) === String(data.roomId));
+  if (!room || !data.checkin || !data.checkout || data.isManualPrice) return;
+  if (new Date(data.checkin) >= new Date(data.checkout)) return;
+
+  const request = ++pricingRequest;
+  try {
+    const response = await axios.post('/api/pms/hotel/calculateprice', {
+      roomId: data.roomId,
+      roomType: room.type,
+      checkin: data.checkin,
+      checkout: data.checkout,
+      board: normalizeBoardForBackend(data.board),
+      adults: Number(data.adults || 0),
+      kids: Number(data.kids || 0),
+      kidsAges: normalizeKidsAges(data.kidsAges, data.kids),
+      pricing_mode: 'person',
+      person_pricing: data.person_pricing
+    });
+    if (request !== pricingRequest || response.data?.error) return;
+    serverPricing.value = response.data;
+    data.person_pricing = response.data.person_pricing || null;
+  } catch (error) {
+    if (request === pricingRequest) console.error('Errore calcolo matrice prezzi:', error);
+  }
+};
+
+const scheduleHotelPricingRefresh = () => {
+  if (pricingRefreshTimeout) clearTimeout(pricingRefreshTimeout);
+  serverPricing.value = null;
+  pricingRefreshTimeout = setTimeout(() => refreshHotelPricing(), 150);
+};
+
+watch(
+  () => [
+    newBookingData.value.roomId,
+    newBookingData.value.checkin,
+    newBookingData.value.checkout,
+    newBookingData.value.board,
+    Number(newBookingData.value.adults || 0),
+    Number(newBookingData.value.kids || 0),
+    JSON.stringify(newBookingData.value.kidsAges || []),
+    newBookingData.value.isManualPrice
+  ],
+  () => scheduleHotelPricingRefresh()
+);
+
+const setPersonPrice = (cell, value) => {
+  cell.override_price = value;
+  refreshHotelPricing();
+};
+
+const resetPersonPricingOverrides = () => {
+  newBookingData.value.person_pricing?.rows?.forEach(row => row.cells?.forEach(cell => { cell.override_price = null; }));
+  refreshHotelPricing();
+};
+
+const applyPriceToPerson = (row) => {
+  const current = row.cells?.find(cell => cell.override_price != null)?.override_price;
+  const value = window.prompt('Prezzo finale per tutte le notti. Lascia vuoto per ripristinare il prezzo automatico.', current ?? '');
+  if (value === null) return;
+  const normalized = String(value).trim().replace(',', '.');
+  if (normalized && (!Number.isFinite(Number(normalized)) || Number(normalized) < 0)) {
+    alert('Inserisci un prezzo valido');
+    return;
+  }
+  row.cells.forEach(cell => { cell.override_price = normalized === '' ? null : Number(normalized); });
+  refreshHotelPricing();
+};
+
+const personPricingRowLabel = (row) => {
+  if (row.type === 'child') return `Bambino${row.age == null ? '' : ` · ${row.age} anni`}`;
+  return row.position > 2 ? `${row.position}° adulto` : `Adulto ${row.position}`;
+};
+
+const personPricingRowTotal = (row) => Number((row.cells || []).reduce((sum, cell) => sum + Number(cell.final_price || 0), 0).toFixed(2));
+
+const personPricingOverrideCount = computed(() => (newBookingData.value.person_pricing?.rows || []).reduce(
+  (total, row) => total + (row.cells || []).filter(cell => cell.override_price != null).length,
+  0
+));
+
 const bookingQuote = computed(() => {
   const { checkin, checkout, roomId, board, adults, kids } = newBookingData.value;
   if (!checkin || !checkout || !roomId) return null;
+  if (serverPricing.value?.price_per_day?.length) {
+    const total = Number(serverPricing.value.total_price || 0);
+    return {
+      totalCalculated: total,
+      finalTotal: newBookingData.value.isManualPrice ? newBookingData.value.manualPrice : total,
+      days: serverPricing.value.price_per_day.map(day => ({ date: day.date, dayTotal: Number(day.day_total || 0) })),
+      pricingMode: serverPricing.value.pricing_mode
+    };
+  }
 
   const start = new Date(checkin);
   const end = new Date(checkout);
@@ -2540,7 +2758,7 @@ const confirmCancel = async () => {
   }
 };
 
-const getReservations = () => {
+const getReservations = (direct = false) => {
   // Chiediamo al server dati a partire da 30 giorni prima della data visibile
   // per includere le prenotazioni che finiscono dentro la finestra attuale
   const safetyMargin = 15;
@@ -2554,7 +2772,7 @@ const getReservations = () => {
 
   var url = `/api/pms/getbookingsbyrange?from=${fromDate}&to=${toDate}`;
   
-  axios.get(url)
+  axios.get(url, direct ? { mbarDirect: true } : {})
     .then(response => {
       convertReservations(response.data);
     })
@@ -2581,9 +2799,7 @@ const convertReservations = (apiReservations) => {
     // Trasformiamo la stringa "YYYY-MM-DD" in oggetto Date locale a mezzanotte
     const [year, month, day] = res.checkin.split('-').map(Number);
     const startDateObj = new Date(year, month - 1, day, 0, 0, 0);
-    const roomId = res.roomId != null
-      ? String(res.roomId)
-      : rooms.value.find(room => room.code === String(res.room))?.id;
+    const roomId = res.roomId == null ? '' : String(res.roomId);
     let duration = Number(res.duration);
 
     if (!Number.isFinite(duration) && res.checkout) {
@@ -2628,6 +2844,8 @@ const convertReservations = (apiReservations) => {
       kidsAges: normalizeKidsAges(res.kidsAges, res.kids ?? 0),
       board: (res.board || 'BB').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
+      pricing_mode: res.pricing_mode,
+      person_pricing: res.person_pricing || null,
       notes: Array.isArray(res.notes) ? res.notes : [],
       createdBy: res.createdBy,
       createdAt: res.createdAt || res.datetime,
@@ -2731,7 +2949,7 @@ const handlePmsEvent = (event) => {
     }
   }
   if (pmsRefreshTimeout) clearTimeout(pmsRefreshTimeout);
-  pmsRefreshTimeout = setTimeout(() => getReservations(), 150);
+  pmsRefreshTimeout = setTimeout(() => getReservations(true), 150);
 };
 
 const connectPmsEvents = async () => {
@@ -2777,7 +2995,7 @@ onMounted(() => {
   window.addEventListener('mouseup', handleMouseUp);
   window.addEventListener('click', handleGlobalClick);
   getRooms();
-  loadHotelPricingPolicy();
+  loadHotelPricingPolicy().catch(error => console.error('Errore caricamento fasce età:', error));
   loadPricelists('hotel');
   loadTimetable('hotel');
   loadAvailableServices();
@@ -2798,6 +3016,7 @@ onUnmounted(() => {
   window.removeEventListener('click', handleGlobalClick);
   if (plannerToastTimeout) clearTimeout(plannerToastTimeout);
   if (pmsRefreshTimeout) clearTimeout(pmsRefreshTimeout);
+  if (pricingRefreshTimeout) clearTimeout(pricingRefreshTimeout);
   pmsStreamStopped = true;
   if (pmsReconnectTimeout) clearTimeout(pmsReconnectTimeout);
   if (pmsEventAbortController) pmsEventAbortController.abort();
@@ -3622,6 +3841,43 @@ onUnmounted(() => {
   padding-bottom: 10px;
 }
 
+.close-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--planner-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--planner-text-soft);
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.close-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.close-btn:hover {
+  border-color: var(--planner-border-strong);
+  background: var(--planner-muted-surface);
+  color: var(--planner-text);
+  transform: translateY(-1px);
+}
+
+.close-btn:focus-visible {
+  outline: 3px solid rgba(29, 140, 242, 0.18);
+  outline-offset: 2px;
+}
+
 .form-row {
   display: flex;
   gap: 15px;
@@ -3984,6 +4240,166 @@ onUnmounted(() => {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-5px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.person-pricing {
+  margin-top: 14px;
+  border: 1px solid var(--planner-border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: white;
+}
+
+.person-pricing-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 8px 12px;
+  border: 1px solid rgba(29, 140, 242, 0.28);
+  border-radius: 10px;
+  background: rgba(29, 140, 242, 0.07);
+  color: var(--planner-primary-strong);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.person-pricing-open:hover {
+  border-color: var(--planner-primary);
+  background: rgba(29, 140, 242, 0.13);
+}
+
+.person-pricing-open small {
+  padding-left: 8px;
+  border-left: 1px solid rgba(29, 140, 242, 0.24);
+  color: var(--planner-text-soft);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.person-pricing-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--planner-muted-surface);
+  color: var(--planner-text-soft);
+  font-size: 0.82rem;
+}
+
+.person-pricing-scroll {
+  overflow-x: auto;
+}
+
+.person-pricing-heading-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.person-pricing-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.person-pricing-table th,
+.person-pricing-table td {
+  min-width: 126px;
+  padding: 10px;
+  border-right: 1px solid var(--planner-border);
+  border-bottom: 1px solid var(--planner-border);
+  text-align: center;
+  vertical-align: top;
+}
+
+.person-pricing-table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 150px;
+  background: white;
+  text-align: left;
+}
+
+.person-pricing-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--planner-muted-surface);
+  font-size: 0.78rem;
+}
+
+.person-pricing-table thead th:first-child {
+  z-index: 3;
+  background: var(--planner-muted-surface);
+}
+
+.person-pricing-table td.has-override {
+  background: #fffbeb;
+}
+
+.person-pricing-table input {
+  width: 100%;
+  min-width: 90px;
+  text-align: right;
+}
+
+.person-pricing-table small {
+  display: block;
+  margin-top: 4px;
+  color: var(--planner-text-soft);
+  font-size: 0.68rem;
+}
+
+.person-pricing-row-action {
+  display: block;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--planner-primary);
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+
+.person-pricing-cell-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.person-pricing-cell-actions button {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 3px;
+  border: 1px solid rgba(29, 140, 242, 0.28);
+  border-radius: 7px;
+  background: rgba(29, 140, 242, 0.07);
+  color: var(--planner-primary-strong);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  font-weight: 650;
+  font-size: 0.68rem;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.person-pricing-cell-actions button:hover {
+  border-color: var(--planner-primary);
+  background: rgba(29, 140, 242, 0.14);
+}
+
+.person-pricing-cell-actions button:active {
+  transform: translateY(1px);
+}
+
+.person-pricing-cell-actions button:focus-visible {
+  outline: 2px solid rgba(29, 140, 242, 0.35);
+  outline-offset: 2px;
 }
 
 /* Contenitore principale del preventivo */

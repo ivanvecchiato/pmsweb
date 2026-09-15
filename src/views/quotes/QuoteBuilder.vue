@@ -83,8 +83,9 @@
               <input
                 v-model.number="quoteData.kidsAges[idx]"
                 type="number"
-                min="0"
-                max="17"
+                :min="minimumKidAge"
+                :max="maximumKidAge"
+                :disabled="minimumKidAge === null || maximumKidAge === null"
                 placeholder="Età"
               />
             </div>
@@ -169,8 +170,10 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import axios from 'axios'
 import { useQuotes } from '@/composables/useQuotes.js'
 import { usePricing } from '@/composables/usePricing.js'
+import { isFirebaseRemoteMode } from '@/services/firebaseClient.js'
 
 const props = defineProps({
   type: {
@@ -182,7 +185,7 @@ const props = defineProps({
 const emit = defineEmits(['created', 'close'])
 
 const { saveQuote } = useQuotes()
-const { loadPricelists, loadTimetable, loadHotelPricingPolicy, calculateQuotePrice, getRoomTypes } = usePricing()
+const { hotelPricingPolicy, loadPricelists, loadTimetable, loadHotelPricingPolicy, calculateQuotePrice, getRoomTypes } = usePricing()
 
 const quoteData = ref({
   name: '',
@@ -201,6 +204,7 @@ const priceQuote = ref(null)
 const roomTypes = ref([])
 const calculatedRoomPrices = ref([])
 const isLoading = ref(false)
+let calculationRequest = 0
 
 const minOption = computed(() => {
   if (!calculatedRoomPrices.value || calculatedRoomPrices.value.length === 0) return null
@@ -220,6 +224,16 @@ const normalizedChildrenCount = computed(() => {
   return Math.floor(count)
 })
 
+const minimumKidAge = computed(() => {
+  if (!hotelPricingPolicy.value.ageBands.length) return null
+  return Math.min(...hotelPricingPolicy.value.ageBands.map((band) => band.minAge))
+})
+
+const maximumKidAge = computed(() => {
+  if (!hotelPricingPolicy.value.ageBands.length) return null
+  return Math.max(...hotelPricingPolicy.value.ageBands.map((band) => band.maxAge))
+})
+
 const normalizeKidsAges = (ages, expectedCount) => {
   const src = Array.isArray(ages) ? ages : []
   const count = Math.max(0, Number(expectedCount) || 0)
@@ -232,7 +246,8 @@ const normalizeKidsAges = (ages, expectedCount) => {
 }
 
 // Calcola i prezzi per TUTTI i roomType (hotel) o un prezzo generico (beach)
-const calculateAllRoomPrices = () => {
+const calculateAllRoomPrices = async () => {
+  const request = ++calculationRequest
   if (!quoteData.value.checkin || !quoteData.value.checkout || daysCount.value === 0) {
     calculatedRoomPrices.value = []
     priceQuote.value = null
@@ -240,47 +255,107 @@ const calculateAllRoomPrices = () => {
   }
   
   if (props.type === 'hotel') {
-    // Hotel: calcola per ogni tipo di camera
-    const prices = roomTypes.value.map(room => {
-      const quote = calculateQuotePrice(
-        quoteData.value.checkin,
-        quoteData.value.checkout,
-        room.roomType,
-        props.type,
-        quoteData.value.adults + quoteData.value.kids,
-        {
-          board: quoteData.value.board,
-          adults: quoteData.value.adults,
-          kids: quoteData.value.kids,
-          kidAges: normalizeKidsAges(quoteData.value.kidsAges, quoteData.value.kids)
+    if (isFirebaseRemoteMode()) {
+      const prices = roomTypes.value.map(room => {
+        const quote = calculateQuotePrice(
+          quoteData.value.checkin,
+          quoteData.value.checkout,
+          room.roomType,
+          props.type,
+          quoteData.value.adults + quoteData.value.kids,
+          {
+            board: quoteData.value.board,
+            adults: quoteData.value.adults,
+            kids: quoteData.value.kids,
+            kidAges: normalizeKidsAges(quoteData.value.kidsAges, quoteData.value.kids)
+          }
+        )
+        return {
+          roomType: room.roomType,
+          totalPrice: quote?.finalTotal || 0,
+          pricePerNight: quote?.pricePerNight || 0,
+          quote
         }
-      )
-      return {
-        roomType: room.roomType,
-        totalPrice: quote?.finalTotal || 0,
-        pricePerNight: quote?.pricePerNight || 0,
-        quote
-      }
-    })
-    calculatedRoomPrices.value = prices
-  } else {
-    // Beach: calcola per ogni tipo di fila
-    const prices = roomTypes.value.map(room => {
-      const quote = calculateQuotePrice(
-        quoteData.value.checkin,
-        quoteData.value.checkout,
-        room.placeType, // Usa placeType per beach (es. "FILA 1")
-        props.type,
-        quoteData.value.adults + quoteData.value.kids
-      )
-      return {
-        roomType: room.placeType, // Usa placeType (es. "FILA 1")
-        placeTypeId: room.placeTypeId,
-        totalPrice: quote?.finalTotal || 0,
-        pricePerNight: quote?.pricePerNight || 0,
-        quote
-      }
-    })
+      })
+      if (request === calculationRequest) calculatedRoomPrices.value = prices
+      return
+    }
+
+    isLoading.value = true
+    try {
+      const adults = Number(quoteData.value.adults || 0)
+      const kids = Number(quoteData.value.kids || 0)
+      const kidsAges = normalizeKidsAges(quoteData.value.kidsAges, kids)
+      const prices = await Promise.all(roomTypes.value.map(async (room) => {
+        const response = await axios.post('/api/pms/hotel/calculateprice', {
+          roomType: room.roomType,
+          checkin: quoteData.value.checkin,
+          checkout: quoteData.value.checkout,
+          board: quoteData.value.board,
+          adults,
+          kids,
+          kidsAges
+        })
+        if (response.data?.error) throw new Error(response.data.error)
+
+        const total = Number(response.data?.total_price || 0)
+        const nights = daysCount.value
+        const quote = {
+          days: (response.data?.price_per_day || []).map((day) => ({
+            date: day.date,
+            dayTotal: Number(day.day_total || 0),
+            pricePerUnit: Number(day.unit_price || 0),
+            units: Number(day.units || 0),
+            weighted: day.weighted || null
+          })),
+          nights,
+          totalCalculated: total,
+          finalTotal: total,
+          pricePerNight: nights > 0 ? total / nights : 0,
+          perPerson: adults + kids > 0 ? total / (adults + kids) : total,
+          roomType: room.roomType,
+          pricingMode: response.data?.pricing_mode
+        }
+        return {
+          roomType: room.roomType,
+          totalPrice: total,
+          pricePerNight: quote.pricePerNight,
+          quote
+        }
+      }))
+      if (request !== calculationRequest) return
+      calculatedRoomPrices.value = prices
+      const selected = prices.find((room) => room.roomType === quoteData.value.roomType)
+      priceQuote.value = selected?.quote || null
+    } catch (error) {
+      if (request !== calculationRequest) return
+      calculatedRoomPrices.value = []
+      priceQuote.value = null
+      console.error('Errore calcolo preventivo hotel:', error)
+    } finally {
+      if (request === calculationRequest) isLoading.value = false
+    }
+    return
+  }
+
+  // Beach: calcola per ogni tipo di fila
+  const prices = roomTypes.value.map(room => {
+    const quote = calculateQuotePrice(
+      quoteData.value.checkin,
+      quoteData.value.checkout,
+      room.placeType, // Usa placeType per beach (es. "FILA 1")
+      props.type,
+      quoteData.value.adults + quoteData.value.kids
+    )
+    return {
+      roomType: room.placeType, // Usa placeType (es. "FILA 1")
+      placeTypeId: room.placeTypeId,
+      totalPrice: quote?.finalTotal || 0,
+      pricePerNight: quote?.pricePerNight || 0,
+      quote
+    }
+  })
+  if (request === calculationRequest) {
     calculatedRoomPrices.value = prices
   }
 }
@@ -295,7 +370,13 @@ const selectRoom = (roomType) => {
 }
 
 watch(
-  () => [quoteData.value.checkin, quoteData.value.checkout, quoteData.value.adults, quoteData.value.kids],
+  () => [
+    quoteData.value.checkin,
+    quoteData.value.checkout,
+    quoteData.value.adults,
+    quoteData.value.kids,
+    JSON.stringify(quoteData.value.kidsAges)
+  ],
   () => calculateAllRoomPrices(),
   { deep: true }
 )
@@ -314,6 +395,11 @@ const isFormValid = computed(() => {
          quoteData.value.checkout &&
          daysCount.value > 0 &&
          (props.type !== 'hotel' || quoteData.value.board) &&
+         (props.type !== 'hotel' || normalizedChildrenCount.value === 0 || (
+           minimumKidAge.value !== null &&
+           maximumKidAge.value !== null &&
+           quoteData.value.kidsAges.every((age) => Number.isFinite(Number(age)) && Number(age) >= minimumKidAge.value && Number(age) <= maximumKidAge.value)
+         )) &&
          (props.type !== 'hotel' || calculatedRoomPrices.value.length > 0)
 })
 
@@ -418,12 +504,12 @@ onMounted(async () => {
       await loadHotelPricingPolicy()
     }
     await loadPricelists(props.type)
-    await loadTimetable(props.type)
+    if (props.type === 'beach' || isFirebaseRemoteMode()) await loadTimetable(props.type)
     
     // Carica i tipi disponibili (hotel: roomType, beach: place types)
     roomTypes.value = getRoomTypes(props.type)
     // Avvia il calcolo dei prezzi non appena i dati sono pronti
-    calculateAllRoomPrices()
+    await calculateAllRoomPrices()
   } catch (err) {
     console.error('Errore caricamento dati:', err)
   } finally {

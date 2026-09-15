@@ -470,6 +470,31 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
   const db = getFirebaseDb()
   const { endpoint, query: inlineQuery } = splitEndpointAndQuery(url)
   const query = queryStringFromParams(params) || inlineQuery
+
+  if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/getconfigs') {
+    const snapshot = await getDoc(doc(db, 'pms_configs', 'current'))
+    if (!snapshot.exists()) throw new Error('Configurazione PMS non disponibile in Firebase')
+    const configs = snapshot.data() || {}
+    const section = new URLSearchParams(query).get('section')
+    return {
+      response: section ? configs[section] ?? null : configs,
+      source: 'pms_configs'
+    }
+  }
+
+  if (String(method).toLowerCase() === 'get' && (endpoint === '/api/pms/getrates' || endpoint === '/api/pms/gettimetable')) {
+    const type = new URLSearchParams(query).get('type')
+    if (type === 'hotel' || type === 'beach') {
+      const collectionName = endpoint === '/api/pms/getrates'
+        ? `pms_${type}_rates`
+        : `pms_${type}_timetable`
+      const snapshot = await getDocs(collection(db, collectionName))
+      const response = []
+      snapshot.forEach((entry) => response.push(entry.data()))
+      return { response, source: collectionName }
+    }
+  }
+
   const parsedData = parseAxiosData(data)
   const { requestDocId, endpointDocId } = buildDocIds({ method, endpoint, query, data: parsedData })
 
@@ -628,6 +653,11 @@ export const installApiTransportBridge = async () => {
   globalThis.fetch = async (input, init = undefined) => {
     const rawUrl = typeof input === 'string' ? input : input?.url || ''
     const method = String(init?.method || 'get').toLowerCase()
+    const { endpoint } = splitEndpointAndQuery(rawUrl)
+    if (endpoint === '/api/pms/events') {
+      const directUrl = PMS_API_BASE_URL && rawUrl.startsWith('/') ? `${PMS_API_BASE_URL}${rawUrl}` : rawUrl
+      return originalFetch(directUrl, init)
+    }
     const bypass = buildRemoteStatsUrl({ url: rawUrl })
 
     if (bypass.url) {

@@ -162,7 +162,7 @@
               </div>
               <div v-if="reservationForm.kids > 0" class="kids-ages">
                 <label v-for="(_, index) in reservationForm.kidsAges" :key="`kid-${index}`">Età bambino {{ index + 1 }}
-                  <input v-model.number="reservationForm.kidsAges[index]" type="number" min="0" max="17" />
+                  <input v-model.number="reservationForm.kidsAges[index]" type="number" :min="minimumKidAge" :max="maximumKidAge" :disabled="minimumKidAge === null || maximumKidAge === null" />
                 </label>
               </div>
               <label>Note prenotazione<textarea v-model="reservationForm.notes" rows="4" maxlength="1000" /></label>
@@ -221,9 +221,11 @@ import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useRoute } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import { usePricing } from '@/composables/usePricing'
 
 const route = useRoute()
 const { currentUser, getLoginUsers, hasPermission } = useAuth()
+const { hotelPricingPolicy, loadHotelPricingPolicy } = usePricing()
 const isLoading = ref(false)
 const loadedAccounts = ref([])
 const operators = ref([])
@@ -243,6 +245,16 @@ const toDate = ref(toISODate(today))
 const searchText = ref('')
 const appliedSearchText = ref('')
 const currentYear = ref(false)
+
+const minimumKidAge = computed(() => {
+  if (!hotelPricingPolicy.value.ageBands.length) return null
+  return Math.min(...hotelPricingPolicy.value.ageBands.map(band => band.minAge))
+})
+
+const maximumKidAge = computed(() => {
+  if (!hotelPricingPolicy.value.ageBands.length) return null
+  return Math.max(...hotelPricingPolicy.value.ageBands.map(band => band.maxAge))
+})
 
 const accounts = computed(() => {
   const query = appliedSearchText.value.trim().toLocaleLowerCase('it-IT')
@@ -321,7 +333,7 @@ const openReservation = async (account) => {
     reservationSource.value = reservation
     reservationForm.value = {
       id: reservation.id,
-      roomId: String(reservation.roomId ?? rooms.value.find(room => String(room.room_code) === String(reservation.room))?.id ?? ''),
+      roomId: String(reservation.roomId ?? ''),
       checkin: reservation.checkin || '',
       checkout: reservation.checkout || '',
       board: String(reservation.board || 'BB').toUpperCase(),
@@ -360,6 +372,14 @@ const showDepositDocument = (deposit) => {
 const saveReservation = async () => {
   const form = reservationForm.value
   if (!form) return
+  if (Number(form.kids) > 0 && (
+    minimumKidAge.value === null ||
+    maximumKidAge.value === null ||
+    form.kidsAges.some(age => !Number.isFinite(Number(age)) || Number(age) < minimumKidAge.value || Number(age) > maximumKidAge.value)
+  )) {
+    alert('Età bambini non valida per le fasce configurate sul server')
+    return
+  }
   const checkin = new Date(`${form.checkin}T00:00:00`)
   const checkout = new Date(`${form.checkout}T00:00:00`)
   const duration = Math.round((checkout - checkin) / 86400000)
@@ -456,9 +476,14 @@ watch(() => reservationForm.value?.kids, (value) => {
   if (!reservationForm.value) return
   const count = Math.max(0, Number(value) || 0)
   reservationForm.value.kidsAges = reservationForm.value.kidsAges.slice(0, count)
-  while (reservationForm.value.kidsAges.length < count) reservationForm.value.kidsAges.push(1)
+  while (reservationForm.value.kidsAges.length < count) reservationForm.value.kidsAges.push(minimumKidAge.value)
 })
 onMounted(async () => {
+  try {
+    await loadHotelPricingPolicy()
+  } catch (error) {
+    console.error('Errore caricamento fasce età:', error)
+  }
   try {
     operators.value = await getLoginUsers()
   } catch (error) {

@@ -11,6 +11,9 @@ const hotelPricingPolicy = ref({
   boardChargeMode: 'per_person',
   fallbackKidDiscountPct: 0,
   extraBedDiscountPct: 0,
+  thirdBedDiscountPct: 0,
+  fourthBedDiscountPct: 0,
+  additionalBedDiscountPct: 0,
   overnightTax: {
     enabled: false,
     allYear: true,
@@ -93,11 +96,23 @@ const normalizePolicy = (rawPolicy = {}) => {
   let extraBedDiscountPct = Number(rawPolicy?.extraBedDiscountPct)
   if (!Number.isFinite(extraBedDiscountPct)) extraBedDiscountPct = 0
 
+  let thirdBedDiscountPct = Number(rawPolicy?.thirdBedDiscountPct)
+  if (!Number.isFinite(thirdBedDiscountPct)) thirdBedDiscountPct = extraBedDiscountPct
+
+  let fourthBedDiscountPct = Number(rawPolicy?.fourthBedDiscountPct)
+  if (!Number.isFinite(fourthBedDiscountPct)) fourthBedDiscountPct = extraBedDiscountPct
+
+  let additionalBedDiscountPct = Number(rawPolicy?.additionalBedDiscountPct)
+  if (!Number.isFinite(additionalBedDiscountPct)) additionalBedDiscountPct = extraBedDiscountPct
+
   return {
     mode,
     boardChargeMode: String(rawPolicy?.boardChargeMode || 'per_person'),
     fallbackKidDiscountPct: Math.max(0, Math.min(100, fallbackKidDiscountPct)),
     extraBedDiscountPct: Math.max(0, Math.min(100, extraBedDiscountPct)),
+    thirdBedDiscountPct: Math.max(0, Math.min(100, thirdBedDiscountPct)),
+    fourthBedDiscountPct: Math.max(0, Math.min(100, fourthBedDiscountPct)),
+    additionalBedDiscountPct: Math.max(0, Math.min(100, additionalBedDiscountPct)),
     overnightTax: normalizeOvernightTax(rawPolicy?.overnightTax || {}),
     ageBands
   }
@@ -106,9 +121,13 @@ const normalizePolicy = (rawPolicy = {}) => {
 const loadHotelPricingPolicy = async () => {
   try {
     const res = await axios.get('/api/pms/getconfigs?section=hotel')
-    hotelPricingPolicy.value = normalizePolicy(res?.data?.pricing || res?.data || {})
+    const pricing = res?.data?.pricing || res?.data
+    if (!pricing || typeof pricing !== 'object') throw new Error('Policy prezzi hotel non disponibile')
+    hotelPricingPolicy.value = normalizePolicy(pricing)
   } catch (err) {
+    hotelPricingPolicy.value = normalizePolicy({})
     console.error('Errore caricamento policy pricing hotel:', err)
+    throw err
   }
   return hotelPricingPolicy.value
 }
@@ -295,7 +314,19 @@ const calculateWeightedGuests = (occupancy = {}, policy = hotelPricingPolicy.val
   const extraBeds = Math.max(0, Number(occupancy.extraBeds || 0))
   const kidAges = Array.isArray(occupancy.kidAges) ? occupancy.kidAges : []
 
-  const adultsAmount = Number((adults * Number(fullPrice || 0)).toFixed(2))
+  let adultsAmount = 0
+  const adultsBreakdown = []
+  for (let i = 0; i < adults; i++) {
+    const position = i + 1
+    let discountPct = 0
+    if (position === 3) discountPct = Number(policy?.thirdBedDiscountPct || 0)
+    else if (position === 4) discountPct = Number(policy?.fourthBedDiscountPct || 0)
+    else if (position > 4) discountPct = Number(policy?.additionalBedDiscountPct || 0)
+    const amount = applyDiscount(fullPrice, discountPct)
+    adultsBreakdown.push({ position, discountPct, amount })
+    adultsAmount += amount
+  }
+  adultsAmount = Number(adultsAmount.toFixed(2))
   let kidsAmount = 0
   const kidsBreakdown = []
   for (let i = 0; i < kids; i++) {
@@ -322,6 +353,7 @@ const calculateWeightedGuests = (occupancy = {}, policy = hotelPricingPolicy.val
     adults,
     kids,
     adultsAmount,
+    adultsBreakdown,
     kidsAmount: Number(kidsAmount.toFixed(2)),
     extraBedsAmount,
     kidsBreakdown,

@@ -132,8 +132,13 @@
                 <input v-model="formData.document.id" type="text" class="input-field" />
               </div>
               <div class="form-group form-group-full">
-                <label class="input-label">Luogo di rilascio</label>
-                <input v-model="formData.document.issued_by" type="text" class="input-field" placeholder="Comune italiano o Stato estero" />
+                <label class="input-label">Rilasciato da</label>
+                <select v-model="formData.document.issued_by" class="input-field">
+                  <option value="">Seleziona</option>
+                  <option v-for="place in issuingPlaces" :key="place.code" :value="place.code">
+                    {{ place.type === 'municipality' ? `${place.label} (${place.province})` : place.label }}
+                  </option>
+                </select>
               </div>
               <div class="form-group">
                 <label class="input-label">Data di rilascio</label>
@@ -161,6 +166,7 @@
 </template>
 
 <script setup>
+import axios from 'axios';
 import { ref, watch } from 'vue';
 
 const props = defineProps({
@@ -202,11 +208,17 @@ const emptyCustomer = () => ({
 });
 const formData = ref(emptyCustomer());
 const activeTab = ref('customer');
+const issuingPlaces = ref([]);
 
 watch(
   () => [props.open, props.customer],
   () => {
     if (props.open) {
+      if (!issuingPlaces.value.length) {
+        axios.get('/api/pms/guest-registration/options', { mbarDirect: true })
+          .then(response => { issuingPlaces.value = Array.isArray(response.data?.issuingPlaces) ? response.data.issuingPlaces : []; })
+          .catch(error => { console.error('Errore caricamento luoghi di rilascio:', error); });
+      }
       const customer = props.customer || {};
       formData.value = {
         ...emptyCustomer(),
