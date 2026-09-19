@@ -354,7 +354,7 @@ const normalizeKidsAges = (ages, expectedCount) => {
   const count = Math.max(0, Number(expectedCount) || 0)
   const normalized = []
   for (let i = 0; i < count; i++) {
-    const value = Number(source[i])
+    const value = source[i] == null || String(source[i]).trim() === '' ? NaN : Number(source[i])
     normalized.push(Number.isFinite(value) && value >= 0 ? Math.floor(value) : null)
   }
   return normalized

@@ -74,24 +74,12 @@
       <h2>Altri Parametri</h2>
       <div class="params-grid">
         <label>
-          Fallback bambino senza età (sconto %)
-          <input v-model.number="form.fallbackKidDiscountPct" type="number" min="0" max="100" step="0.01" />
-        </label>
-        <label>
           Letto aggiuntivo (sconto % sul prezzo intero)
           <input v-model.number="form.extraBedDiscountPct" type="number" min="0" max="100" step="0.01" />
         </label>
         <label>
-          Terzo adulto (sconto %)
+          Dal terzo adulto (sconto %)
           <input v-model.number="form.thirdBedDiscountPct" type="number" min="0" max="100" step="0.01" />
-        </label>
-        <label>
-          Quarto adulto (sconto %)
-          <input v-model.number="form.fourthBedDiscountPct" type="number" min="0" max="100" step="0.01" />
-        </label>
-        <label>
-          Adulti successivi (sconto %)
-          <input v-model.number="form.additionalBedDiscountPct" type="number" min="0" max="100" step="0.01" />
         </label>
       </div>
     </section>
@@ -203,11 +191,8 @@ const loading = ref(false)
 const form = ref({
   mode: 'room',
   boardChargeMode: 'per_person',
-  fallbackKidDiscountPct: 0,
   extraBedDiscountPct: 0,
   thirdBedDiscountPct: 0,
-  fourthBedDiscountPct: 0,
-  additionalBedDiscountPct: 0,
   overnightTax: {
     enabled: false,
     allYear: true,
@@ -225,20 +210,11 @@ const loadedHotelSection = ref({})
 const hotelPaymentMethods = ref([])
 
 const normalizeForm = (value) => {
-  let fallbackKidDiscountPct = Number(value?.fallbackKidDiscountPct)
-  if (!Number.isFinite(fallbackKidDiscountPct)) fallbackKidDiscountPct = 0
-
   let extraBedDiscountPct = Number(value?.extraBedDiscountPct)
   if (!Number.isFinite(extraBedDiscountPct)) extraBedDiscountPct = 0
 
   let thirdBedDiscountPct = Number(value?.thirdBedDiscountPct)
   if (!Number.isFinite(thirdBedDiscountPct)) thirdBedDiscountPct = extraBedDiscountPct
-
-  let fourthBedDiscountPct = Number(value?.fourthBedDiscountPct)
-  if (!Number.isFinite(fourthBedDiscountPct)) fourthBedDiscountPct = extraBedDiscountPct
-
-  let additionalBedDiscountPct = Number(value?.additionalBedDiscountPct)
-  if (!Number.isFinite(additionalBedDiscountPct)) additionalBedDiscountPct = extraBedDiscountPct
 
   const ageBands = Array.isArray(value?.ageBands)
     ? value.ageBands
@@ -293,11 +269,8 @@ const normalizeForm = (value) => {
   return {
     mode: String(value?.mode || '').toLowerCase() === 'person' ? 'person' : 'room',
     boardChargeMode: 'per_person',
-    fallbackKidDiscountPct: Math.max(0, Math.min(100, fallbackKidDiscountPct)),
     extraBedDiscountPct: Math.max(0, Math.min(100, extraBedDiscountPct)),
     thirdBedDiscountPct: Math.max(0, Math.min(100, thirdBedDiscountPct)),
-    fourthBedDiscountPct: Math.max(0, Math.min(100, fourthBedDiscountPct)),
-    additionalBedDiscountPct: Math.max(0, Math.min(100, additionalBedDiscountPct)),
     overnightTax,
     ageBands
   }
@@ -485,7 +458,7 @@ onMounted(async () => {
 
 .bands-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1.2fr 1.4fr auto;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.4fr) 104px;
   gap: 8px;
   align-items: center;
 }
@@ -500,6 +473,14 @@ onMounted(async () => {
   min-height: 44px;
   background: rgba(255, 255, 255, 0.92);
   color: var(--ds-text);
+}
+
+.bands-row input,
+.bands-row select,
+.bands-row .btn {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
 }
 
 .bands-head {

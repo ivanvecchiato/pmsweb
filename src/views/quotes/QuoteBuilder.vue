@@ -239,7 +239,7 @@ const normalizeKidsAges = (ages, expectedCount) => {
   const count = Math.max(0, Number(expectedCount) || 0)
   const normalized = []
   for (let i = 0; i < count; i++) {
-    const n = Number(src[i])
+    const n = src[i] == null || String(src[i]).trim() === '' ? NaN : Number(src[i])
     normalized.push(Number.isFinite(n) && n >= 0 ? Math.floor(n) : null)
   }
   return normalized
@@ -398,7 +398,14 @@ const isFormValid = computed(() => {
          (props.type !== 'hotel' || normalizedChildrenCount.value === 0 || (
            minimumKidAge.value !== null &&
            maximumKidAge.value !== null &&
-           quoteData.value.kidsAges.every((age) => Number.isFinite(Number(age)) && Number(age) >= minimumKidAge.value && Number(age) <= maximumKidAge.value)
+           quoteData.value.kidsAges.length === normalizedChildrenCount.value &&
+           quoteData.value.kidsAges.every((age) => {
+             if (age == null || String(age).trim() === '') return false
+             const normalized = Number(age)
+             return Number.isInteger(normalized) && hotelPricingPolicy.value.ageBands.some(
+               (band) => normalized >= band.minAge && normalized <= band.maxAge
+             )
+           })
          )) &&
          (props.type !== 'hotel' || calculatedRoomPrices.value.length > 0)
 })

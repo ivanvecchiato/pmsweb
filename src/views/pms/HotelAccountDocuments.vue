@@ -373,9 +373,13 @@ const saveReservation = async () => {
   const form = reservationForm.value
   if (!form) return
   if (Number(form.kids) > 0 && (
-    minimumKidAge.value === null ||
-    maximumKidAge.value === null ||
-    form.kidsAges.some(age => !Number.isFinite(Number(age)) || Number(age) < minimumKidAge.value || Number(age) > maximumKidAge.value)
+    form.kidsAges.length !== Number(form.kids) ||
+    form.kidsAges.some(age => {
+      if (age == null || String(age).trim() === '') return true
+      const normalized = Number(age)
+      return !Number.isInteger(normalized) ||
+        !hotelPricingPolicy.value.ageBands.some(band => normalized >= band.minAge && normalized <= band.maxAge)
+    })
   )) {
     alert('Età bambini non valida per le fasce configurate sul server')
     return
@@ -476,7 +480,7 @@ watch(() => reservationForm.value?.kids, (value) => {
   if (!reservationForm.value) return
   const count = Math.max(0, Number(value) || 0)
   reservationForm.value.kidsAges = reservationForm.value.kidsAges.slice(0, count)
-  while (reservationForm.value.kidsAges.length < count) reservationForm.value.kidsAges.push(minimumKidAge.value)
+  while (reservationForm.value.kidsAges.length < count) reservationForm.value.kidsAges.push(null)
 })
 onMounted(async () => {
   try {

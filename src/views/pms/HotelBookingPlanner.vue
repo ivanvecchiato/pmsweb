@@ -1280,7 +1280,7 @@ const normalizeKidsAges = (ages, expectedCount) => {
   const count = Math.max(0, Number(expectedCount) || 0);
   const normalized = [];
   for (let i = 0; i < count; i++) {
-    const value = Number(source[i]);
+    const value = source[i] == null || String(source[i]).trim() === '' ? NaN : Number(source[i]);
     normalized.push(Number.isFinite(value) && value >= 0 ? Math.floor(value) : null);
   }
   return normalized;
@@ -2032,9 +2032,13 @@ const submitNewBooking = async () => {
   if (isModalReadOnly.value) return;
 
   if (normalizedChildrenCount.value > 0 && (
-    minimumKidAge.value === null ||
-    maximumKidAge.value === null ||
-    newBookingData.value.kidsAges.some(age => !Number.isFinite(Number(age)) || Number(age) < minimumKidAge.value || Number(age) > maximumKidAge.value)
+    newBookingData.value.kidsAges.length !== normalizedChildrenCount.value ||
+    newBookingData.value.kidsAges.some(age => {
+      if (age == null || String(age).trim() === '') return true;
+      const normalized = Number(age);
+      return !Number.isInteger(normalized) || normalized < 0 ||
+        !hotelPricingPolicy.value.ageBands.some(band => normalized >= band.minAge && normalized <= band.maxAge);
+    })
   )) {
     alert('Età bambini non valida per le fasce configurate sul server');
     return;
