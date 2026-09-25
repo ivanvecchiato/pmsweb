@@ -63,6 +63,7 @@
                 || hasPermission('customers')
                 || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach']))
                 || (hasPermission('listino') && isPmsTypeAllowed(['hotel']))
+                || (hasPermission('pms_reports') && isPmsTypeAllowed(['hotel']))
               )
             "
             class="menu-section"
@@ -99,6 +100,19 @@
               </span>
               <span class="label">Prenotazioni</span>
             </router-link>
+
+            <router-link
+              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
+              to="/housekeeping"
+              :class="['menu-item', { active: route.path === '/housekeeping' }]"
+              aria-label="Piano pulizie"
+            >
+              <span class="icon" aria-hidden>✦</span>
+              <span class="label">Pulizie</span>
+            </router-link>
+            <div v-if="userRole === 'admin' && isPmsTypeAllowed(['hotel'])" class="submenu">
+              <router-link to="/housekeeping/activities" class="submenu-item">Registro pulizie</router-link>
+            </div>
 
             <router-link
               v-if="canShowHotelBeachMenus && (hasPermission('listino') || hasPermission('listino_beach'))"
@@ -167,6 +181,25 @@
                 </svg>
               </span>
               <span class="label">Conti</span>
+            </router-link>
+
+            <router-link
+              v-if="hasPermission('pms_reports') && isPmsTypeAllowed(['hotel'])"
+              to="/pms/reports"
+              :class="['menu-item', { active: route.path.startsWith('/pms/reports') }]"
+              aria-label="Report PMS"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 19V5m0 14h16M8 15l4-4 3 2 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="label">Report PMS</span>
+            </router-link>
+
+            <router-link v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])" to="/hotel-events"
+              :class="['menu-item', { active: route.path === '/hotel-events' }]" aria-label="Registro eventi hotel">
+              <span class="icon" aria-hidden="true">≡</span><span class="label">Registro eventi</span>
             </router-link>
 
             <router-link
@@ -405,12 +438,33 @@
             <span class="toolbar-eyebrow">Control panel</span>
             <h1>{{ activeSection.title }}</h1>
           </div>
+          <div class="notification-center">
+            <button type="button" class="notification-button" aria-label="Notifiche operative"
+              :aria-expanded="isNotificationOpen ? 'true' : 'false'" @click="toggleNotifications">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span v-if="unreadNotifications" class="notification-badge">{{ unreadNotifications }}</span>
+            </button>
+            <div v-if="isNotificationOpen" class="notification-popover">
+              <div class="notification-popover-title"><strong>Notifiche</strong><span>Ultime {{ MAX_NOTIFICATIONS }}</span></div>
+              <div v-if="!notifications.length" class="notification-empty">Nessuna notifica ricevuta.</div>
+              <article v-for="notification in notifications" :key="notification.id" class="notification-item">
+                <strong>{{ notification.title }}</strong>
+                <p>{{ notification.message }}</p>
+                <small>{{ notificationOperator(notification) }} · {{ formatNotificationTime(notification.time) }}</small>
+              </article>
+            </div>
+          </div>
         </header>
 
         <section class="content-body">
           <router-view />
         </section>
       </main>
+      <div v-if="activeToast" class="operational-toast" role="status">
+        <strong>{{ activeToast.title }}</strong><span>{{ activeToast.message }}</span>
+      </div>
     </div>
 
     <router-view v-else />
@@ -421,10 +475,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from './composables/useAuth'
+import axios from 'axios'
 
 const route = useRoute()
 const router = useRouter()
-const { isAuthenticated, logout, hasPermission, userRole, userName, isPmsTypeAllowed, canShowHotelBeachMenus } = useAuth()
+const { currentUser, isAuthenticated, logout, hasPermission, userRole, userName, isPmsTypeAllowed, canShowHotelBeachMenus } = useAuth()
 
 const MOBILE_BREAKPOINT = 1080
 const isStatsOpen = ref(false)
@@ -432,14 +487,94 @@ const isMenuAppOpen = ref(false)
 const isMobileViewport = ref(false)
 const isMobileMenuOpen = ref(false)
 const isSidebarCompact = ref(false)
+const MAX_NOTIFICATIONS = 8
+const notifications = ref([])
+const unreadNotifications = ref(0)
+const isNotificationOpen = ref(false)
+const activeToast = ref(null)
+let notificationToastTimeout = null
+let notificationAbortController = null
+let notificationReconnectTimeout = null
+let notificationStreamStopped = true
+const notificationNode = `pmsweb-notifications-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+const formatNotificationTime = time => new Date(time).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
+const notificationOperator = notification => {
+  if (notification.operator == null) return 'Operatore non comunicato'
+  if (String(notification.operator) === String(currentUser.value?.id)) return userName.value || `Operatore ${notification.operator}`
+  return `Operatore ${notification.operator}`
+}
+const toggleNotifications = () => {
+  isNotificationOpen.value = !isNotificationOpen.value
+  if (isNotificationOpen.value) unreadNotifications.value = 0
+}
+const receiveOperationalNotification = notification => {
+  notifications.value = [notification, ...notifications.value.filter(item => String(item.id) !== String(notification.id))].slice(0, MAX_NOTIFICATIONS)
+  if (!isNotificationOpen.value) unreadNotifications.value = Math.min(MAX_NOTIFICATIONS, unreadNotifications.value + 1)
+  activeToast.value = notification
+  if (notificationToastTimeout) clearTimeout(notificationToastTimeout)
+  notificationToastTimeout = setTimeout(() => { activeToast.value = null }, 5000)
+}
+const connectNotificationStream = async () => {
+  if (notificationStreamStopped) return
+  const controller = new AbortController()
+  notificationAbortController = controller
+  const baseUrl = String(import.meta.env.VITE_PMS_API_BASE_URL || '').trim().replace(/\/+$/, '')
+  try {
+    const response = await fetch(`${baseUrl}/api/pms/events?node=${encodeURIComponent(notificationNode)}&agent=web`, {
+      signal: controller.signal,
+      cache: 'no-store'
+    })
+    if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (!notificationStreamStopped) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const messages = buffer.split(/\r?\n\r?\n/)
+      buffer = messages.pop() || ''
+      for (const message of messages) {
+        try {
+          const event = JSON.parse(message.trim())
+          if (event.type === 'operational_notification' && event.data) receiveOperationalNotification(event.data)
+        } catch {}
+      }
+    }
+  } catch (error) {
+    if (!controller.signal.aborted) console.error('Connessione notifiche PMS interrotta:', error)
+  } finally {
+    if (notificationAbortController === controller) notificationAbortController = null
+    if (!notificationStreamStopped) notificationReconnectTimeout = setTimeout(connectNotificationStream, 3000)
+  }
+}
+const startNotificationStream = () => {
+  if (!notificationStreamStopped) return
+  notificationStreamStopped = false
+  axios.get('/api/pms/notifications', { params: { limit: MAX_NOTIFICATIONS }, mbarDirect: true })
+    .then(response => { notifications.value = response.data.notifications || [] })
+    .catch(error => console.error('Storico notifiche PMS non disponibile:', error))
+  connectNotificationStream()
+}
+const stopNotificationStream = () => {
+  notificationStreamStopped = true
+  if (notificationReconnectTimeout) clearTimeout(notificationReconnectTimeout)
+  if (notificationAbortController) notificationAbortController.abort()
+  notificationReconnectTimeout = null
+  notificationAbortController = null
+}
 
 const sectionContent = {
   '/': { title: 'Planner Hotel', description: 'Monitoraggio camere, prenotazioni e operativita giornaliera.' },
   '/bookings': { title: 'Prenotazioni', description: 'Lista annuale prenotazioni con ricerca, filtri e ordinamento.' },
+  '/housekeeping/activities': { title: 'Registro pulizie', description: 'Attività giornaliere della governante.' },
   '/customers': { title: 'Gestione Clienti', description: 'Anagrafica ospiti, contatti e storico relazioni.' },
   '/beach-bookings': { title: 'Planner Spiaggia', description: 'Controllo rapido delle prenotazioni stabilimento.' },
   '/quotes': { title: 'Preventivi', description: 'Creazione e conversione offerte in prenotazioni operative.' },
+  '/hotel-events': { title: 'Registro eventi', description: 'Storico delle operazioni hotel.' },
   '/accounts': { title: 'Conti Ospiti', description: 'Saldo servizi, depositi e chiusure conto.' },
+  '/pms/reports': { title: 'Report PMS', description: 'Vendite fiscalizzate e andamento nel periodo.' },
   '/breakfast-report': { title: 'Report Colazione', description: 'Report giornaliero delle colazioni e riepilogo ospiti.' },
   '/ps': { title: 'Schedine di notifica PS', description: 'Generazione del file giornaliero per AlloggiatiWeb.' },
   '/istat': { title: 'Istat', description: 'Rilevazione mensile dei flussi turistici per Ross1000 Veneto.' },
@@ -506,10 +641,24 @@ watch(
 onMounted(() => {
   updateViewportState()
   window.addEventListener('resize', updateViewportState, { passive: true })
+  if (isAuthenticated.value) startNotificationStream()
+})
+
+watch(isAuthenticated, authenticated => {
+  if (authenticated) {
+    startNotificationStream()
+  } else {
+    stopNotificationStream()
+    notifications.value = []
+    unreadNotifications.value = 0
+    isNotificationOpen.value = false
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updateViewportState)
+  stopNotificationStream()
+  if (notificationToastTimeout) clearTimeout(notificationToastTimeout)
 })
 
 const handleLogout = () => {
@@ -835,6 +984,8 @@ const handleLogout = () => {
 }
 
 .content-toolbar {
+  position: relative;
+  z-index: 2;
   padding: 22px 26px;
   border-radius: 30px;
   display: flex;
@@ -842,6 +993,19 @@ const handleLogout = () => {
   justify-content: space-between;
   gap: 20px;
 }
+
+.notification-center { position: relative; margin-left: auto; }
+.notification-button { position: relative; width: 46px; height: 46px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(29, 140, 242, 0.18); border-radius: 15px; background: rgba(29, 140, 242, 0.08); color: var(--ds-primary); cursor: pointer; }
+.notification-button svg { width: 23px; height: 23px; }
+.notification-badge { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; border: 2px solid white; border-radius: 999px; background: #d84b4b; color: white; font-size: .7rem; font-weight: 800; }
+.notification-popover { position: absolute; z-index: 30; top: calc(100% + 10px); right: 0; width: min(380px, calc(100vw - 40px)); max-height: 430px; overflow-y: auto; border: 1px solid rgba(148, 163, 184, 0.24); border-radius: 18px; background: rgba(255, 255, 255, .98); box-shadow: 0 22px 55px rgba(15, 23, 42, .2); }
+.notification-popover-title { position: sticky; top: 0; display: flex; justify-content: space-between; padding: 14px 16px; background: white; border-bottom: 1px solid rgba(148, 163, 184, .2); }
+.notification-popover-title span, .notification-item small { color: var(--ds-text-soft); font-size: .76rem; }
+.notification-item { padding: 13px 16px; border-bottom: 1px solid rgba(148, 163, 184, .16); }
+.notification-item p { margin: 5px 0; font-size: .86rem; line-height: 1.35; }
+.notification-empty { padding: 28px 16px; color: var(--ds-text-soft); text-align: center; }
+.operational-toast { position: fixed; z-index: 50; right: 24px; bottom: 24px; width: min(390px, calc(100vw - 32px)); padding: 15px 17px; display: flex; flex-direction: column; gap: 4px; border-radius: 16px; background: #17324d; color: white; box-shadow: 0 20px 45px rgba(15, 23, 42, .28); }
+.operational-toast span { font-size: .87rem; opacity: .9; }
 
 .toolbar-heading h1 {
   margin: 0;
@@ -860,6 +1024,8 @@ const handleLogout = () => {
 }
 
 .content-body {
+  position: relative;
+  z-index: 1;
   min-height: 0;
   flex: 1;
   overflow: auto;
@@ -907,8 +1073,7 @@ const handleLogout = () => {
   }
 
   .content-toolbar {
-    flex-direction: column;
-    align-items: stretch;
+    align-items: center;
   }
 }
 

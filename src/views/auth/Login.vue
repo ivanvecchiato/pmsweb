@@ -2,7 +2,8 @@
   <div class="login-container">
     <div class="login-shell">
       <section class="login-hero">
-        <div class="hero-badge">MBAR PMS</div>
+        <div><img src="@/assets/mood.png"/></div>
+        <!--
         <h1>Un’unica interfaccia per reception, bar e spiaggia.</h1>
         <p>
           Accesso rapido all’operativita giornaliera con un linguaggio visivo coerente,
@@ -19,8 +20,8 @@
             <span>Superfici chiare, gerarchia forte e controlli consistenti.</span>
           </article>
         </div>
+      -->
       </section>
-
       <section class="login-box">
         <div class="login-header">
           <div class="login-mark" aria-hidden="true">
@@ -31,7 +32,6 @@
           </div>
           <div>
             <h1>Accedi al sistema</h1>
-            <p>Property Management System</p>
           </div>
         </div>
 

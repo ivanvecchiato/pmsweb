@@ -33,6 +33,18 @@ const router = createRouter({
       meta: { requiresAuth: true, permissions: ['home', 'beach-bookings'], pmsTypes: ['hotel', 'beach'], requiresHospitalityStudioPms: true }
     },
     {
+      path: '/housekeeping',
+      name: 'Housekeeping',
+      component: () => import('@/views/pms/Housekeeping.vue'),
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
+    },
+    {
+      path: '/housekeeping/activities',
+      name: 'HousekeepingActivities',
+      component: () => import('@/views/pms/HousekeepingActivities.vue'),
+      meta: { requiresAuth: true, adminOnly: true, pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
+    },
+    {
       path: '/customers',
       name: 'CustomerManagement',
       component: () => import('@/views/pms/CustomerManagement.vue'),
@@ -105,6 +117,12 @@ const router = createRouter({
       meta: { requiresAuth: true, permission: 'inventory' }
     },
     {
+      path: '/pms/reports',
+      name: 'PmsReports',
+      component: () => import('@/views/pms/PmsReports.vue'),
+      meta: { requiresAuth: true, permission: 'pms_reports', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
+    },
+    {
       path: '/stats/products',
       name: 'StatsProducts',
       component: () => import('@/views/stats/StatsProducts.vue'),
@@ -133,6 +151,12 @@ const router = createRouter({
       name: 'QuoteManager',
       component: () => import('@/views/quotes/QuoteManager.vue'),
       meta: { requiresAuth: true, permission: 'home', requiresHospitalityStudioPms: true }
+    },
+    {
+      path: '/hotel-events',
+      name: 'HotelEvents',
+      component: () => import('@/views/pms/HotelEvents.vue'),
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {
       path: '/accounts',
@@ -175,7 +199,7 @@ const router = createRouter({
 
 // Navigation guard per proteggere le rotte
 router.beforeEach(async (to, from, next) => {
-  const { isAuthenticated, hasPermission, isPmsTypeAllowed, loadPmsType, pmsType, canShowHotelBeachMenus, validateSession } = useAuth()
+  const { isAuthenticated, hasPermission, isPmsTypeAllowed, loadPmsType, pmsType, canShowHotelBeachMenus, userRole, validateSession } = useAuth()
 
   validateSession()
 
@@ -193,6 +217,8 @@ router.beforeEach(async (to, from, next) => {
     } else if (to.meta.permissions && !to.meta.permissions.some((permission) => hasPermission(permission))) {
       next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
     } else if (to.meta.permission && !hasPermission(to.meta.permission)) {
+      next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
+    } else if (to.meta.adminOnly && userRole.value !== 'admin') {
       next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
     } else if (to.meta.requiresHospitalityStudioPms && !canShowHotelBeachMenus.value) {
       next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))

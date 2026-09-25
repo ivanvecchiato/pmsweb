@@ -149,6 +149,7 @@
       
       <form @submit.prevent="submitNewBooking" class="booking-form">
         <div v-if="editingBooking" class="reservation-history">
+          <router-link :to="{ path: '/hotel-events', query: { reservation_id: editingBooking.id } }">Registro eventi della prenotazione</router-link>
           <button type="button" class="reservation-history-toggle" @click="toggleReservationHistory">
             <span>{{ showReservationHistory ? 'Nascondi modifiche' : 'Visualizza modifiche' }}</span>
             <span>{{ showReservationHistory ? '−' : '+' }}</span>
@@ -2750,7 +2751,7 @@ const confirmCancel = async () => {
     editingBooking.value.displayStatus = STATUS_CANCELLED;
     editingBooking.value.status = STATUS_CANCELLED;
     editingBooking.value.cancellation_reason = response.data.cancellation_reason;
-    editingBooking.value.cancelled_at = response.data.cancelled_at;
+    editingBooking.value.cancelled_timestamp = response.data.cancelled_timestamp;
     selectedBooking.value = null;
     editingBooking.value = null;
     showCancelDialog.value = false;
@@ -2939,6 +2940,10 @@ const getDateRange = () => {
 };
 
 const handlePmsEvent = (event) => {
+  if (event.type === 'hotel_log_warning') {
+    showPlannerToast('Operazione eseguita, ma non registrata nel log hotel. Non ripetere l’operazione.', 'error');
+    return;
+  }
   if (!String(event.type || '').startsWith('reservation_')) return;
   const data = event.data || {};
   if (event.type === 'reservation_services_updated' && Array.isArray(data.services)) {

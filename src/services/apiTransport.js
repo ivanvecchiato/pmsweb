@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { useAuth } from '../composables/useAuth'
 import { addDoc, collection, doc, getDoc, getDocs, query as buildFsQuery, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { getFirebaseDb, isFirebaseRemoteMode } from './firebaseClient'
 
@@ -588,7 +589,8 @@ const isApiEndpoint = (url) => {
 }
 
 export const installApiTransportBridge = async () => {
-  if (!isFirebaseRemoteMode()) return
+  const remoteMode = isFirebaseRemoteMode()
+  const { currentUser } = useAuth()
 
   const originalAxiosRequest = axios.request.bind(axios)
   const originalFetch = globalThis.fetch?.bind(globalThis)
@@ -596,6 +598,21 @@ export const installApiTransportBridge = async () => {
   axios.request = async (config = {}) => {
     const method = (config.method || 'get').toLowerCase()
     const url = config.url || ''
+
+    const { endpoint } = splitEndpointAndQuery(url)
+    const isHotelMutation = endpoint === '/api/pms/updatereservation'
+      || endpoint === '/api/pms/saverate'
+      || endpoint === '/api/pms/updatetimetable'
+      || /^\/api\/pms\/hotel\/(new_?reservation|update_?reservation|delete_reservation|cancel_reservation|add_service|remove_service|return_service|deposit\/(fiscal|annul)|account\/close)$/.test(endpoint)
+    if (currentUser.value && isHotelMutation && config.data && typeof config.data === 'object' && !Array.isArray(config.data)) {
+      config = { ...config, data: { ...config.data, operator: currentUser.value.id } }
+      delete config.data.updatedBy
+    }
+    if (currentUser.value && ['/api/pms/checkin', '/api/pms/checkout'].includes(endpoint)) {
+      config = { ...config, params: { ...config.params, operator: currentUser.value.id } }
+      delete config.params.updatedBy
+    }
+    if (!remoteMode) return originalAxiosRequest(config)
 
     if (config.mbarDirect === true) {
       const directConfig = {
@@ -648,7 +665,7 @@ export const installApiTransportBridge = async () => {
   axios.put = (url, data, config = {}) => axios.request({ ...config, method: 'put', url, data })
   axios.patch = (url, data, config = {}) => axios.request({ ...config, method: 'patch', url, data })
 
-  if (!originalFetch) return
+  if (!remoteMode || !originalFetch) return
 
   globalThis.fetch = async (input, init = undefined) => {
     const rawUrl = typeof input === 'string' ? input : input?.url || ''
