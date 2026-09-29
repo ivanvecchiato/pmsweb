@@ -43,14 +43,6 @@
           <span>{{ isLoadingBar ? 'Caricamento...' : formatCurrency(barConsumptionsTotal) }}</span>
         </button>
 
-        <div class="line-row total-row"><span>Totale conto</span><span>{{ formatCurrency(accountTotalWithBar) }}</span></div>
-        <template v-if="payments.length">
-          <div v-for="(pay, i) in payments" :key="`pay-${i}`" class="line-row service-line">
-            <span>{{ String(pay.type || 'acconto').toLowerCase() === 'caparra' ? 'Caparra' : 'Acconto' }}<span v-if="pay.paymentDate"> · {{ formatDate(pay.paymentDate) }}</span><span v-if="pay.paymentMode"> — {{ pay.paymentMode }}</span></span>
-            <span>{{ formatCurrency(-Number(pay.amount || 0)) }}</span>
-          </div>
-        </template>
-
         <div class="line-row tax-row">
           <span>Tassa di soggiorno</span>
           <select
@@ -64,6 +56,66 @@
           </select>
           <span>{{ formatCurrency(account.overnightTax.total) }}</span>
         </div>
+        <div class="tax-guests">
+          <button
+            type="button"
+            class="tax-guests-title"
+            :class="{ 'tax-guests-title--expanded': taxGuestsExpanded }"
+            :aria-expanded="taxGuestsExpanded"
+            @click="taxGuestsExpanded = !taxGuestsExpanded"
+          >
+            <div>
+              <strong>Applicazione tassa per ospite</strong>
+              <span>Per ogni ospite la tassa è applicata di default; seleziona una natura soltanto in caso di esenzione.</span>
+            </div>
+            <span class="tax-guests-toggle" aria-hidden="true">{{ taxGuestsExpanded ? '−' : '+' }}</span>
+          </button>
+          <template v-if="taxGuestsExpanded">
+            <div v-if="!account.overnightTax.guests?.length" class="tax-guests-empty">
+              Nessuna presenza registrata: registra gli ospiti prima di applicare la tassa di soggiorno.
+            </div>
+            <div
+              v-for="guest in account.overnightTax.guests"
+              :key="guest.presenceId"
+              class="tax-guest-row"
+              :class="{ 'tax-guest-row--exempt': !guest.taxApplied }"
+            >
+              <div>
+                <strong>{{ guest.name || 'Ospite' }}</strong>
+                <span>{{ guest.taxableNights }} nott{{ guest.taxableNights === 1 ? 'e' : 'i' }}</span>
+              </div>
+              <span v-if="guest.exemptionReason === 'minor'" class="tax-exempt-label">
+                Esente — {{ guest.exemptionLabel }}
+              </span>
+              <span v-else-if="guest.amountBeforeExemption <= 0" class="tax-exempt-label">
+                Non applicata nel periodo
+              </span>
+              <select
+                v-else
+                v-model="overnightTaxExemptions[guest.presenceId]"
+                :disabled="isAccountPaid || isUpdatingOvernightTax"
+                @change="changeOvernightTaxExemption"
+              >
+                <option value="">Tassa applicata</option>
+                <option
+                  v-for="reason in manualOvernightTaxExemptionReasons"
+                  :key="reason.code"
+                  :value="reason.code"
+                >
+                  Esente — {{ reason.label }}
+                </option>
+              </select>
+              <strong>{{ formatCurrency(guest.amount) }}</strong>
+            </div>
+          </template>
+        </div>
+        <div class="line-row total-row"><span>Totale conto</span><span>{{ formatCurrency(accountTotalWithBar) }}</span></div>
+        <template v-if="payments.length">
+          <div v-for="(pay, i) in payments" :key="`pay-${i}`" class="line-row service-line">
+            <span>{{ String(pay.type || 'acconto').toLowerCase() === 'caparra' ? 'Caparra' : 'Acconto' }}<span v-if="pay.paymentDate"> · {{ formatDate(pay.paymentDate) }}</span><span v-if="pay.paymentMode"> — {{ pay.paymentMode }}</span></span>
+            <span>{{ formatCurrency(-Number(pay.amount || 0)) }}</span>
+          </div>
+        </template>
         <div class="line-row"><span>Residuo da incassare</span><span>{{ formatCurrency(remaining) }}</span></div>
       </div>
 
@@ -115,7 +167,7 @@
           </div>
         </div>
         <div v-if="!isAccountPaid" class="checkout-payment-summary" :class="{ 'checkout-payment-summary--paid': isCheckoutPaid }">
-          <span>Residuo da coprire</span>
+          <span>Residuo da pagare</span>
           <strong>{{ formatCurrency(checkoutRemaining) }}</strong>
         </div>
 
@@ -177,6 +229,9 @@ const payments = ref([])
 const checkoutPayments = ref([])
 const hotelPaymentMethods = ref([])
 const taxPaymentMethodId = ref('')
+const overnightTaxExemptions = ref({})
+const isUpdatingOvernightTax = ref(false)
+const taxGuestsExpanded = ref(false)
 
 const isLoadingBar = ref(false)
 const barConsumptions = ref([])
@@ -194,6 +249,15 @@ const checkoutPaymentsTotal = computed(() => Number(checkoutPayments.value.reduc
 const checkoutRemaining = computed(() => Math.max(0, Number((remaining.value - checkoutPaymentsTotal.value).toFixed(2))))
 const isCheckoutPaid = computed(() => remaining.value >= 0 && Math.abs(remaining.value - checkoutPaymentsTotal.value) < 0.01)
 const isAccountPaid = computed(() => account.value?.paymentStatus === 'paid')
+const manualOvernightTaxExemptionReasons = computed(() => (
+  account.value?.overnightTax?.exemptionReasons || []
+).filter(reason => reason.code !== 'minor'))
+
+const getOvernightTaxRequest = () => ({
+  exemptions: Object.entries(overnightTaxExemptions.value)
+    .filter(([, reason]) => Boolean(reason))
+    .map(([presenceId, reason]) => ({ presenceId, reason }))
+})
 
 function toISODate(date) {
   const y = date.getFullYear()
@@ -351,7 +415,7 @@ const normalizeKidsAges = (ages, expectedCount) => {
   const count = Math.max(0, Number(expectedCount) || 0)
   const normalized = []
   for (let i = 0; i < count; i++) {
-    const value = Number(source[i])
+    const value = source[i] == null || String(source[i]).trim() === '' ? NaN : Number(source[i])
     normalized.push(Number.isFinite(value) && value >= 0 ? Math.floor(value) : null)
   }
   return normalized
@@ -451,6 +515,12 @@ const loadReservationAccount = async () => {
       accountTotal: Number((hotelNetTotal + Number(overnightTax.total || 0) + servicesTotal).toFixed(2))
     }
 
+    overnightTaxExemptions.value = Object.fromEntries(
+      (overnightTax.guests || [])
+        .filter(guest => guest.exemptionReason !== 'minor')
+        .map(guest => [guest.presenceId, guest.exemptionReason || ''])
+    )
+
     payments.value = normalizeDeposits(res)
   } catch (error) {
     console.error('Errore caricamento conto dedicato:', error)
@@ -458,6 +528,32 @@ const loadReservationAccount = async () => {
     alert('Errore caricamento conto dedicato')
   } finally {
     isLoading.value = false
+  }
+}
+
+const changeOvernightTaxExemption = async () => {
+  if (!account.value?.id) return
+  isUpdatingOvernightTax.value = true
+  try {
+    const response = await axios.post('/api/pms/hotel/account/summary', {
+      reservationId: account.value.id,
+      overnightTax: getOvernightTaxRequest()
+    }, { mbarDirect: true })
+    account.value.overnightTax = response.data.overnightTax
+    account.value.accountTotal = Number((
+      Number(account.value.hotelNetTotal || 0)
+      + Number(response.data.overnightTax?.total || 0)
+      + Number(account.value.servicesTotal || 0)
+    ).toFixed(2))
+    checkoutPayments.value = []
+    prepareOvernightTaxPayment()
+  } catch (error) {
+    console.error('Errore applicazione esenzione tassa di soggiorno:', error)
+    alert(error.response?.data?.error || 'Impossibile applicare l’esenzione')
+    await loadReservationAccount()
+    prepareOvernightTaxPayment()
+  } finally {
+    isUpdatingOvernightTax.value = false
   }
 }
 
@@ -599,7 +695,8 @@ const printA4 = async () => {
 
   try {
     const response = await axios.post('/api/pms/hotel/account/proforma', {
-      reservationId: account.value.id
+      reservationId: account.value.id,
+      overnightTax: getOvernightTaxRequest()
     }, {
       responseType: 'blob',
       mbarDirect: true
@@ -635,6 +732,7 @@ const closeAccount = async () => {
         accountTotal: accountTotalWithBar.value
       },
       payments: [...payments.value, ...checkoutPayments.value],
+      overnightTax: getOvernightTaxRequest(),
       barConsumptions: barConsumptions.value,
       operator: currentUser.value.id
     }, { mbarDirect: true })
@@ -659,10 +757,10 @@ const goToAccounts = () => router.push('/accounts')
 
 onMounted(async () => {
   await Promise.all([loadReservationAccount(), loadHotelPaymentMethods()])
-  prepareOvernightTaxPayment()
   if (account.value?.id) {
     await loadBarConsumptions()
   }
+  prepareOvernightTaxPayment()
 })
 </script>
 
@@ -791,6 +889,101 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.92);
   color: var(--ds-text);
   font: inherit;
+}
+
+.tax-guests {
+  margin: 4px 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.tax-guests-title {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ds-text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.tax-guests-title--expanded,
+.tax-guests-empty {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.tax-guests-title > div,
+.tax-guests-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tax-guests-title span,
+.tax-guests-empty {
+  color: var(--ds-text-soft);
+  font-size: 0.82rem;
+}
+
+.tax-guests-empty {
+  padding: 10px 12px;
+}
+
+.tax-guests-toggle {
+  flex: 0 0 auto;
+  font-size: 1.25rem !important;
+  font-weight: 700;
+}
+
+.tax-guest-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(280px, 1.6fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  color: var(--ds-text);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.tax-guest-row:last-child {
+  border-bottom: 0;
+}
+
+.tax-guest-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tax-guest-row > div span {
+  color: var(--ds-text-soft);
+  font-size: 0.78rem;
+}
+
+.tax-guest-row select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ds-text);
+}
+
+.tax-guest-row--exempt {
+  background: rgba(236, 253, 245, 0.75);
+}
+
+.tax-exempt-label {
+  color: #166534;
+  font-size: 0.86rem;
+  font-weight: 700;
 }
 
 .total-row {
@@ -1010,6 +1203,15 @@ onMounted(async () => {
 
   .payment-entry-form {
     grid-template-columns: 1fr;
+  }
+
+  .tax-row,
+  .tax-guest-row {
+    grid-template-columns: 1fr;
+  }
+
+  .tax-guest-row > strong {
+    justify-self: end;
   }
 }
 

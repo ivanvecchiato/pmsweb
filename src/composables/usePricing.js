@@ -9,8 +9,8 @@ const timetables = ref({
 const hotelPricingPolicy = ref({
   mode: 'room',
   boardChargeMode: 'per_person',
-  fallbackKidDiscountPct: 0,
   extraBedDiscountPct: 0,
+  thirdBedDiscountPct: 0,
   overnightTax: {
     enabled: false,
     allYear: true,
@@ -87,17 +87,17 @@ const normalizePolicy = (rawPolicy = {}) => {
         .sort((a, b) => a.minAge - b.minAge)
     : []
 
-  let fallbackKidDiscountPct = Number(rawPolicy?.fallbackKidDiscountPct)
-  if (!Number.isFinite(fallbackKidDiscountPct)) fallbackKidDiscountPct = 0
-
   let extraBedDiscountPct = Number(rawPolicy?.extraBedDiscountPct)
   if (!Number.isFinite(extraBedDiscountPct)) extraBedDiscountPct = 0
+
+  let thirdBedDiscountPct = Number(rawPolicy?.thirdBedDiscountPct)
+  if (!Number.isFinite(thirdBedDiscountPct)) thirdBedDiscountPct = extraBedDiscountPct
 
   return {
     mode,
     boardChargeMode: String(rawPolicy?.boardChargeMode || 'per_person'),
-    fallbackKidDiscountPct: Math.max(0, Math.min(100, fallbackKidDiscountPct)),
     extraBedDiscountPct: Math.max(0, Math.min(100, extraBedDiscountPct)),
+    thirdBedDiscountPct: Math.max(0, Math.min(100, thirdBedDiscountPct)),
     overnightTax: normalizeOvernightTax(rawPolicy?.overnightTax || {}),
     ageBands
   }
@@ -106,9 +106,13 @@ const normalizePolicy = (rawPolicy = {}) => {
 const loadHotelPricingPolicy = async () => {
   try {
     const res = await axios.get('/api/pms/getconfigs?section=hotel')
-    hotelPricingPolicy.value = normalizePolicy(res?.data?.pricing || res?.data || {})
+    const pricing = res?.data?.pricing || res?.data
+    if (!pricing || typeof pricing !== 'object') throw new Error('Policy prezzi hotel non disponibile')
+    hotelPricingPolicy.value = normalizePolicy(pricing)
   } catch (err) {
+    hotelPricingPolicy.value = normalizePolicy({})
     console.error('Errore caricamento policy pricing hotel:', err)
+    throw err
   }
   return hotelPricingPolicy.value
 }
@@ -252,24 +256,13 @@ const applyDiscount = (fullPrice, discountPct) => {
 
 const resolveKidPricing = (age, policy, fullPrice) => {
   const bands = Array.isArray(policy?.ageBands) ? policy.ageBands : []
-  const fallbackDiscount = Number(policy?.fallbackKidDiscountPct ?? 0)
   if (!Number.isFinite(age)) {
-    return {
-      pricingType: 'discount',
-      discountPct: fallbackDiscount,
-      fixedPrice: 0,
-      amount: applyDiscount(fullPrice, fallbackDiscount)
-    }
+    throw new Error('Età bambino obbligatoria')
   }
 
   const match = bands.find((band) => age >= band.minAge && age <= band.maxAge)
   if (!match) {
-    return {
-      pricingType: 'discount',
-      discountPct: fallbackDiscount,
-      fixedPrice: 0,
-      amount: applyDiscount(fullPrice, fallbackDiscount)
-    }
+    throw new Error(`Nessuna fascia di prezzo configurata per un bambino di ${age} anni`)
   }
 
   if (match.pricingType === 'fixed') {
@@ -295,12 +288,30 @@ const calculateWeightedGuests = (occupancy = {}, policy = hotelPricingPolicy.val
   const extraBeds = Math.max(0, Number(occupancy.extraBeds || 0))
   const kidAges = Array.isArray(occupancy.kidAges) ? occupancy.kidAges : []
 
-  const adultsAmount = Number((adults * Number(fullPrice || 0)).toFixed(2))
+  let adultsAmount = 0
+  const adultsBreakdown = []
+  for (let i = 0; i < adults; i++) {
+    const position = i + 1
+    let discountPct = 0
+    if (position >= 3) discountPct = Number(policy?.thirdBedDiscountPct || 0)
+    const amount = applyDiscount(fullPrice, discountPct)
+    adultsBreakdown.push({ position, discountPct, amount })
+    adultsAmount += amount
+  }
+  adultsAmount = Number(adultsAmount.toFixed(2))
   let kidsAmount = 0
   const kidsBreakdown = []
   for (let i = 0; i < kids; i++) {
     const age = i < kidAges.length ? Number(kidAges[i]) : NaN
-    const pricing = resolveKidPricing(age, policy, fullPrice)
+    const ageBandPricing = resolveKidPricing(age, policy, fullPrice)
+    const pricing = adults >= 2
+      ? ageBandPricing
+      : {
+          pricingType: 'full',
+          discountPct: 0,
+          fixedPrice: 0,
+          amount: Number(Number(fullPrice || 0).toFixed(2))
+        }
     kidsBreakdown.push({
       index: i + 1,
       age: Number.isFinite(age) ? age : null,
@@ -322,6 +333,7 @@ const calculateWeightedGuests = (occupancy = {}, policy = hotelPricingPolicy.val
     adults,
     kids,
     adultsAmount,
+    adultsBreakdown,
     kidsAmount: Number(kidsAmount.toFixed(2)),
     extraBedsAmount,
     kidsBreakdown,
@@ -334,6 +346,17 @@ const calculateWeightedGuests = (occupancy = {}, policy = hotelPricingPolicy.val
 // Calcola il prezzo totale per un preventivo
 const calculateQuotePrice = (checkin, checkout, roomType, type = 'hotel', persone = 1, options = {}) => {
   if (!checkin || !checkout || !roomType) return null
+
+  if (type === 'hotel' && hotelPricingPolicy.value.mode === 'person') {
+    const kids = Math.max(0, Math.floor(Number(options?.kids || 0)))
+    const kidsAges = Array.isArray(options?.kidAges) ? options.kidAges : []
+    if (kidsAges.length !== kids || kidsAges.some((age) => {
+      if (age == null || String(age).trim() === '') return true
+      const normalized = Number(age)
+      return !Number.isInteger(normalized) || normalized < 0 ||
+        !hotelPricingPolicy.value.ageBands.some((band) => normalized >= band.minAge && normalized <= band.maxAge)
+    })) return null
+  }
   
   const start = new Date(checkin)
   const end = new Date(checkout)

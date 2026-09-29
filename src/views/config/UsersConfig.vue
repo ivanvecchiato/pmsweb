@@ -92,6 +92,7 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const webPermissions = [
   { key: 'inventory', label: 'Magazzino e prodotti' }, { key: 'stats', label: 'Statistiche' },
+  { key: 'pms_reports', label: 'Report PMS' },
   { key: 'daily_close', label: 'Chiusura giornaliera' }
 ]
 const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${currentUser.value.token}` })
