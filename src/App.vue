@@ -73,21 +73,32 @@
               v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
               to="/"
               :class="['menu-item', { active: route.path === '/' }]"
-              aria-label="Vai alla Home"
+              aria-label="Vai al Tableau"
             >
               <span class="icon" aria-hidden>
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </span>
-              <span class="label">Home</span>
+              <span class="label">Tableau</span>
             </router-link>
 
             <router-link
-              v-if="
-                (hasPermission('home') && isPmsTypeAllowed(['hotel']))
-                || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach']))
-              "
+              v-if="hasPermission('beach-bookings') && isPmsTypeAllowed(['beach'])"
+              to="/beach-tableau"
+              :class="['menu-item', { active: route.path === '/beach-tableau' }]"
+              aria-label="Vai al piano spiaggia"
+            >
+              <span class="icon" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 20h18M5 15h14M7 10h10M9 5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="label">Piano spiaggia</span>
+            </router-link>
+
+            <router-link
+              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
               to="/bookings"
               :class="['menu-item', { active: route.path === '/bookings' }]"
               aria-label="Prenotazioni"
@@ -129,20 +140,7 @@
             </router-link>
 
             <router-link
-              v-if="hasPermission('beach-bookings') && isPmsTypeAllowed(['beach'])"
-              to="/beach-bookings"
-              :class="['menu-item', { active: route.path === '/beach-bookings' }]"
-              aria-label="Prenotazioni Spiaggia"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 20h16M6 20v-9m6 9V6m6 14v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Prenotazioni Spiaggia</span>
-            </router-link>
-
-            <router-link
+              v-if="(hasPermission('home') && isPmsTypeAllowed(['hotel'])) || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach']))"
               to="/quotes"
               :class="['menu-item', { active: route.path === '/quotes' }]"
               aria-label="Preventivi"
@@ -434,10 +432,10 @@ const isMobileMenuOpen = ref(false)
 const isSidebarCompact = ref(false)
 
 const sectionContent = {
-  '/': { title: 'Planner Hotel', description: 'Monitoraggio camere, prenotazioni e operativita giornaliera.' },
+  '/': { title: 'Tableau', description: 'Monitoraggio camere, prenotazioni e operativita giornaliera.' },
+  '/beach-tableau': { title: 'Piano spiaggia', description: 'Zone, file e posti dello stabilimento.' },
   '/bookings': { title: 'Prenotazioni', description: 'Lista annuale prenotazioni con ricerca, filtri e ordinamento.' },
   '/customers': { title: 'Gestione Clienti', description: 'Anagrafica ospiti, contatti e storico relazioni.' },
-  '/beach-bookings': { title: 'Planner Spiaggia', description: 'Controllo rapido delle prenotazioni stabilimento.' },
   '/quotes': { title: 'Preventivi', description: 'Creazione e conversione offerte in prenotazioni operative.' },
   '/accounts': { title: 'Conti Ospiti', description: 'Saldo servizi, depositi e chiusure conto.' },
   '/breakfast-report': { title: 'Report Colazione', description: 'Report giornaliero delle colazioni e riepilogo ospiti.' },

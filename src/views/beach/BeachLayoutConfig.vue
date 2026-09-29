@@ -1,24 +1,44 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import axios from 'axios';
 
-// Stato per la creazione dei settori
-const sectors = ref([
-  { id: 1, name: 'Area Centrale', prefix: 'A', rows: 5, cols: 10, startPrice: 50 },
-  { id: 2, name: 'Area Laterale', prefix: 'B', rows: 5, cols: 8, startPrice: 40 }
-]);
-
+const sectors = ref([]);
+const savedZones = ref([]);
 const loading = ref(false);
+const error = ref('');
+
+const loadZones = async () => {
+  try {
+    const response = await axios.get('/api/pms/beach/getplan?mode=zones');
+    savedZones.value = response.data;
+    sectors.value = savedZones.value.map(zone => ({
+      id: zone.id,
+      name: zone.name,
+      prefix: zone.code,
+      rows: zone.rows.length,
+      cols: zone.rows[0]?.places.length || 0,
+      rowTypes: zone.rows.map(row => ({ ...row.place_type })),
+      placeOverrides: Object.fromEntries(zone.rows.flatMap((row, rowIndex) =>
+        row.places.flatMap((place, columnIndex) => place?.place_type
+          ? [[`${rowIndex}:${columnIndex}`, place.place_type.id]] : [])))
+    }));
+  } catch (cause) {
+    error.value = cause.message || 'Errore nel caricamento delle zone';
+  }
+};
+
+onMounted(loadZones);
 
 const addSector = () => {
-  const newId = sectors.value.length + 1;
+  const newId = Math.max(0, ...sectors.value.map(sector => sector.id)) + 1;
   sectors.value.push({ 
     id: newId, 
     name: `Nuovo Settore ${newId}`, 
     prefix: String.fromCharCode(65 + sectors.value.length), // B, C, D...
     rows: 1, 
-    cols: 1, 
-    startPrice: 30 
+    cols: 1,
+    rowTypes: [{ id: 1, description: 'FILA 1', label: 'F1', color: '#E3F2FD' }],
+    placeOverrides: {}
   });
 };
 
@@ -26,39 +46,46 @@ const removeSector = (id) => {
   sectors.value = sectors.value.filter(s => s.id !== id);
 };
 
-// Funzione core: genera gli oggetti "Ombrellone" basati sulla griglia definita
+const syncRows = (sector) => {
+  while (sector.rowTypes.length < sector.rows) {
+    const number = sector.rowTypes.length + 1;
+    sector.rowTypes.push({ id: number, description: `FILA ${number}`, label: `F${number}`, color: '#E3F2FD' });
+  }
+};
+
 const generateBeachMap = async () => {
-  if (!confirm("Questa operazione rigenererà tutti i posti. I dati esistenti potrebbero essere sovrascritti. Procedere?")) return;
-  
+  if (!confirm('Applicare la nuova struttura del piano spiaggia? I posti rimossi non saranno recuperabili.')) return;
+  error.value = '';
   loading.value = true;
-  const allResources = [];
-
-  sectors.value.forEach(sector => {
-    for (let r = 1; r <= sector.rows; r++) {
-      for (let c = 1; c <= sector.cols; c++) {
-        allResources.push({
-          id: `${sector.prefix}${r}-${c}`, // ID univoco es. A1-5
-          name: `${sector.prefix}${r}-${c}`,
-          row: r,
-          column: c,
-          sector: sector.name,
-          type: `FILA_${r}`, // La fila agisce come "Tipo Camera" per il listino base
-          basePrice: sector.startPrice
-        });
-      }
-    }
-  });
-
   try {
-    // Salviamo la configurazione nel database
-    await axios.post('/api/pms/beach/setup', {
-      sectors: sectors.value,
-      resources: allResources
+    const zones = sectors.value.map(sector => {
+      const existing = savedZones.value.find(zone => zone.id === sector.id);
+      return {
+        id: sector.id,
+        name: sector.name.trim(),
+        code: sector.prefix.trim(),
+        rows: Array.from({ length: sector.rows }, (_, rowIndex) => ({
+          place_type: sector.rowTypes[rowIndex],
+          places: Array.from({ length: sector.cols }, (_, columnIndex) => {
+            const place = { ...(existing?.rows[rowIndex]?.places[columnIndex] || {}) };
+            const overrideId = Number(sector.placeOverrides[`${rowIndex}:${columnIndex}`]);
+            const override = sector.rowTypes.find(type => type.id === overrideId);
+            if (override && override.id !== sector.rowTypes[rowIndex].id) place.place_type = override;
+            else delete place.place_type;
+            return place;
+          })
+        }))
+      };
     });
-    alert(`Successo! Generati ${allResources.length} posti spiaggia.`);
-  } catch (err) {
-    console.error(err);
-    alert("Errore durante la generazione del piano.");
+    const response = await axios.post('/api/pms/beach/setup', { zones });
+    if (response.data?.queued) {
+      error.value = 'Modifica accodata su Firebase: il server attuale non applica ancora le mutazioni remote.';
+      return;
+    }
+    await loadZones();
+    alert('Piano spiaggia aggiornato.');
+  } catch (cause) {
+    error.value = cause.response?.data?.error || cause.message || 'Errore nel salvataggio del piano';
   } finally {
     loading.value = false;
   }
@@ -73,9 +100,11 @@ const generateBeachMap = async () => {
         <p>Definisci la griglia di ombrelloni per ogni settore del tuo stabilimento.</p>
       </div>
       <button @click="generateBeachMap" class="btn-primary" :disabled="loading">
-        {{ loading ? 'Generazione...' : 'Applica e Genera Mappa' }}
+        {{ loading ? 'Salvataggio...' : 'Salva piano' }}
       </button>
     </header>
+
+    <p v-if="error" role="alert">{{ error }}</p>
 
     <div class="sectors-list">
       <div v-for="s in sectors" :key="s.id" class="sector-card">
@@ -91,15 +120,28 @@ const generateBeachMap = async () => {
           </div>
           <div class="field">
             <label>N. File (Rows)</label>
-            <input type="number" v-model.number="s.rows" />
+            <input type="number" min="1" v-model.number="s.rows" @input="syncRows(s)" />
           </div>
           <div class="field">
             <label>Ombrelloni per fila (Cols)</label>
-            <input type="number" v-model.number="s.cols" />
+            <input type="number" min="1" v-model.number="s.cols" />
           </div>
-          <div class="field">
-            <label>Prezzo Base (€)</label>
-            <input type="number" v-model.number="s.startPrice" />
+        </div>
+
+        <div v-for="rowIndex in s.rows" :key="rowIndex" class="row-type-editor">
+          <strong>Fila {{ rowIndex }}</strong>
+          <label>Tipo</label>
+          <input type="number" min="1" v-model.number="s.rowTypes[rowIndex - 1].id" />
+          <label>Descrizione</label>
+          <input v-model="s.rowTypes[rowIndex - 1].description" />
+          <div class="place-overrides">
+            <label v-for="columnIndex in s.cols" :key="columnIndex">
+              Posto {{ columnIndex }} · tipo
+              <select v-model.number="s.placeOverrides[`${rowIndex - 1}:${columnIndex - 1}`]">
+                <option value="">Della fila</option>
+                <option v-for="type in s.rowTypes.slice(0, s.rows)" :key="type.id" :value="type.id">{{ type.description }}</option>
+              </select>
+            </label>
           </div>
         </div>
 
@@ -116,6 +158,11 @@ const generateBeachMap = async () => {
 </template>
 
 <style scoped>
+.row-type-editor { margin: 12px 0; padding: 14px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.row-type-editor input { max-width: 170px; }
+.place-overrides { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; }
+.place-overrides label { display: flex; align-items: center; gap: 6px; font-size: .85rem; }
+.place-overrides select { padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
 .layout-container {
   padding: 8px;
   min-height: calc(100vh - 120px);

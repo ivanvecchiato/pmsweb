@@ -52,7 +52,7 @@ if (missing.length) {
   process.exit(1)
 }
 
-const sourcePath = process.env.DOCUMENTI_JSON_PATH || '/Users/ivanvecchiato/work/node/mbar-server/database/collections/documenti.json'
+const sourcePath = process.env.DOCUMENTI_JSON_PATH || resolve(ROOT, '../../node/mbar-server/database/bar/collections/documenti.json')
 const targetCollection = env.VITE_FIREBASE_STATS_DOCS_COLLECTION || 'order_facts'
 const writeMode = process.argv.includes('--write')
 const cleanupLegacy = process.argv.includes('--cleanup-legacy')

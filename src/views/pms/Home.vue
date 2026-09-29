@@ -1,6 +1,6 @@
 <template>
   <div class="home-page">
-    <div class="home-tabs" role="tablist" aria-label="Home PMS">
+    <div class="home-tabs" role="tablist" aria-label="Tableau PMS">
       <button
         type="button"
         role="tab"

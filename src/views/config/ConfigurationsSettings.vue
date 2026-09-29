@@ -39,19 +39,25 @@
     <section class="card">
       <div class="card-heading">
         <div>
-          <h2>PMS</h2>
+          <h2>Moduli</h2>
         </div>
-        <span class="status-pill" :class="{ active: form.enabled }">
-          {{ form.enabled ? 'Attivo' : 'Disattivato' }}
+        <span class="status-pill" :class="{ active: form.hotelEnabled || form.beachEnabled }">
+          {{ form.hotelEnabled || form.beachEnabled ? 'Attivi' : 'Disattivati' }}
         </span>
       </div>
       <div class="params-grid">
         <label class="checkbox-stack">
           <div>
-            <strong>PMS abilitato</strong>
+            <strong>Hotel abilitato</strong>
             <small>Consente l’accesso alle viste operative principali.</small>
           </div>
-          <input v-model="form.enabled" type="checkbox" />
+          <input v-model="form.hotelEnabled" type="checkbox" />
+        </label>
+        <label class="checkbox-stack">
+          <div>
+            <strong>Spiaggia abilitata</strong>
+          </div>
+          <input v-model="form.beachEnabled" type="checkbox" />
         </label>
       </div>
     </section>
@@ -188,12 +194,16 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { useAuth } from '@/composables/useAuth'
+
+const { loadPmsType } = useAuth()
 
 const loading = ref(false)
 const globalConfigs = ref({})
 const hotelSection = ref({})
 const form = ref({
-  enabled: true
+  hotelEnabled: false,
+  beachEnabled: false
 })
 const vatRatesForm = ref([10, 22])
 const vatRateDraft = ref('')
@@ -227,14 +237,6 @@ const normalizeBooleanLike = (value, defaultValue = true) => {
     if (['false', '0', 'no', 'n', 'off'].includes(normalized)) return false
   }
   return defaultValue
-}
-
-const normalizePmsConfig = (value) => {
-  const source = value && typeof value === 'object' ? value : {}
-  return {
-    ...source,
-    enabled: normalizeBooleanLike(source.enabled, true)
-  }
 }
 
 const normalizeVatRates = (value) => {
@@ -342,7 +344,7 @@ const loadForm = async () => {
     const currentHotelSection = hotelResponse?.data && typeof hotelResponse.data === 'object' ? hotelResponse.data : {}
     globalConfigs.value = configs
     hotelSection.value = currentHotelSection
-    form.value = normalizePmsConfig(configs.pms)
+    form.value = { hotelEnabled: configs.hotel?.enabled === true, beachEnabled: configs.beach?.enabled === true }
     vatRatesForm.value = normalizeVatRates(configs.vatRates)
     paymentsForm.value = normalizePayments(configs.payments)
     hotelFiscalPrinterForm.value = normalizeHotelFiscalPrinter(configs.hotelFiscalPrinter)
@@ -358,40 +360,33 @@ const loadForm = async () => {
 const save = async () => {
   loading.value = true
   try {
-    const currentPms = globalConfigs.value?.pms && typeof globalConfigs.value.pms === 'object'
-      ? globalConfigs.value.pms
-      : {}
-
+    const modulesChanged = globalConfigs.value.hotel?.enabled !== form.value.hotelEnabled
+      || globalConfigs.value.beach?.enabled !== form.value.beachEnabled
     const nextConfigs = {
       ...globalConfigs.value,
-      pms: {
-        ...currentPms,
-        enabled: normalizeBooleanLike(form.value.enabled, true)
-      },
+      hotel: { ...globalConfigs.value.hotel, enabled: form.value.hotelEnabled },
+      beach: { ...globalConfigs.value.beach, enabled: form.value.beachEnabled },
       vatRates: normalizeVatRates(vatRatesForm.value),
       payments: normalizePayments(paymentsForm.value),
       hotelFiscalPrinter: normalizeHotelFiscalPrinter(hotelFiscalPrinterForm.value)
     }
     const nextHotelSection = {
       ...(hotelSection.value || {}),
+      enabled: form.value.hotelEnabled,
       structure: normalizeStructureForm(structureForm.value)
     }
 
-    await Promise.all([
-      axios.post('/api/configs', nextConfigs, { mbarDirect: true }),
-      axios.post('/api/pms/setconfigs', {
-        section: 'hotel',
-        data: nextHotelSection
-      })
-    ])
+    await axios.post('/api/configs', nextConfigs, { mbarDirect: true })
+    await axios.post('/api/pms/setconfigs', { section: 'hotel', data: nextHotelSection })
+    await loadPmsType(true)
     globalConfigs.value = nextConfigs
     hotelSection.value = nextHotelSection
-    form.value = normalizePmsConfig(nextConfigs.pms)
+    form.value = { hotelEnabled: nextConfigs.hotel.enabled, beachEnabled: nextConfigs.beach.enabled }
     vatRatesForm.value = normalizeVatRates(nextConfigs.vatRates)
     paymentsForm.value = normalizePayments(nextConfigs.payments)
     hotelFiscalPrinterForm.value = normalizeHotelFiscalPrinter(nextConfigs.hotelFiscalPrinter)
     structureForm.value = normalizeStructureForm(nextHotelSection.structure)
-    alert('Configurazioni salvate correttamente')
+    alert(modulesChanged ? 'Configurazioni salvate. Riavvia il server per applicare la configurazione dei moduli.' : 'Configurazioni salvate correttamente')
   } catch (error) {
     console.error('Errore salvataggio configurazioni PMS:', error)
     alert('Errore salvataggio configurazioni')

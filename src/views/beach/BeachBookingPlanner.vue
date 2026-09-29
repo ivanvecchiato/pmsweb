@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import axios from 'axios';
-import BeachMap from './BeachMap.vue';
 import { useRouter } from 'vue-router'
 import QuoteBuilder from '../quotes/QuoteBuilder.vue'
 import { useAuth } from '@/composables/useAuth'
@@ -29,7 +28,6 @@ const editingBooking = ref(null); // store booking being edited when modal open
 const showCancelDialog = ref(false);
 const cancelReason = ref('');
 const isCancelling = ref(false);
-const showMap = ref(true);
 const now = new Date();
 const selectedDate = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
 const isLoading = ref(false);
@@ -80,14 +78,8 @@ const normalizeResource = (res) => {
 const findBeachPriceEntry = (list, place) => {
   if (!list || !Array.isArray(list.prices) || !place) return null;
 
-  const fila = toNumber(place.fila) ?? toNumber(place.column);
-  const riga = toNumber(place.riga) ?? toNumber(place.row);
-  if (fila != null && riga != null) {
-    const specific = list.prices.find((item) => {
-      return toNumber(item?.fila) === fila && toNumber(item?.riga) === riga;
-    });
-    if (specific) return { entry: specific, source: 'place' };
-  }
+  const specific = list.prices.find(item => toNumber(item?.id) === toNumber(place.id));
+  if (specific) return { entry: specific, source: 'place' };
 
   const placeTypeId = toNumber(place?.place_type?.id);
   if (placeTypeId != null) {
@@ -702,16 +694,6 @@ const nextPeriod = () => {
   fetchBookings();
 };
 
-const onMapSelect = (place) => {
-  openNewBooking(place, selectedDate.value);
-};
-
-const onMapEdit = (reservation) => {
-  // reservation is raw API object; normalize then open modal
-  const normalized = normalizeBooking(reservation);
-  openEditBooking(normalized);
-};
-
 const reloadAll = async () => {
   isLoading.value = true;
   loadError.value = '';
@@ -904,7 +886,7 @@ watch(selectedBooking, (id) => {
   <div class="planner-container">
     <div class="header">
       <div>
-        <h1 class="title">Planning Ombrelloni</h1>
+        <h2 class="title">Tableau spiaggia</h2>
         <p class="subtitle">Gestione prenotazioni stabilimento</p>
       </div>
       <div class="header-controls">
@@ -927,21 +909,6 @@ watch(selectedBooking, (id) => {
         <button @click="createQuote" class="btn btn-secondary">
           📋 Preventivo
         </button>
-      </div>
-    </div>
-
-    <div class="map-panel">
-      <div class="map-toolbar">
-        <div class="toolbar-left">
-          <label>Data mappa</label>
-          <input type="date" v-model="selectedDate" />
-        </div>
-        <button class="btn btn-secondary" @click="showMap = !showMap">
-          {{ showMap ? 'Nascondi Mappa' : 'Mostra Mappa' }}
-        </button>
-      </div>
-      <div v-if="showMap" class="map-wrapper">
-        <BeachMap :selectedDate="selectedDate" @select="onMapSelect" @edit="onMapEdit" />
       </div>
     </div>
 
@@ -1413,43 +1380,6 @@ watch(selectedBooking, (id) => {
   background: var(--beach-muted-surface);
 }
 
-.map-panel {
-  background: var(--beach-surface);
-  border: 1px solid var(--beach-border);
-  border-radius: 28px;
-  margin-bottom: 14px;
-  overflow: hidden;
-  box-shadow: var(--beach-shadow);
-  backdrop-filter: blur(18px);
-}
-
-.map-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 20px;
-  background: rgba(255, 255, 255, 0.9);
-  border-bottom: 1px solid var(--beach-border);
-}
-
-.toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 0.9rem;
-  color: var(--beach-text-soft);
-}
-
-.toolbar-left input {
-  padding: 8px 10px;
-  border-radius: 14px;
-  border: 1px solid var(--beach-border);
-  font-weight: 600;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.map-wrapper { padding: 12px 20px 24px; }
-
 .content {
   flex: 1;
   overflow: auto;
@@ -1873,7 +1803,6 @@ watch(selectedBooking, (id) => {
   .header { flex-direction: column; align-items: stretch; }
   .header-controls { flex-direction: column; }
   .date-navigation { justify-content: center; }
-  .map-toolbar { flex-direction: column; align-items: flex-start; }
   .filter-count { width: 100%; margin-left: 0; }
 }
 </style>

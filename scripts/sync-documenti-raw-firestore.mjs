@@ -101,7 +101,7 @@ if (missing.length) {
   process.exit(1)
 }
 
-const sourcePath = process.env.DOCUMENTI_JSON_PATH || '/Users/ivanvecchiato/work/node/mbar-server/database/collections/documenti.json'
+const sourcePath = process.env.DOCUMENTI_JSON_PATH || resolve(ROOT, '../../node/mbar-server/database/bar/collections/documenti.json')
 const targetCollection = env.VITE_FIREBASE_RAW_DOCS_COLLECTION || 'documenti_raw'
 const writeMode = process.argv.includes('--write')
 const maxArg = process.argv.find((a) => a.startsWith('--max='))

@@ -13,78 +13,8 @@ const adminPermissions = ['listino', 'listino_beach', 'onda_push_products', 'use
 const pmsPermissions = ['home', 'customers', 'beach-bookings']
 
 const currentUser = ref(null)
-const pmsType = ref(null)
-const pmsEnabled = ref(false)
-const pmsIntegrationType = ref(null)
+const modules = ref({ hotel: { enabled: false, providerType: null }, beach: { enabled: false } })
 let pmsTypeRequest = null
-
-const PMS_ENABLED_CANDIDATE_PATHS = ['pmsEnabled', 'enabled', 'active', 'isActive', 'pms.enabled']
-const INTEGRATION_TYPE_CANDIDATE_PATHS = [
-  'pmsIntegrationType',
-  'providerType',
-  'integrationType',
-  'type_',
-  'pmsTypeName',
-  'pmsName',
-  'provider',
-  'pms.providerType',
-  'pms.type_',
-  'pms.type'
-]
-
-const getByPath = (obj, path) => {
-  if (!obj || !path) return undefined
-  return path.split('.').reduce((acc, key) => (acc == null ? undefined : acc[key]), obj)
-}
-
-const getFirstDefined = (obj, paths) => {
-  for (const path of paths) {
-    const value = getByPath(obj, path)
-    if (value !== undefined && value !== null) {
-      return value
-    }
-  }
-  return undefined
-}
-
-const normalizePmsType = (type) => {
-  if (!type || typeof type !== 'string') return null
-  const normalized = type.toLowerCase()
-  if (normalized === 'hotel' || normalized === 'beach') return normalized
-  return null
-}
-
-const normalizeIntegrationType = (type) => {
-  if (!type || typeof type !== 'string') return null
-  return type
-    .toLowerCase()
-    .replace(/[\s_-]+/g, ' ')
-    .trim()
-}
-
-const parseBooleanLike = (value) => {
-  if (typeof value === 'boolean') return value
-  if (typeof value === 'number') return value === 1
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase()
-    return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'y' || normalized === 'on'
-  }
-  return null
-}
-
-const parsePmsEnabled = (payload) => {
-  const value = getFirstDefined(payload, PMS_ENABLED_CANDIDATE_PATHS)
-  const parsed = parseBooleanLike(value)
-  if (parsed !== null) return parsed
-
-  const integrationType = parseIntegrationType(payload)
-  return Boolean(integrationType)
-}
-
-const parseIntegrationType = (payload) => {
-  const rawIntegrationType = getFirstDefined(payload, INTEGRATION_TYPE_CANDIDATE_PATHS)
-  return normalizeIntegrationType(rawIntegrationType)
-}
 
 const fetchJson = async (url) => {
   const response = await fetch(url)
@@ -101,17 +31,6 @@ const getLoginUsers = async () => {
   return users
     .filter((user) => user && user.enabled !== false && user.active !== false)
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'it'))
-}
-
-const loadStoredPmsType = () => {
-  const stored = localStorage.getItem('pms_type')
-  pmsType.value = normalizePmsType(stored)
-
-  const storedEnabled = localStorage.getItem('pms_enabled')
-  pmsEnabled.value = storedEnabled === 'true'
-
-  const storedIntegrationType = localStorage.getItem('pms_integration_type')
-  pmsIntegrationType.value = normalizeIntegrationType(storedIntegrationType)
 }
 
 const loadUser = () => {
@@ -137,34 +56,16 @@ const loadPmsType = async (forceRefresh = false) => {
 
   pmsTypeRequest = (async () => {
     try {
-      let data
-      try {
-        data = await fetchJson(`${PMS_API_BASE_URL}/api/pms/getpmstype`)
-      } catch (primaryError) {
-        const configs = await fetchJson(`${PMS_API_BASE_URL}/api/configs`)
-        data = configs?.pms ? { ...configs.pms, pms: configs.pms } : configs
+      const data = await fetchJson(`${PMS_API_BASE_URL}/api/pms/getpmstype`)
+      if (typeof data?.hotel?.enabled !== 'boolean' || typeof data?.beach?.enabled !== 'boolean') {
+        throw new Error('Configurazione moduli non valida')
       }
-
-      const backendType = normalizePmsType(data?.type || data?.pmsType || data?.pms?.mode)
-      pmsEnabled.value = parsePmsEnabled(data)
-      pmsIntegrationType.value = parseIntegrationType(data)
-      pmsType.value = backendType
+      modules.value = { hotel: data.hotel, beach: data.beach }
     } catch (error) {
-      pmsType.value = null
-      pmsEnabled.value = false
-      pmsIntegrationType.value = null
-      console.warn('Unable to load PMS type from backend:', error)
+      modules.value = { hotel: { enabled: false, providerType: null }, beach: { enabled: false } }
+      console.warn('Unable to load modules from backend:', error)
     }
-
-    if (pmsType.value) {
-      localStorage.setItem('pms_type', pmsType.value)
-    } else {
-      localStorage.removeItem('pms_type')
-    }
-
-    localStorage.setItem('pms_enabled', String(pmsEnabled.value))
-    localStorage.setItem('pms_integration_type', pmsIntegrationType.value || '')
-    return pmsType.value
+    return modules.value
   })()
 
   try {
@@ -205,12 +106,7 @@ const login = async (user, pin) => {
 const logout = () => {
   currentUser.value = null
   localStorage.removeItem('pms_user')
-  localStorage.removeItem('pms_type')
-  localStorage.removeItem('pms_enabled')
-  localStorage.removeItem('pms_integration_type')
-  pmsType.value = null
-  pmsEnabled.value = false
-  pmsIntegrationType.value = null
+  modules.value = { hotel: { enabled: false, providerType: null }, beach: { enabled: false } }
 }
 
 const validateSession = () => {
@@ -233,20 +129,18 @@ const hasPermission = (page) => {
 
 const isPmsTypeAllowed = (allowedTypes) => {
   if (!allowedTypes || allowedTypes.length === 0) return true
-  if (!pmsType.value) return false
-  return allowedTypes.includes(pmsType.value)
+  return allowedTypes.some(type => modules.value[type]?.enabled === true)
 }
 
 const isAuthenticated = computed(() => currentUser.value !== null)
 const userRole = computed(() => currentUser.value?.role)
 const userName = computed(() => currentUser.value?.name)
-const isHotelPms = computed(() => pmsType.value === 'hotel')
-const isBeachPms = computed(() => pmsType.value === 'beach')
-const isHospitalityStudioPms = computed(() => pmsIntegrationType.value === 'hospitality studio')
-const canShowHotelBeachMenus = computed(() => pmsEnabled.value)
+const isHotelPms = computed(() => modules.value.hotel.enabled)
+const isBeachPms = computed(() => modules.value.beach.enabled)
+const pmsIntegrationType = computed(() => modules.value.hotel.providerType)
+const canShowHotelBeachMenus = computed(() => isHotelPms.value || isBeachPms.value)
 
 loadUser()
-loadStoredPmsType()
 
 if (currentUser.value) {
   loadPmsType()
@@ -255,12 +149,10 @@ if (currentUser.value) {
 export const useAuth = () => ({
   currentUser,
   isAuthenticated,
-  pmsType,
-  pmsEnabled,
+  modules,
   pmsIntegrationType,
   isHotelPms,
   isBeachPms,
-  isHospitalityStudioPms,
   canShowHotelBeachMenus,
   userRole,
   userName,

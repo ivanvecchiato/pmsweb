@@ -147,9 +147,7 @@
 <script setup>
 import axios from 'axios'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useAuth } from '@/composables/useAuth'
 
-const { pmsType, loadPmsType } = useAuth()
 const currentYear = new Date().getFullYear()
 const today = new Date()
 const yesterday = new Date(today)
@@ -254,10 +252,6 @@ const loadBookings = async () => {
   errorMessage.value = ''
 
   try {
-    if (!pmsType.value) {
-      await loadPmsType()
-    }
-
     const range = getArrivalRequestRange()
     const from = toEndpointDate(range.from)
     const to = toEndpointDate(range.to)
@@ -294,7 +288,7 @@ const filteredBookings = computed(() => {
     })
 })
 
-const resourceColumnLabel = computed(() => (pmsType.value === 'beach' ? 'Posto' : 'Stanza'))
+const resourceColumnLabel = 'Stanza'
 
 const resetFilters = () => {
   filters.customer = ''
