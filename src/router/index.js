@@ -1,9 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 
-const getAuthorizedFallbackRoute = ({ hasPermission, pmsType, canShowHotelBeachMenus }) => {
-  if (canShowHotelBeachMenus.value && hasPermission('home') && pmsType.value === 'hotel') return '/'
-  if (canShowHotelBeachMenus.value && hasPermission('beach-bookings') && pmsType.value === 'beach') return '/beach-bookings'
+const getAuthorizedFallbackRoute = ({ hasPermission, isPmsTypeAllowed }) => {
+  if (hasPermission('home') && isPmsTypeAllowed(['hotel'])) return '/'
+  if (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach'])) return '/beach-tableau'
   if (hasPermission('inventory')) return '/listino-prodotti'
   if (hasPermission('stats')) return '/stats/sales'
   if (hasPermission('listino')) return '/settings/configurations'
@@ -22,7 +22,7 @@ const router = createRouter({
     },
     {
       path: '/',
-      name: 'Home',
+      name: 'Tableau',
       component: () => import('@/views/pms/Home.vue'),
       meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
@@ -30,7 +30,7 @@ const router = createRouter({
       path: '/bookings',
       name: 'Bookings',
       component: () => import('@/views/pms/Bookings.vue'),
-      meta: { requiresAuth: true, permissions: ['home', 'beach-bookings'], pmsTypes: ['hotel', 'beach'], requiresHospitalityStudioPms: true }
+      meta: { requiresAuth: true, permission: 'home', pmsTypes: ['hotel'], requiresHospitalityStudioPms: true }
     },
     {
       path: '/housekeeping',
@@ -100,8 +100,13 @@ const router = createRouter({
     },
     {
       path: '/beach-bookings',
-      name: 'BeachBookingPlanner',
-      component: () => import('@/views/beach/BeachBookingPlanner.vue'),
+      redirect: '/beach-tableau?tab=tableau',
+      meta: { requiresAuth: true, permission: 'beach-bookings', pmsTypes: ['beach'], requiresHospitalityStudioPms: true }
+    },
+    {
+      path: '/beach-tableau',
+      name: 'BeachTableau',
+      component: () => import('@/views/beach/BeachTableau.vue'),
       meta: { requiresAuth: true, permission: 'beach-bookings', pmsTypes: ['beach'], requiresHospitalityStudioPms: true }
     },
     {
@@ -150,7 +155,7 @@ const router = createRouter({
       path: '/quotes',
       name: 'QuoteManager',
       component: () => import('@/views/quotes/QuoteManager.vue'),
-      meta: { requiresAuth: true, permission: 'home', requiresHospitalityStudioPms: true }
+      meta: { requiresAuth: true, permissions: ['home', 'beach-bookings'], pmsTypes: ['hotel', 'beach'], requiresHospitalityStudioPms: true }
     },
     {
       path: '/hotel-events',
@@ -215,15 +220,15 @@ router.beforeEach(async (to, from, next) => {
       // Non autenticato, redirect a login
       next('/login')
     } else if (to.meta.permissions && !to.meta.permissions.some((permission) => hasPermission(permission))) {
-      next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
+      next(getAuthorizedFallbackRoute({ hasPermission, isPmsTypeAllowed }))
     } else if (to.meta.permission && !hasPermission(to.meta.permission)) {
-      next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
+      next(getAuthorizedFallbackRoute({ hasPermission, isPmsTypeAllowed, canShowHotelBeachMenus }))
     } else if (to.meta.adminOnly && userRole.value !== 'admin') {
-      next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
+      next(getAuthorizedFallbackRoute({ hasPermission, isPmsTypeAllowed }))
     } else if (to.meta.requiresHospitalityStudioPms && !canShowHotelBeachMenus.value) {
-      next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
+      next(getAuthorizedFallbackRoute({ hasPermission, isPmsTypeAllowed }))
     } else if (to.meta.pmsTypes && !isPmsTypeAllowed(to.meta.pmsTypes)) {
-      next(getAuthorizedFallbackRoute({ hasPermission, pmsType, canShowHotelBeachMenus }))
+      next(getAuthorizedFallbackRoute({ hasPermission, isPmsTypeAllowed }))
     } else {
       // Autenticato e con permessi
       next()

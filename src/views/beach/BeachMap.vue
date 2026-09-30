@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
+import { isFirebaseRemoteMode } from '@/services/firebaseClient';
+import { getBeachReservationsForDate } from '@/services/beachReservations';
 
 const props = defineProps({
   selectedDate: {
@@ -48,8 +50,18 @@ const sectorsMap = computed(() => {
 const fetchData = async () => {
   loading.value = true;
   try {
-    const resData = await axios.get(`/api/pms/beach/getplan?mode=flat&includeReservations=true&date=${props.selectedDate}`);
-    resources.value = resData.data.map(normalizeResource);
+    if (isFirebaseRemoteMode()) {
+      const [resData, reservations] = await Promise.all([
+        axios.get('/api/pms/beach/getplan?mode=flat'),
+        getBeachReservationsForDate(props.selectedDate)
+      ]);
+      resources.value = resData.data.map(place => normalizeResource(reservations.has(place.id)
+        ? { ...place, reservation: reservations.get(place.id) }
+        : place));
+    } else {
+      const resData = await axios.get(`/api/pms/beach/getplan?mode=flat&includeReservations=true&date=${props.selectedDate}`);
+      resources.value = resData.data.map(normalizeResource);
+    }
   } catch (err) {
     console.error("Errore caricamento mappa:", err);
   } finally {
@@ -72,7 +84,7 @@ const handleUmbrellaClick = (umbrella) => {
   }
 };
 
-const emit = defineEmits(['select']);
+const emit = defineEmits(['select', 'edit']);
 onMounted(fetchData);
 watch(() => props.selectedDate, fetchData);
 </script>
@@ -82,7 +94,6 @@ watch(() => props.selectedDate, fetchData);
     <div class="map-legend">
       <div class="legend-item"><span class="box free"></span> Libero</div>
       <div class="legend-item"><span class="box occupied"></span> Occupato</div>
-      <div class="legend-item"><span class="box premium"></span> Premium</div>
     </div>
 
     <div class="sea-line">MARE 🌊</div>
@@ -108,7 +119,8 @@ watch(() => props.selectedDate, fetchData);
                 v-for="u in umbrellas" 
                 :key="u.id"
                 class="umbrella-spot"
-                :class="{ 'is-occupied': u.isOccupied, 'is-premium': u.column >= 4 && u.column <= 6 }"
+                :class="{ 'is-occupied': u.isOccupied }"
+                :style="{ borderColor: u.place_type?.color || '#fbbf24' }"
                 @click="handleUmbrellaClick(u)"
                 :title="`Posto ${u.name} - Fila ${u.row}`"
               >
@@ -142,7 +154,6 @@ watch(() => props.selectedDate, fetchData);
 .box { width: 15px; height: 15px; border-radius: 3px; display: inline-block; }
 .box.free { background: white; border: 1px solid #cbd5e1; }
 .box.occupied { background: #ef4444; }
-.box.premium { background: #fbbf24; }
 
 .sector-block { margin-bottom: 32px; }
 .sector-title { font-size: 0.8rem; color: #92400e; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 15px; }
@@ -163,7 +174,6 @@ watch(() => props.selectedDate, fetchData);
 
 .umbrella-spot:hover { transform: scale(1.1); box-shadow: 0 16px 24px rgba(15, 23, 42, 0.12); }
 .umbrella-spot.is-occupied { background: #ef4444; border-color: #991b1b; color: white; cursor: not-allowed; }
-.umbrella-spot.is-premium { background: #fffbeb; border-width: 3px; }
 
 .skeleton { display: flex; flex-direction: column; gap: 16px; padding: 20px; }
 .skeleton-line {

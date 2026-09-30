@@ -8,6 +8,10 @@
       <div class="header">
         <h1>Gestione Preventivi</h1>
         <div class="filters">
+          <select v-if="modules.hotel.enabled && modules.beach.enabled" v-model="currentPmsType" aria-label="Modulo preventivi">
+            <option value="hotel">Hotel</option>
+            <option value="beach">Spiaggia</option>
+          </select>
           <button @click="createNewQuote" class="btn btn-primary">
             + Nuovo Preventivo
           </button>
@@ -302,7 +306,7 @@ import { useAuth } from '@/composables/useAuth.js'
 
 const router = useRouter()
 const { quotes, loadQuotes, deleteQuote, convertToBooking: convertQuoteToBooking } = useQuotes()
-const { pmsType, loadPmsType } = useAuth()
+const { modules, loadPmsType } = useAuth()
 
 const selectedQuoteId = ref(null)
 const selectedRoomForConversion = ref(null)
@@ -316,7 +320,7 @@ const isDeleting = ref(false)
 const isConverting = ref(false)
 const showQuoteBuilder = ref(false)
 const selectedQuoteType = ref('hotel')
-const currentPmsType = computed(() => pmsType.value || 'hotel')
+const currentPmsType = ref('hotel')
 
 const filteredQuotes = computed(() => {
   return quotes.value.filter(q => q.type === currentPmsType.value)
@@ -599,7 +603,9 @@ const convertToBooking = async () => {
 
 onMounted(async () => {
   try {
-    await Promise.all([loadPmsType(), loadQuotes(), loadBeachPlaces()])
+    await loadPmsType()
+    await Promise.all([loadQuotes(), modules.value.beach.enabled ? loadBeachPlaces() : Promise.resolve()])
+    if (!modules.value.hotel.enabled && modules.value.beach.enabled) currentPmsType.value = 'beach'
   } catch (err) {
     alert('Errore nel caricamento dei preventivi: ' + err.message)
   } finally {

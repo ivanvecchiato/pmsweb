@@ -53,8 +53,11 @@ Le statistiche (`/api/mbar/*`) vengono calcolate in tempo reale dalla collezione
 
 - Tutte le `GET /api/*` cercano i dati nella collezione `api_cache` di Firestore.
 - Le `GET /api/mbar/*` (statistiche) aggregano i dati dalla collezione `order_facts`.
-- Tutte le `POST/PUT/PATCH/DELETE` vengono accumulatre in `api_mutations`
-  e applicate da mbar-server al rientro in rete locale.
+- Le `POST/PUT/PATCH/DELETE` vengono accodate in `api_mutations`. Il server attuale non ha un consumer per questa collezione: il seed aggiorna le letture, ma non applica le modifiche accodate.
+
+Per aggiornare soltanto le viste spiaggia nella cache eseguire `npm run seed:firebase -- --beach-only`.
+Il seed legge il documento esistente e scrive su Firestore solo quando la risposta dell'API cambia.
+Il piano a zone e i listini canonici occupano un documento ciascuno nella cache; il tableau legge le prenotazioni dalla collezione `pms_beach_reservations` per la data selezionata.
 
 ### Setup `.env` per il deploy Firebase
 

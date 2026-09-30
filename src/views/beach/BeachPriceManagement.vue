@@ -29,51 +29,10 @@ const normalizeResource = (res) => {
   return { ...res, row, column, sector, place_type: placeType, name };
 };
 
-const mostCommonValue = (values) => {
-  if (values.length === 0) return 0;
-  const counts = new Map();
-  values.forEach((val) => counts.set(val, (counts.get(val) || 0) + 1));
-  let bestVal = values[0];
-  let bestCount = 0;
-  counts.forEach((count, value) => {
-    if (count > bestCount) {
-      bestCount = count;
-      bestVal = value;
-    }
-  });
-  return bestVal;
-};
-
 const buildUiPricelist = (list, normalizedResources) => {
-  const pricesById = new Map();
-  (list.prices || []).forEach((p) => {
-    const price = Number(p.price_per_place);
-    pricesById.set(String(p.id), Number.isFinite(price) ? price : 0);
-  });
-
-  const rowDefaults = {};
-  const customPrices = {};
-  const rows = {};
-
-  normalizedResources.forEach((r) => {
-    const rowKey = String(r.row ?? 0);
-    if (!rows[rowKey]) rows[rowKey] = [];
-    rows[rowKey].push(r);
-  });
-
-  Object.entries(rows).forEach(([rowKey, items]) => {
-    const prices = items.map((r) => {
-      const price = pricesById.get(String(r.id));
-      return Number.isFinite(price) ? price : 0;
-    });
-    const defaultPrice = mostCommonValue(prices);
-    rowDefaults[rowKey] = defaultPrice;
-    items.forEach((r, idx) => {
-      if (prices[idx] !== defaultPrice) {
-        customPrices[r.id] = prices[idx];
-      }
-    });
-  });
+  const rowDefaults = Object.fromEntries(normalizedResources.map(r => [`${r.zone_id}:${r.row}`, 0]));
+  (list.rowPrices || []).forEach(row => { rowDefaults[`${row.zoneId}:${row.row}`] = row.price_per_place; });
+  const customPrices = Object.fromEntries((list.placeOverrides || []).map(place => [place.placeId, place.price_per_place]));
 
   return {
     id: list.id,
@@ -82,35 +41,24 @@ const buildUiPricelist = (list, normalizedResources) => {
     endDate: list.endDate ?? '',
     color: list.color ?? '#cbd5e1',
     rowDefaults,
-    customPrices,
-    _source: list
+    customPrices
   };
 };
 
-const buildPmsPayload = (list, normalizedResources) => {
-  const prices = normalizedResources.map((r, idx) => {
-    const rowKey = String(r.row ?? 0);
-    const rowDefault = Number(list.rowDefaults?.[rowKey] ?? 0);
-    const override = list.customPrices?.[r.id];
-    const price = Number.isFinite(Number(override)) ? Number(override) : (Number.isFinite(rowDefault) ? rowDefault : 0);
-    const placeType = r.place_type ?? {};
-    const priceId = Number(r.id);
-    return {
-      id: Number.isFinite(priceId) ? priceId : idx + 1,
-      fila: r.column,
-      riga: r.row,
-      place_type: {
-        id: placeType.id ?? r.row ?? 1,
-        description: placeType.description ?? `FILA ${r.row}`
-      },
-      price_per_place: price
-    };
-  });
-
+const buildPmsPayload = (list) => {
   return {
     id: list.id ?? 0,
+    description: list.description,
+    startDate: list.startDate,
+    endDate: list.endDate,
     color: list.color ?? '#A5D6A7',
-    prices
+    rowPrices: Object.entries(list.rowDefaults).map(([key, value]) => {
+      const [zoneId, row] = key.split(':').map(Number);
+      return { zoneId, row, price_per_place: Number(value) };
+    }),
+    placeOverrides: Object.entries(list.customPrices)
+      .filter(([, value]) => value !== '' && value != null)
+      .map(([placeId, value]) => ({ placeId: Number(placeId), price_per_place: Number(value) }))
   };
 };
 
@@ -118,7 +66,7 @@ const buildPmsPayload = (list, normalizedResources) => {
 const resourcesByRow = computed(() => {
   const rows = {};
   resources.value.forEach(r => {
-    const rowKey = String(r.row ?? 0);
+    const rowKey = `${r.zone_id}:${r.row}`;
     if (!rows[rowKey]) rows[rowKey] = [];
     rows[rowKey].push(r);
   });
@@ -198,7 +146,11 @@ const saveRangeAssignment = async () => {
   }
 
   try {
-    await axios.post('/api/pms/updatetimetable', { updates });
+    const response = await axios.post('/api/pms/updatetimetable?type=beach', { updates });
+    if (response.data?.queued) {
+      alert('Assegnazione accodata su Firebase: il server attuale non applica ancora le mutazioni remote.');
+      return;
+    }
     updates.forEach((upd) => {
       const idx = timetable.value.findIndex((d) => d.date === upd.date);
       if (idx !== -1) timetable.value[idx].pricelist = upd.pricelist;
@@ -217,7 +169,7 @@ const fetchData = async () => {
   try {
     const [resProd, resPrice, resTime] = await Promise.all([
       axios.get('/api/pms/beach/getplan?mode=flat'),
-      axios.get('/api/pms/getrates?type=beach'),
+      axios.get('/api/pms/getrates?type=beach&mode=canonical'),
       axios.get('/api/pms/gettimetable?type=beach')
     ]);
     const normalizedResources = resProd.data.map(normalizeResource);
@@ -235,23 +187,41 @@ const saveBeachPrices = async (list) => {
   try {
     // Il payload conterrà i prezzi per fila (default) 
     // e gli override per (fila, colonna) specifici
-    const payload = buildPmsPayload(list, resources.value);
-    await axios.post('/api/pms/saverate?type=beach', payload);
+    const payload = buildPmsPayload(list);
+    const response = await axios.post('/api/pms/saverate?type=beach', payload);
+    if (response.data?.queued) {
+      alert('Modifica accodata su Firebase: il server attuale non applica ancora le mutazioni remote.');
+      return;
+    }
+    await fetchData();
     alert("Listino spiaggia aggiornato con successo!");
   } catch (err) {
     alert("Errore nel salvataggio");
   }
 };
 
+const addPricelist = () => {
+  const draft = pricelists.value.find(list => list.id === 0);
+  if (draft) {
+    selectedPricelist.value = draft;
+    return;
+  }
+  const rowDefaults = Object.fromEntries(Object.keys(resourcesByRow.value).map(row => [row, 0]));
+  const list = {
+    id: 0,
+    description: 'Nuovo listino',
+    color: '#A5D6A7',
+    rowDefaults,
+    customPrices: {}
+  };
+  pricelists.value.push(list);
+  selectedPricelist.value = list;
+};
+
 // Funzione per impostare rapidamente il prezzo a tutta una fila
 const setRowPrice = (rowNumber, price) => {
   if (!selectedPricelist.value.rowDefaults) selectedPricelist.value.rowDefaults = {};
   selectedPricelist.value.rowDefaults[rowNumber] = price;
-  
-  // Opzionale: resetta gli override manuali di quella fila se si vuole resettare
-  resources.value.filter(r => String(r.row) === String(rowNumber)).forEach(r => {
-    delete selectedPricelist.value.customPrices?.[r.id];
-  });
 };
 
 onMounted(fetchData);
@@ -261,6 +231,7 @@ onMounted(fetchData);
   <div class="config-container" @mouseup="handleMouseUp">
     <div class="sidebar">
       <h2>Listini Spiaggia</h2>
+      <button type="button" class="btn-save" @click="addPricelist">Nuovo listino</button>
 
       <div v-for="price in pricelists" :key="price.id"
            class="price-card" 
@@ -294,14 +265,14 @@ onMounted(fetchData);
 
       <section v-if="activeView === 'pricing' && selectedPricelist" class="editor-section">
         <div class="editor-header">
-          <h3>Configurazione Prezzi: {{ selectedPricelist.description }}</h3>
+          <input v-model="selectedPricelist.description" aria-label="Nome listino spiaggia" />
           <button class="btn-save" @click="saveBeachPrices(selectedPricelist)">Salva Configurazione</button>
         </div>
 
         <div class="beach-grid-editor">
           <div v-for="(items, row) in resourcesByRow" :key="row" class="row-config">
             <div class="row-header">
-              <h4>FILA {{ row }}</h4>
+              <h4>{{ items[0]?.sector }} · FILA {{ items[0]?.row }}</h4>
               <div class="default-setter">
                 <label>Prezzo Base Fila:</label>
                 <input type="number" 
@@ -318,7 +289,7 @@ onMounted(fetchData);
                        v-model.number="selectedPricelist.customPrices[u.id]" 
                        :placeholder="selectedPricelist.rowDefaults[row]"
                        class="input-u" />
-                <small v-if="selectedPricelist.customPrices[u.id]" class="override-tag">Override</small>
+                <small v-if="selectedPricelist.customPrices[u.id] !== '' && selectedPricelist.customPrices[u.id] != null" class="override-tag">Override</small>
               </div>
             </div>
           </div>

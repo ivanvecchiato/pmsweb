@@ -224,7 +224,6 @@ import axios from 'axios'
 import menuTemplate from '@/menu/assets/menu-hotel.html?raw'
 import dailyMenuTemplate from '@/menu/assets/menu-hotel-giornaliero.html?raw'
 import logoUrl from '@/menu/assets/logo.png'
-import interrazzaLogoUrl from '@/menu/assets/interrazza.png'
 
 const MENU_ENDPOINT = '/api/menu'
 const rowCount = 6
@@ -535,12 +534,6 @@ function resolveAssetUrl(assetUrl) {
 }
 
 function resolveTemplateLogoUrl(logo) {
-  const templateSrc = logo.getAttribute('src') || ''
-
-  if (templateSrc.includes('interrazza')) {
-    return resolveAssetUrl(interrazzaLogoUrl)
-  }
-
   return resolveAssetUrl(logoUrl)
 }
 

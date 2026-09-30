@@ -18,7 +18,7 @@ import { readFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { initializeApp } from 'firebase/app'
-import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 
 // ---------------------------------------------------------------------------
 // Legge .env senza dipendenze esterne
@@ -135,8 +135,15 @@ const seedEndpoint = async (path) => {
     return
   }
 
+  const cacheRef = doc(db, API_CACHE_COLLECTION, docId)
+  const previous = await getDoc(cacheRef)
+  if (previous.exists() && JSON.stringify(previous.data().response) === JSON.stringify(response)) {
+    console.log(`  =  ${path} invariato, nessuna scrittura`)
+    return
+  }
+
   await setDoc(
-    doc(db, API_CACHE_COLLECTION, docId),
+    cacheRef,
     {
       method: 'get',
       endpoint,
@@ -181,9 +188,10 @@ const ENDPOINTS = [
 
   // Listini e timetable beach
   '/api/pms/getrates?type=beach',
+  '/api/pms/getrates?type=beach&mode=canonical',
   '/api/pms/gettimetable?type=beach',
+  '/api/pms/beach/getplan?mode=zones',
   '/api/pms/beach/getplan?mode=flat',
-  '/api/pms/beach/getplan?mode=flat&includeReservations=true',
 
   // Inventario bar
   '/api/inventory',
@@ -206,7 +214,11 @@ const ENDPOINTS = [
 console.log(`\nFirebase seed → collection: ${API_CACHE_COLLECTION}`)
 console.log(`Server locale: ${API_BASE}\n`)
 
-for (const path of ENDPOINTS) {
+const selectedEndpoints = process.argv.includes('--beach-only')
+  ? ENDPOINTS.filter(path => path.includes('type=beach') || path.startsWith('/api/pms/beach/'))
+  : ENDPOINTS
+
+for (const path of selectedEndpoints) {
   await seedEndpoint(path)
 }
 
