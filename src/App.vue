@@ -104,15 +104,12 @@
             <router-link
               v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
               to="/housekeeping"
-              :class="['menu-item', { active: route.path === '/housekeeping' }]"
+              :class="['menu-item', { active: route.path.startsWith('/housekeeping') }]"
               aria-label="Piano pulizie"
             >
               <span class="icon" aria-hidden>✦</span>
               <span class="label">Pulizie</span>
             </router-link>
-            <div v-if="userRole === 'admin' && isPmsTypeAllowed(['hotel'])" class="submenu">
-              <router-link to="/housekeeping/activities" class="submenu-item">Registro pulizie</router-link>
-            </div>
 
             <router-link
               v-if="canShowHotelBeachMenus && (hasPermission('listino') || hasPermission('listino_beach'))"

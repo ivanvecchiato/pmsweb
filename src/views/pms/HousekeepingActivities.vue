@@ -16,6 +16,7 @@
     <div class="summary">
       <span><strong>{{ cleaningCount }}</strong> pulizie</span>
       <span><strong>{{ inProgressCount }}</strong> in corso</span>
+      <span v-if="unregisteredCount"><strong>{{ unregisteredCount }}</strong> senza avvio registrato</span>
       <span><strong>{{ noteCount }}</strong> note e segnalazioni</span>
     </div>
 
@@ -25,7 +26,7 @@
         <tbody>
           <tr v-for="activity in rows" :key="activity.id">
             <td><strong>{{ activity.roomCode }}</strong><small>{{ activity.roomType }}<span v-if="activity.floor"> · Piano {{ activity.floor }}</span></small></td>
-            <td><span v-if="activity.kind === 'cleaning' && !activity.endedAt" class="in-progress">In corso</span><span v-else>{{ activity.kind === 'cleaning' ? 'Conclusa' : activity.kind === 'fault' ? 'Segnalazione' : 'Nota' }}</span></td>
+            <td><span v-if="activity.kind === 'unregistered'" class="in-progress">Avvio non registrato</span><span v-else-if="activity.kind === 'cleaning' && !activity.endedAt" class="in-progress">In corso</span><span v-else>{{ activity.kind === 'cleaning' ? 'Conclusa' : activity.kind === 'fault' ? 'Segnalazione' : 'Nota' }}</span></td>
             <td>{{ activity.kind === 'cleaning' ? formatTime(activity.time) : '—' }}</td>
             <td>{{ activity.kind === 'cleaning' ? (activity.endedAt ? formatTime(activity.endedAt) : '—') : '—' }}</td>
             <td><div v-for="(note, index) in activity.notes" :key="index" class="note"><strong>{{ note.kind === 'fault' ? 'Segnalazione' : 'Nota' }}</strong> {{ note.text }}<small v-if="activity.kind !== 'cleaning'">{{ formatTime(activity.time) }}</small></div><span v-if="!activity.notes.length">—</span></td>
@@ -52,6 +53,7 @@ let refreshInterval = null
 
 const cleaningCount = computed(() => rows.value.filter(item => item.kind === 'cleaning').length)
 const inProgressCount = computed(() => rows.value.filter(item => item.kind === 'cleaning' && !item.endedAt).length)
+const unregisteredCount = computed(() => rows.value.filter(item => item.kind === 'unregistered').length)
 const noteCount = computed(() => rows.value.reduce((count, item) => count + item.notes.length, 0))
 const formatTime = value => new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 
