@@ -588,36 +588,100 @@
     v-if="showBookingActionMenu"
     class="booking-action-menu"
     :style="bookingActionMenuStyle"
+    role="dialog"
+    aria-labelledby="booking-popup-title"
+    tabindex="-1"
+    @keydown.esc="closeBookingActions"
     @click.stop
   >
-    <template v-if="isCheckoutContextMenu">
-      <button type="button" class="booking-action-item" @click="openViewFromMenu">
-        Visualizza
+    <div class="booking-popup-header">
+      <span class="booking-popup-status-dot" :style="{ background: getBookingStatusMeta(actionMenuBooking).color }"></span>
+      <div>
+        <h3 id="booking-popup-title">{{ actionMenuBooking.guest || 'Prenotazione' }}</h3>
+        <span class="booking-popup-status">{{ getBookingStatusLabel(actionMenuBooking) }}</span>
+      </div>
+      <button type="button" class="close-btn" aria-label="Chiudi" @click="closeBookingActions">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
       </button>
-      <button v-if="isPendingPaymentContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
-        Paga
-      </button>
-      <button type="button" class="booking-action-item booking-action-item--danger" @click="undoCheckoutFromMenu">
-        Annulla checkout
-      </button>
-    </template>
-    <template v-else>
-      <button type="button" class="booking-action-item" @click="openEditFromMenu">
-        Modifica
-      </button>
-      <button type="button" class="booking-action-item" @click="openGuestRegistrationFromMenu">
-        Registra ospiti
-      </button>
-      <button v-if="bookingStatusActionLabel" type="button" class="booking-action-item" @click="runBookingStatusAction">
-        {{ bookingStatusActionLabel }}
-      </button>
-      <button type="button" class="booking-action-item" @click="openAddServiceFromMenu">
-        Aggiungi Servizio
-      </button>
-      <button v-if="isCheckedInContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
-        Paga conto
-      </button>
-    </template>
+    </div>
+    <div class="booking-popup-body">
+      <dl class="booking-popup-details">
+        <div class="booking-popup-info">
+          <svg class="booking-popup-icon" aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M3 18v-7h18v7M3 15h18M5 11V6h14v5M8 8h3v3M13 8h3v3M3 18v2M21 18v2" />
+          </svg>
+          <dt>Camera</dt>
+          <dd>{{ actionMenuRoom ? `${actionMenuRoom.code} · ${actionMenuRoom.type}` : 'Camera non assegnata' }}</dd>
+        </div>
+        <div class="booking-popup-dates booking-popup-info">
+          <svg class="booking-popup-icon" aria-hidden="true" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+          <div><dt>Check-in</dt><dd>{{ actionMenuBooking.startDate.toLocaleDateString('it-IT') }}</dd></div>
+          <div><dt>Check-out</dt><dd>{{ actionMenuCheckout.toLocaleDateString('it-IT') }}</dd></div>
+        </div>
+        <div class="booking-popup-info">
+          <svg class="booking-popup-icon" aria-hidden="true" viewBox="0 0 24 24">
+            <circle cx="9" cy="7" r="3" />
+            <path d="M3 20v-2a6 6 0 0 1 12 0v2H3ZM16 4a3 3 0 0 1 0 6M17 13a5 5 0 0 1 4 5v2h-3" />
+          </svg>
+          <dd>{{ actionMenuBooking.guests.length || (Number(actionMenuBooking.adults) + Number(actionMenuBooking.kids)) }} persone</dd>
+        </div>
+        <div class="booking-popup-info">
+          <svg class="booking-popup-icon" aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M4 3v5a3 3 0 0 0 6 0V3M7 3v18M20 21V3c-3 2-4 5-4 9h4" />
+          </svg>
+          <dt>Trattamento</dt>
+          <dd>{{ actionMenuBooking.board.toUpperCase() }}</dd>
+        </div>
+        <div v-if="getReservationNotes(actionMenuBooking)" class="booking-popup-info booking-popup-notes">
+          <svg class="booking-popup-icon" aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h6" />
+          </svg>
+          <dt>Note</dt>
+          <dd>{{ getReservationNotes(actionMenuBooking) }}</dd>
+        </div>
+        <div class="booking-popup-total booking-popup-info">
+          <svg class="booking-popup-icon" aria-hidden="true" viewBox="0 0 24 24">
+            <rect x="3" y="5" width="18" height="14" rx="3" />
+            <path d="M3 10h18M7 15h3M13 15h2" />
+          </svg>
+          <dt>Prezzo totale</dt>
+          <dd>{{ actionMenuBooking.priceTotal == null ? 'Non disponibile' : Number(actionMenuBooking.priceTotal).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' }) }}</dd>
+        </div>
+      </dl>
+      <div class="booking-popup-actions">
+        <template v-if="isCheckoutContextMenu">
+          <button type="button" class="booking-action-item" @click="openViewFromMenu">
+            Visualizza
+          </button>
+          <button v-if="isPendingPaymentContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
+            Paga
+          </button>
+          <button type="button" class="booking-action-item booking-action-item--danger" @click="undoCheckoutFromMenu">
+            Annulla checkout
+          </button>
+        </template>
+        <template v-else>
+          <button type="button" class="booking-action-item" @click="openEditFromMenu">
+            Modifica
+          </button>
+          <button type="button" class="booking-action-item" @click="openGuestRegistrationFromMenu">
+            Registra ospiti
+          </button>
+          <button v-if="bookingStatusActionLabel" type="button" class="booking-action-item" @click="runBookingStatusAction">
+            {{ bookingStatusActionLabel }}
+          </button>
+          <button type="button" class="booking-action-item" @click="openAddServiceFromMenu">
+            Aggiungi Servizio
+          </button>
+          <button v-if="isCheckedInContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
+            Paga conto
+          </button>
+        </template>
+      </div>
+    </div>
   </div>
 </Teleport>
 
@@ -758,7 +822,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
 import trashIcon from '@/assets/trash.svg';
 import { watch } from 'vue';
@@ -1612,6 +1676,14 @@ const bookingStatusActionLabel = computed(() => {
   return statusAction?.label || '';
 });
 
+const actionMenuRoom = computed(() => rooms.value.find(room => room.id === actionMenuBooking.value?.roomId));
+
+const actionMenuCheckout = computed(() => {
+  const checkout = new Date(actionMenuBooking.value.startDate);
+  checkout.setDate(checkout.getDate() + actionMenuBooking.value.duration);
+  return checkout;
+});
+
 const bookingActionMenuStyle = computed(() => ({
   left: `${actionMenuPosition.value.x}px`,
   top: `${actionMenuPosition.value.y}px`
@@ -1630,8 +1702,8 @@ const openBookingActions = (event, booking) => {
   selectedBooking.value = booking.id;
   actionMenuBooking.value = booking;
 
-  const menuWidth = 180;
-  const menuHeight = 240;
+  const menuWidth = Math.min(580, window.innerWidth - 16);
+  const menuHeight = window.innerWidth <= 560 ? 610 : 450;
   const viewportPadding = 8;
   const x = Math.min(event.clientX, window.innerWidth - menuWidth - viewportPadding);
   const y = Math.min(event.clientY + 8, window.innerHeight - menuHeight - viewportPadding);
@@ -1642,6 +1714,7 @@ const openBookingActions = (event, booking) => {
   };
 
   showBookingActionMenu.value = true;
+  nextTick(() => document.querySelector('.booking-action-menu')?.focus());
 };
 
 const openEditFromMenu = () => {
@@ -2849,6 +2922,7 @@ const convertReservations = (apiReservations) => {
       kidsAges: normalizeKidsAges(res.kidsAges, res.kids ?? 0),
       board: (res.board || 'BB').toLowerCase(),
       fixedPrice: res.fixedPrice ?? null,
+      priceTotal: res.fixedPrice ?? res.price_total ?? res.price_per_room ?? res.total_price ?? res.amount ?? null,
       pricing_mode: res.pricing_mode,
       person_pricing: res.person_pricing || null,
       notes: Array.isArray(res.notes) ? res.notes : [],
@@ -3529,16 +3603,137 @@ onUnmounted(() => {
 .booking-action-menu {
   position: fixed;
   z-index: 2200;
-  min-width: 180px;
-  background: rgba(255, 255, 255, 0.92);
+  width: min(580px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  background: white;
   border: 1px solid var(--planner-border);
-  border-radius: 18px;
+  border-radius: 22px;
   box-shadow: var(--planner-shadow-lg);
-  backdrop-filter: blur(24px);
-  padding: 6px;
+  padding: 24px;
+  outline: none;
+}
+
+.booking-popup-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.booking-popup-header h3 {
+  margin: 0 0 6px;
+  color: var(--planner-text);
+  font-size: 1.2rem;
+  overflow-wrap: anywhere;
+}
+
+.booking-popup-header .close-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.booking-popup-status-dot {
+  width: 12px;
+  height: 12px;
+  margin-top: 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.booking-popup-status,
+.booking-popup-details dt {
+  color: var(--planner-text-soft);
+  font-size: 0.85rem;
+}
+
+.booking-popup-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 24px;
+}
+
+.booking-popup-details {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 0;
+}
+
+.booking-popup-info {
+  position: relative;
+  padding-left: 36px;
+}
+
+.booking-popup-icon {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: #a8b5c7;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.booking-popup-details dd {
+  margin: 5px 0;
+  color: var(--planner-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.booking-popup-notes dd {
+  white-space: pre-wrap;
+  font-weight: 400;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.booking-popup-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.booking-popup-total {
+  border-top: 1px solid var(--planner-border);
+  padding-top: 16px;
+}
+
+.booking-popup-total .booking-popup-icon {
+  top: 19px;
+}
+
+.booking-popup-total dd {
+  font-size: 1.2rem;
+}
+
+.booking-popup-actions {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  border-left: 1px solid var(--planner-border);
+  padding-left: 16px;
+}
+
+@media (max-width: 560px) {
+  .booking-action-menu {
+    padding: 18px;
+  }
+
+  .booking-popup-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .booking-popup-actions {
+    border-left: none;
+    border-top: 1px solid var(--planner-border);
+    padding: 16px 0 0;
+  }
 }
 
 .booking-action-item {
