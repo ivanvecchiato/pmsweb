@@ -162,7 +162,7 @@ const generateBeachMap = async () => {
 .row-type-editor input { max-width: 170px; }
 .place-overrides { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; }
 .place-overrides label { display: flex; align-items: center; gap: 6px; font-size: .85rem; }
-.place-overrides select { padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
+.place-overrides select { padding: 6px 44px 6px 12px; border: 1px solid #cbd5e1; border-radius: 16px; }
 .layout-container {
   padding: 8px;
   min-height: calc(100vh - 120px);
