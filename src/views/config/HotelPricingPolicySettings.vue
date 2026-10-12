@@ -1,7 +1,7 @@
 <template>
   <div class="settings-page">
     <div class="header">
-      <h1>Policy Prezzi Hotel</h1>
+      <h1>Regole prezzi hotel</h1>
       <p>Configura la modalità globale di calcolo prezzi per l'hotel.</p>
     </div>
 

@@ -146,6 +146,7 @@ const seedRooms = async () => {
 }
 
 const loadRooms = async () => {
+  if (loadingRooms.value) return
   loadingRooms.value = true
   error.value = ''
   try {
@@ -207,15 +208,13 @@ onMounted(() => {
   document.addEventListener('pointerdown', closeStatusMenu)
   try {
     unsubscribe = onSnapshot(collection(getFirebaseDb(), 'housekeeping_rooms'), { includeMetadataChanges: true }, snapshot => {
-      const confirmed = new Map(roomDocuments.value.map(room => [room.documentId, room]))
-      roomDocuments.value = snapshot.docs.map(item => item.metadata.hasPendingWrites ? confirmed.get(item.id) : ({ ...item.data(), documentId: item.id }))
-        .filter(Boolean)
+      if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return
+      roomDocuments.value = snapshot.docs.map(item => ({ ...item.data(), documentId: item.id }))
         .filter(room => !isOverRoomType(room.roomType))
       const firstSnapshot = !loaded.value
       loaded.value = true
-      if (firstSnapshot) seedRooms().catch(cause => { error.value = `Impossibile sincronizzare le camere: ${cause.message}` })
+      if (firstSnapshot) loadRooms()
     }, cause => { error.value = `Piano pulizie non disponibile: ${cause.message}` })
-    loadRooms()
   } catch (cause) {
     error.value = `Piano pulizie non disponibile: ${cause.message}`
   }

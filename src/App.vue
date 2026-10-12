@@ -10,14 +10,9 @@
         aria-label="Sidebar menu"
       >
         <div class="sidebar-brand">
-          <div class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M7 12.5 10 15.5 17 8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5" opacity="0.38"/>
-            </svg>
-          </div>
+          <img class="brand-mark" src="/mood-icon.svg" alt="Logo Mood" width="50" height="50">
           <div class="brand-copy">
-            <strong>MBAR PMS</strong>
+            <img class="brand-logo" src="@/assets/mood.png" alt="Mood" width="104" height="30">
             <span>Operations Suite</span>
           </div>
 
@@ -62,8 +57,8 @@
                 (hasPermission('home') && isPmsTypeAllowed(['hotel']))
                 || hasPermission('customers')
                 || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach']))
-                || (hasPermission('listino') && isPmsTypeAllowed(['hotel']))
-                || (hasPermission('pms_reports') && isPmsTypeAllowed(['hotel']))
+                || hasPermission('listino')
+                || hasPermission('listino_beach')
               )
             "
             class="menu-section"
@@ -164,252 +159,29 @@
               <span class="label">Preventivi</span>
             </router-link>
 
-            <router-link
-              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
-              to="/accounts"
-              :class="['menu-item', { active: route.path === '/accounts' }]"
-              aria-label="Conti Hotel"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 6h16v12H4zM4 10h16M8 14h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Conti</span>
-            </router-link>
-
-            <router-link
-              v-if="hasPermission('pms_reports') && isPmsTypeAllowed(['hotel'])"
-              to="/pms/reports"
-              :class="['menu-item', { active: route.path.startsWith('/pms/reports') }]"
-              aria-label="Report PMS"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 19V5m0 14h16M8 15l4-4 3 2 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Report PMS</span>
-            </router-link>
-
             <router-link v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])" to="/hotel-events"
               :class="['menu-item', { active: route.path === '/hotel-events' }]" aria-label="Registro eventi hotel">
               <span class="icon" aria-hidden="true">≡</span><span class="label">Registro eventi</span>
             </router-link>
 
-            <router-link
-              v-if="hasPermission('listino') && isPmsTypeAllowed(['hotel'])"
-              to="/menu-del-giorno"
-              :class="['menu-item', { active: route.path === '/menu-del-giorno' }]"
-              aria-label="Composizione Menu del giorno"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M7 4h10M5 8h14M7 12h10M7 16h6M5 20h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Menu del giorno</span>
-            </router-link>
-
-            <router-link
-              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
-              to="/breakfast-report"
-              :class="['menu-item', { active: route.path === '/breakfast-report' }]"
-              aria-label="Report colazione"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 8h12v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8zM16 10h2a2 2 0 0 1 0 4h-2M6 4h8M7 20h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Report colazione</span>
-            </router-link>
-
-            <router-link
-              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
-              to="/ps"
-              :class="['menu-item', { active: route.path === '/ps' }]"
-              aria-label="Pubblica Sicurezza"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 3 5 6v5c0 4.6 2.8 8.1 7 10 4.2-1.9 7-5.4 7-10V6l-7-3zM9 12l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">PS</span>
-            </router-link>
-
-            <router-link
-              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
-              to="/istat"
-              :class="['menu-item', { active: route.path === '/istat' }]"
-              aria-label="Istat"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M5 20V10m5 10V4m5 16v-7m5 7V7M3 20h19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Istat</span>
-            </router-link>
-
           </div>
 
-          <!-- AREA BAR -->
-          <div v-if="hasPermission('inventory') || hasPermission('stats')" class="menu-section">
-            <div class="section-label">BAR</div>
-
+          <div v-if="navigationAreas.length" class="menu-section">
+            <div class="section-label">Aree</div>
             <router-link
-              v-if="hasPermission('inventory')"
-              to="/listino-prodotti"
-              :class="['menu-item', { active: route.path === '/listino-prodotti' }]"
-              aria-label="Listino Prodotti"
+              v-for="area in navigationAreas"
+              :key="area.path"
+              :to="area.path"
+              :class="['menu-item', { active: activeArea?.path === area.path }]"
+              :aria-label="area.meta.title"
             >
-              <span class="icon" aria-hidden>
+              <span class="icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M4 8h16M7 4h10M9 12h6M6 16h12M8 20h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path :d="area.meta.icon" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </span>
-              <span class="label">Listino</span>
+              <span class="label">{{ area.meta.title }}</span>
             </router-link>
-            
-            <router-link
-              v-if="hasPermission('inventory')"
-              to="/inventory"
-              :class="['menu-item', { active: route.path === '/inventory' }]"
-              aria-label="Magazzino"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Magazzino</span>
-            </router-link>
-
-            <div v-if="hasPermission('stats')" class="menu-group">
-              <button
-                @click="isStatsOpen = !isStatsOpen"
-                :class="['menu-item', 'menu-trigger', { active: route.path.startsWith('/stats') }]"
-                aria-label="Statistiche"
-              >
-                <span class="icon">
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M18 20V10M12 20V4M6 20v-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </span>
-                <span class="label">Statistiche</span>
-                <span class="arrow-icon" :class="{ rotated: isStatsOpen }">
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </span>
-              </button>
-
-              <div v-if="isStatsOpen" class="submenu">
-                <router-link to="/stats/sales" class="submenu-item">Vendite</router-link>
-                <router-link to="/stats/products" class="submenu-item">Prodotti</router-link>
-                <router-link to="/stats/operators" class="submenu-item">Operatori</router-link>
-                <router-link to="/stats/documents" class="submenu-item">Documenti</router-link>
-              </div>
-            </div>
-          </div>
-
-          <!-- AREA CONFIGURAZIONE -->
-          <div v-if="hasPermission('listino') || (canShowHotelBeachMenus && hasPermission('listino_beach')) || hasPermission('onda_push_products') || hasPermission('users')" class="menu-section">
-            <div class="section-label">CONFIGURAZIONE</div>
-
-            <router-link
-              v-if="hasPermission('listino')"
-              to="/settings/configurations"
-              :class="['menu-item', { active: route.path === '/settings/configurations' }]"
-              aria-label="Generale"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 7h18M6 12h12M8 17h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Generale</span>
-            </router-link>
-
-            <router-link
-              v-if="hasPermission('users')"
-              to="/settings/users"
-              :class="['menu-item', { active: route.path === '/settings/users' }]"
-              aria-label="Utenti"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Utenti</span>
-            </router-link>
-            
-            <router-link
-              v-if="canShowHotelBeachMenus && hasPermission('listino') && isPmsTypeAllowed(['hotel'])"
-              to="/listino"
-              :class="['menu-item', { active: route.path === '/listino' }]"
-              aria-label="Listino Hotel"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Listino Hotel</span>
-            </router-link>
-
-            <router-link
-              v-if="canShowHotelBeachMenus && hasPermission('listino') && isPmsTypeAllowed(['hotel'])"
-              to="/settings/hotel-pricing"
-              :class="['menu-item', { active: route.path === '/settings/hotel-pricing' }]"
-              aria-label="Policy Prezzi Hotel"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 7h18M6 12h12M8 17h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Policy Prezzi</span>
-            </router-link>
-
-            <router-link
-              v-if="canShowHotelBeachMenus && hasPermission('listino_beach') && isPmsTypeAllowed(['beach'])"
-              to="/listino_beach"
-              :class="['menu-item', { active: route.path === '/listino_beach' }]"
-              aria-label="Gestione Spiaggia"
-            >
-              <span class="icon" aria-hidden>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21v-1.5C2 16.5 6.7 15 8 15s6 1.5 6 4.5V21H2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="label">Gestione Spiaggia</span>
-            </router-link>
-
-            <div v-if="hasPermission('onda_push_products')" class="menu-group">
-              <button
-                @click="isMenuAppOpen = !isMenuAppOpen"
-                :class="['menu-item', 'menu-trigger', { active: route.path === '/menu-app' || route.path === '/onda-push-products' }]"
-                aria-label="Menu App"
-              >
-                <span class="icon" aria-hidden>
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M4 8h16M7 4h10M9 12h6M6 16h12M8 20h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </span>
-                <span class="label">Menu App</span>
-                <span class="arrow-icon" :class="{ rotated: isMenuAppOpen }">
-                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </span>
-              </button>
-
-              <div v-if="isMenuAppOpen" class="submenu">
-                <router-link to="/menu-app" class="submenu-item">Composizione</router-link>
-                <router-link to="/onda-push-products" class="submenu-item">Promo</router-link>
-              </div>
-            </div>
-
           </div>
 
           <!-- Logout button -->
@@ -454,7 +226,14 @@
         </header>
 
         <section class="content-body">
-          <router-view />
+          <nav v-if="activeArea && !route.meta.areaOverview" class="area-navigation" :aria-label="activeArea.meta.title">
+            <router-link :to="activeArea.path">← {{ activeArea.meta.title }}</router-link>
+            <router-link v-for="item in activeAreaItems" :key="item.path" :to="item.path">{{ item.meta.title }}</router-link>
+          </nav>
+          <router-view v-slot="{ Component }">
+            <component v-if="route.meta.areaOverview" :is="Component" :items="activeAreaItems" />
+            <component v-else :is="Component" />
+          </router-view>
         </section>
       </main>
       <div v-if="activeToast" class="operational-toast" role="status">
@@ -477,8 +256,6 @@ const router = useRouter()
 const { currentUser, isAuthenticated, logout, hasPermission, userRole, userName, isPmsTypeAllowed, canShowHotelBeachMenus } = useAuth()
 
 const MOBILE_BREAKPOINT = 1080
-const isStatsOpen = ref(false)
-const isMenuAppOpen = ref(false)
 const isMobileViewport = ref(false)
 const isMobileMenuOpen = ref(false)
 const isSidebarCompact = ref(false)
@@ -560,6 +337,17 @@ const stopNotificationStream = () => {
   notificationAbortController = null
 }
 
+const areaRoutes = computed(() => router.getRoutes().filter(item => item.meta.area
+  && (!item.meta.permission || hasPermission(item.meta.permission))
+  && (!item.meta.permissions || item.meta.permissions.some(permission => hasPermission(permission)))
+  && (!item.meta.pmsTypes || isPmsTypeAllowed(item.meta.pmsTypes))
+  && (!item.meta.requiresHospitalityStudioPms || canShowHotelBeachMenus.value)))
+const navigationAreas = computed(() => router.getRoutes().filter(item => item.meta.areaOverview
+  && areaRoutes.value.some(child => child.meta.area === item.path)).sort((a, b) => a.meta.areaOrder - b.meta.areaOrder))
+const activeArea = computed(() => navigationAreas.value.find(item => item.path === route.path || item.path === route.meta.area))
+const activeAreaItems = computed(() => areaRoutes.value.filter(item => item.meta.area === activeArea.value?.path)
+  .sort((a, b) => a.meta.areaOrder - b.meta.areaOrder))
+
 const sectionContent = {
   '/': { title: 'Tableau', description: 'Monitoraggio camere, prenotazioni e operativita giornaliera.' },
   '/beach-tableau': { title: 'Piano spiaggia', description: 'Zone, file e posti dello stabilimento.' },
@@ -576,10 +364,10 @@ const sectionContent = {
   '/listino-prodotti': { title: 'Catalogo Prodotti', description: 'Listini, categorie e prodotti in evidenza.' },
   '/inventory': { title: 'Magazzino', description: 'Stock, movimenti e carichi fornitori in un’unica vista.' },
   '/settings/configurations': { title: 'Configurazioni', description: 'Impostazioni globali e attivazione moduli del PMS.' },
-  '/settings/users': { title: 'Utenti', description: 'Accessi e permessi delle applicazioni MBAR.' },
+  '/settings/users': { title: 'Utenti', description: 'Accessi e permessi delle applicazioni Mood.' },
   '/listino': { title: 'Listino Hotel', description: 'Tariffe, fasce e struttura dei prezzi hotel.' },
   '/menu-del-giorno': { title: 'Menu del Giorno', description: 'Composizione del menu stampabile per il servizio hotel.' },
-  '/settings/hotel-pricing': { title: 'Policy Prezzi', description: 'Regole tariffarie per camere, ospiti e stagionalita.' },
+  '/settings/hotel-pricing': { title: 'Regole prezzi hotel', description: 'Regole tariffarie per camere, ospiti e stagionalita.' },
   '/listino_beach': { title: 'Gestione Spiaggia', description: 'Configurazione posti, settori e prezzi stabilimento.' },
   '/menu-app': { title: 'Composizione Menu App', description: 'Selezione e ordinamento dei prodotti pubblicati nell’app menu.' },
   '/onda-push-products': { title: 'Promo Onda', description: 'Selezione prodotti e slot promozionali pubblicati.' },
@@ -587,6 +375,8 @@ const sectionContent = {
 }
 
 const activeSection = computed(() => {
+  if (route.meta.title) return { title: route.meta.title, description: route.meta.description }
+
   if (route.path.startsWith('/stats')) {
     return {
       title: 'Statistiche',
@@ -623,9 +413,6 @@ const updateViewportState = () => {
 watch(
   () => route.fullPath,
   () => {
-    isStatsOpen.value = route.path.startsWith('/stats')
-    isMenuAppOpen.value = route.path === '/menu-app' || route.path === '/onda-push-products'
-
     if (isMobileViewport.value) {
       isMobileMenuOpen.value = false
     }
@@ -753,18 +540,8 @@ const handleLogout = () => {
 .brand-mark {
   width: 50px;
   height: 50px;
-  border-radius: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ds-primary);
-  background: linear-gradient(180deg, rgba(29, 140, 242, 0.18), rgba(29, 140, 242, 0.08));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-
-.brand-mark svg {
-  width: 24px;
-  height: 24px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 
 .brand-copy {
@@ -773,9 +550,10 @@ const handleLogout = () => {
   gap: 2px;
 }
 
-.brand-copy strong {
-  font-size: 0.98rem;
-  letter-spacing: -0.03em;
+.brand-logo {
+  display: block;
+  width: 104px;
+  height: auto;
 }
 
 .brand-copy span {
@@ -809,12 +587,6 @@ const handleLogout = () => {
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-}
-
-.menu-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 
 .menu-item {
@@ -880,43 +652,6 @@ const handleLogout = () => {
   display: block;
 }
 
-.arrow-icon {
-  width: 16px;
-  height: 16px;
-  margin-left: auto;
-  transition: transform 0.22s ease;
-}
-
-.arrow-icon.rotated {
-  transform: rotate(180deg);
-}
-
-.submenu {
-  margin-left: 18px;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border-radius: 18px;
-  background: rgba(245, 249, 253, 0.92);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-}
-
-.submenu-item {
-  padding: 10px 12px;
-  border-radius: 12px;
-  color: var(--ds-text-soft);
-  text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.submenu-item:hover,
-.submenu-item.router-link-active {
-  color: var(--ds-text);
-  background: rgba(255, 255, 255, 0.9);
-}
-
 .logout-btn {
   color: #cc5757;
 }
@@ -948,8 +683,6 @@ const handleLogout = () => {
 .sidebar.is-compact .brand-copy,
 .sidebar.is-compact .section-label,
 .sidebar.is-compact .menu-item .label,
-.sidebar.is-compact .arrow-icon,
-.sidebar.is-compact .submenu,
 .sidebar.is-compact .user-info {
   display: none;
 }
@@ -961,6 +694,28 @@ const handleLogout = () => {
 .sidebar.is-compact .menu-item {
   justify-content: center;
   padding: 10px;
+}
+
+.area-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.area-navigation a {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--ds-surface-muted);
+  color: var(--ds-text-soft);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.area-navigation a:hover,
+.area-navigation a.router-link-exact-active {
+  background: var(--ds-primary-soft);
+  color: var(--ds-primary);
 }
 
 .content {
@@ -1091,8 +846,8 @@ const handleLogout = () => {
     padding: 14px;
   }
 
-  .brand-copy strong {
-    font-size: 0.9rem;
+  .brand-logo {
+    width: 96px;
   }
 
   .menu-item {
