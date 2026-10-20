@@ -13,7 +13,7 @@
           <img class="brand-mark" src="/mood-icon.svg" alt="Logo Mood" width="50" height="50">
           <div class="brand-copy">
             <img class="brand-logo" src="@/assets/mood.png" alt="Mood" width="104" height="30">
-            <span>Operations Suite</span>
+            <span>Hospitality Suite</span>
           </div>
 
           <button
