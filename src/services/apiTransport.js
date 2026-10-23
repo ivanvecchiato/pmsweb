@@ -1,10 +1,9 @@
 import axios from 'axios'
 import { useAuth } from '../composables/useAuth'
-import { addDoc, collection, doc, getDoc, getDocs, query as buildFsQuery, serverTimestamp, setDoc, where } from 'firebase/firestore'
-import { getFirebaseDb, isFirebaseRemoteMode } from './firebaseClient'
+import { collection, deleteDoc, doc, getDoc, getDocs, orderBy, query as buildFsQuery, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
+import { getFirebaseAuth, getFirebaseDb, isFirebaseRemoteMode } from './firebaseClient'
 
 const API_CACHE_COLLECTION = import.meta.env.VITE_FIREBASE_API_COLLECTION || 'api_cache'
-const API_MUTATIONS_COLLECTION = import.meta.env.VITE_FIREBASE_MUTATIONS_COLLECTION || 'api_mutations'
 const STATS_API_BASE_URL = String(import.meta.env.VITE_STATS_API_BASE_URL || '').trim().replace(/\/+$/, '')
 const PMS_API_BASE_URL = String(import.meta.env.VITE_PMS_API_BASE_URL || '').trim().replace(/\/+$/, '')
 const STATS_BYPASS_BASE_URL = STATS_API_BASE_URL || PMS_API_BASE_URL
@@ -380,6 +379,7 @@ const buildRemoteStatsUrl = ({ url, params }) => {
   }
 
   const query = queryStringFromParams(params) || inlineQuery
+
   return {
     bypassed: true,
     url: `${STATS_BYPASS_BASE_URL}${endpoint}${query ? `?${query}` : ''}`
@@ -472,6 +472,78 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
   const { endpoint, query: inlineQuery } = splitEndpointAndQuery(url)
   const query = queryStringFromParams(params) || inlineQuery
 
+  if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/getrooms') {
+    const snapshot = await getDocs(collection(db, 'rooms'))
+    const rooms = snapshot.docs.map((entry) => entry.data())
+      .sort((left, right) => String(left.room_code).localeCompare(String(right.room_code), undefined, { numeric: true }))
+    return { response: rooms, source: 'rooms' }
+  }
+
+  if (String(method).toLowerCase() === 'get' && ['/api/pms/movements', '/api/pms/getbookingsbyrange'].includes(endpoint)) {
+    const requestParams = parseMergedParams({ inlineQuery, params })
+    const day = requestParams.date || requestParams.day
+    const from = endpoint === '/api/pms/movements' ? day : requestParams.from
+    const to = endpoint === '/api/pms/movements' ? day : requestParams.to
+    const snapshot = await getDocs(buildFsQuery(
+      collection(db, 'pms_hotel_reservations'),
+      where('checkout', '>=', from),
+      where('checkin', '<=', to),
+      orderBy('checkout'),
+      orderBy('checkin')
+    ))
+    const { readHotelDeposits } = await import('./cloudHotelReservations.js')
+    const bookings = await Promise.all(snapshot.docs.map(async entry => ({ ...entry.data(), deposits: await readHotelDeposits(db, entry.id) })))
+    if (endpoint === '/api/pms/movements') {
+      const activeBookings = bookings.filter((booking) => Number(booking.status) !== -100)
+        .sort((left, right) => String(left.room || '').localeCompare(String(right.room || ''), undefined, { numeric: true }))
+      return { response: { arrivals: activeBookings.filter(booking => booking.checkin === day), departures: activeBookings.filter(booking => booking.checkout === day) }, source: 'pms_hotel_reservations' }
+    }
+    return {
+      response: {
+        from,
+        to,
+        bookings,
+        amount: Number(bookings.reduce((sum, booking) => sum + Number(booking.price_total ?? booking.price_per_room ?? booking.amount ?? 0), 0).toFixed(2))
+      },
+      source: 'pms_hotel_reservations'
+    }
+  }
+
+  if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/hotel/reservation') {
+    const id = new URLSearchParams(query).get('id')
+    const snapshot = await getDoc(doc(db, 'pms_hotel_reservations', id))
+    if (!snapshot.exists()) throw new Error('Prenotazione non disponibile in Firebase')
+    const { readHotelDeposits } = await import('./cloudHotelReservations.js')
+    return { response: { success: true, reservation: { ...snapshot.data(), deposits: await readHotelDeposits(db, id) } }, source: 'pms_hotel_reservations' }
+  }
+
+  if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/hotel/account/documents') {
+    const request = parseMergedParams({ inlineQuery, params })
+    const snapshot = await getDocs(collection(db, 'pms_hotel_documents'))
+    const documents = snapshot.docs.map(entry => entry.data()).filter(document => {
+      const date = new Date(document.closedAt)
+      const day = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
+      return day && (!request.from || day >= request.from) && (!request.to || day <= request.to)
+    }).sort((left, right) => String(right.closedAt || '').localeCompare(String(left.closedAt || '')))
+    return { response: documents, source: 'pms_hotel_documents' }
+  }
+
+  if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/hotel/reservation/history') {
+    const reservationId = new URLSearchParams(query).get('reservationId')
+    const snapshot = await getDocs(buildFsQuery(
+      collection(db, 'pms_hotel_reservation_history'),
+      where('reservation_id', '==', reservationId)
+    ))
+    const history = snapshot.docs.map((entry) => entry.data())
+      .sort((left, right) => Number(right.modified_timestamp || 0) - Number(left.modified_timestamp || 0))
+    return { response: { success: true, history }, source: 'pms_hotel_reservation_history' }
+  }
+
+  if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/services') {
+    const snapshot = await getDocs(collection(db, 'pms_services'))
+    return { response: snapshot.docs.map((entry) => entry.data()), source: 'pms_services' }
+  }
+
   if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/getconfigs') {
     const snapshot = await getDoc(doc(db, 'pms_configs', 'current'))
     if (!snapshot.exists()) throw new Error('Configurazione PMS non disponibile in Firebase')
@@ -479,6 +551,19 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
     const section = new URLSearchParams(query).get('section')
     return {
       response: section ? configs[section] ?? null : configs,
+      source: 'pms_configs'
+    }
+  }
+
+  if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/getpmstype') {
+    const snapshot = await getDoc(doc(db, 'pms_configs', 'current'))
+    if (!snapshot.exists()) throw new Error('Configurazione moduli non disponibile in Firebase')
+    const configs = snapshot.data()
+    return {
+      response: {
+        hotel: { enabled: configs.hotel.enabled, providerType: configs.hotel.providerType ?? null },
+        beach: { enabled: configs.beach.enabled }
+      },
       source: 'pms_configs'
     }
   }
@@ -496,6 +581,8 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
     }
   }
 
+  if (endpoint.startsWith('/api/pms/')) throw new Error(`Operazione PMS cloud non disponibile: ${endpoint}`)
+
   const parsedData = parseAxiosData(data)
   const { requestDocId, endpointDocId } = buildDocIds({ method, endpoint, query, data: parsedData })
 
@@ -512,46 +599,6 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
   }
 
   throw new Error(`Nessun dato Firebase per ${String(method).toUpperCase()} ${endpoint}${query ? `?${query}` : ''}`)
-}
-
-const queueMutation = async ({ method, url, params, data }) => {
-  const db = getFirebaseDb()
-  const { endpoint, query: inlineQuery } = splitEndpointAndQuery(url)
-  const query = queryStringFromParams(params) || inlineQuery
-  const payload = parseAxiosData(data)
-
-  await addDoc(collection(db, API_MUTATIONS_COLLECTION), {
-    method: String(method || 'post').toLowerCase(),
-    endpoint,
-    query,
-    payload: payload || null,
-    createdAt: serverTimestamp()
-  })
-
-  const { requestDocId } = buildDocIds({ method, endpoint, query, data: payload })
-
-  await setDoc(
-    doc(db, API_CACHE_COLLECTION, requestDocId),
-    {
-      method: String(method || 'post').toLowerCase(),
-      endpoint,
-      query,
-      response: {
-        success: true,
-        queued: true,
-        endpoint,
-        method: String(method || 'post').toLowerCase()
-      },
-      updatedAt: serverTimestamp()
-    },
-    { merge: true }
-  )
-
-  return {
-    success: true,
-    queued: true,
-    endpoint
-  }
 }
 
 const createAxiosLikeResponse = (data, status = 200, config = {}) => ({
@@ -602,6 +649,7 @@ export const installApiTransportBridge = async () => {
     const { endpoint } = splitEndpointAndQuery(url)
     const isHotelMutation = endpoint === '/api/pms/updatereservation'
       || endpoint === '/api/pms/saverate'
+      || endpoint === '/api/pms/deleterate'
       || endpoint === '/api/pms/updatetimetable'
       || /^\/api\/pms\/hotel\/(new_?reservation|update_?reservation|delete_reservation|cancel_reservation|add_service|remove_service|return_service|deposit\/(fiscal|annul)|account\/close)$/.test(endpoint)
     if (currentUser.value && isHotelMutation && config.data && typeof config.data === 'object' && !Array.isArray(config.data)) {
@@ -612,17 +660,117 @@ export const installApiTransportBridge = async () => {
       config = { ...config, params: { ...config.params, operator: currentUser.value.id } }
       delete config.params.updatedBy
     }
+    if (currentUser.value && endpoint === '/api/pms/deleterate') {
+      config = { ...config, params: { ...config.params, operator: currentUser.value.id } }
+    }
     if (!remoteMode) return originalAxiosRequest(config)
 
-    if (config.mbarDirect === true) {
-      const directConfig = {
-        ...config,
-        url: PMS_API_BASE_URL && String(url).startsWith('/')
-          ? `${PMS_API_BASE_URL}${url}`
-          : url
+    if (method === 'post' && ['/api/pms/hotel/calculateprice', '/api/pms/hotel/deposit/proforma'].includes(endpoint)) {
+      const user = getFirebaseAuth().currentUser
+      if (!user) throw new axios.AxiosError('Accesso cloud richiesto', 'ERR_UNAUTHORIZED', config, null,
+        createAxiosLikeResponse({ error: 'Accesso cloud richiesto' }, 401, config))
+      try {
+        const snapshot = await getDoc(doc(getFirebaseDb(), 'pms_web_users', user.uid))
+        const profile = snapshot.data()
+        const allowed = profile?.enabled === true && profile.operatorId != null && ['admin', 'staff'].includes(profile.role)
+          && (profile.role === 'admin' || profile.permissions?.customers === true
+            || (endpoint === '/api/pms/hotel/calculateprice' && profile.permissions?.home === true))
+        if (!allowed) throw Object.assign(new Error('Operatore non autorizzato'), { code: 'permission-denied' })
+        const { calculateHotelQuote, createHotelDepositProforma } = await import('./cloudHotelDocuments.js')
+        const data = parseAxiosData(config.data)
+        const result = endpoint === '/api/pms/hotel/calculateprice'
+          ? await calculateHotelQuote(getFirebaseDb(), data)
+          : await createHotelDepositProforma(getFirebaseDb(), data)
+        return createAxiosLikeResponse(result, 200, config)
+      } catch (error) {
+        const status = error.code === 'permission-denied' ? 403 : 400
+        throw new axios.AxiosError(error.message, 'ERR_BAD_REQUEST', config, null,
+          createAxiosLikeResponse({ error: error.message }, status, config))
       }
-      delete directConfig.mbarDirect
-      return originalAxiosRequest(directConfig)
+    }
+    if (endpoint === '/api/pms/hotel/sync_h5s') {
+      const user = getFirebaseAuth().currentUser
+      if (!user) throw new axios.AxiosError('Accesso cloud richiesto', 'ERR_UNAUTHORIZED', config)
+      const base = import.meta.env.DEV && import.meta.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_URL
+        ? import.meta.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_URL.replace(/\/$/, '') : '/api/pms/hotel'
+      return originalAxiosRequest({ ...config, url: `${base}/sync_h5s`, headers: { ...config.headers, Authorization: `Bearer ${await user.getIdToken()}` } })
+    }
+    if ((endpoint.startsWith('/api/pms/hotel/') && (method !== 'get' || endpoint === '/api/pms/hotel/conflicts'))
+      || endpoint === '/api/pms/updatereservation') {
+      try {
+        const { executeHotelOperation } = await import('./cloudHotelReservations.js')
+        const path = endpoint === '/api/pms/updatereservation' ? '/update_reservation' : endpoint.slice('/api/pms/hotel'.length)
+        return createAxiosLikeResponse(await executeHotelOperation(getFirebaseDb(), getFirebaseAuth().currentUser, path, parseAxiosData(config.data)), 200, config)
+      } catch (error) {
+        const status = error.status || (error.code === 'permission-denied' ? 403 : 400)
+        throw new axios.AxiosError(error.message, 'ERR_BAD_REQUEST', config, null,
+          createAxiosLikeResponse(error.result || { error: error.message }, status, config))
+      }
+    }
+    if (['/api/pms/newreservation', '/api/pms/checkin', '/api/pms/checkout'].includes(endpoint)) {
+      throw new axios.AxiosError('Operazione hotel cloud non ancora disponibile', 'ERR_NOT_SUPPORTED', config, null,
+        createAxiosLikeResponse({ error: 'Operazione hotel cloud non ancora disponibile' }, 501, config))
+    }
+
+    if (method === 'post' && ['/api/pms/saverate', '/api/pms/updatetimetable', '/api/pms/setconfigs'].includes(endpoint)) {
+      const user = getFirebaseAuth().currentUser
+      const profileSnapshot = user ? await getDoc(doc(getFirebaseDb(), 'pms_web_users', user.uid)) : null
+      const profile = profileSnapshot?.data()
+      if (!profile || profile.enabled !== true || profile.role !== 'admin') {
+        throw new axios.AxiosError('Solo un amministratore può modificare i prezzi hotel', 'ERR_FORBIDDEN', config, null,
+          createAxiosLikeResponse({ error: 'Operatore non autorizzato' }, 403, config))
+      }
+
+      const data = parseAxiosData(config.data)
+      if (endpoint === '/api/pms/saverate') {
+        if (data?.id == null) throw new axios.AxiosError('Identificativo listino non valido', 'ERR_BAD_REQUEST', config)
+        const { operator, updatedBy, ...rate } = data
+        await setDoc(doc(getFirebaseDb(), 'pms_hotel_rates', String(rate.id)), rate)
+        return createAxiosLikeResponse({ success: true, id: rate.id }, 200, config)
+      }
+
+      if (endpoint === '/api/pms/updatetimetable') {
+        if (!Array.isArray(data?.updates)) throw new axios.AxiosError('Aggiornamenti calendario non validi', 'ERR_BAD_REQUEST', config)
+        for (let offset = 0; offset < data.updates.length; offset += 450) {
+          const batch = writeBatch(getFirebaseDb())
+          data.updates.slice(offset, offset + 450).forEach(update => {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(String(update.date || ''))) throw new Error('Data calendario non valida')
+            batch.set(doc(getFirebaseDb(), 'pms_hotel_timetable', update.date), update, { merge: true })
+          })
+          await batch.commit()
+        }
+        return createAxiosLikeResponse({ success: true }, 200, config)
+      }
+
+      if (data?.section !== 'hotel' || !data.data?.pricing) throw new axios.AxiosError('Policy prezzi non valida', 'ERR_BAD_REQUEST', config)
+      await updateDoc(doc(getFirebaseDb(), 'pms_configs', 'current'), { 'hotel.pricing': data.data.pricing })
+      return createAxiosLikeResponse({ success: true }, 200, config)
+    }
+
+    if (method === 'delete' && endpoint === '/api/pms/deleterate') {
+      const user = getFirebaseAuth().currentUser
+      const profileSnapshot = user ? await getDoc(doc(getFirebaseDb(), 'pms_web_users', user.uid)) : null
+      const profile = profileSnapshot?.data()
+      if (!profile || profile.enabled !== true || profile.role !== 'admin') {
+        throw new axios.AxiosError('Solo un amministratore può eliminare i listini hotel', 'ERR_FORBIDDEN', config,
+          null, createAxiosLikeResponse({ error: 'Operatore non autorizzato' }, 403, config))
+      }
+      const id = String(config.params?.id || '')
+      if (!id) throw new axios.AxiosError('Identificativo listino non valido', 'ERR_BAD_REQUEST', config)
+      const db = getFirebaseDb()
+      const rateRef = doc(db, 'pms_hotel_rates', id)
+      const rateSnapshot = await getDoc(rateRef)
+      if (!rateSnapshot.exists()) throw new axios.AxiosError('Listino non trovato', 'ERR_NOT_FOUND', config)
+      const linkedDays = (await getDocs(collection(db, 'pms_hotel_timetable'))).docs
+        .filter(day => String(day.data().pricelist) === String(rateSnapshot.data().id))
+      for (let offset = 0; offset < linkedDays.length; offset += 450) {
+        const batch = writeBatch(db)
+        linkedDays.slice(offset, offset + 450).forEach(day => batch.update(day.ref, { pricelist: 0 }))
+        if (offset + 450 >= linkedDays.length) batch.delete(rateRef)
+        await batch.commit()
+      }
+      if (!linkedDays.length) await deleteDoc(rateRef)
+      return createAxiosLikeResponse({ success: true, id }, 200, config)
     }
 
     const bypass = buildRemoteStatsUrl({ url, params: config.params })
@@ -643,7 +791,7 @@ export const installApiTransportBridge = async () => {
           return createAxiosLikeResponse(firebaseStatsPayload, 200, config)
         }
       }
-      return originalAxiosRequest(config)
+      throw new axios.AxiosError(`Endpoint cloud non disponibile: ${endpoint}`, 'ERR_NOT_SUPPORTED', config)
     }
 
     if (!isApiEndpoint(url)) {
@@ -655,8 +803,8 @@ export const installApiTransportBridge = async () => {
       return createAxiosLikeResponse(response, 200, config)
     }
 
-    const mutationResponse = await queueMutation({ method, url, params: config.params, data: config.data })
-    return createAxiosLikeResponse(mutationResponse, 200, config)
+    throw new axios.AxiosError(`Scrittura cloud non ancora disponibile: ${endpoint}`, 'ERR_NOT_SUPPORTED', config, null,
+      createAxiosLikeResponse({ success: false, error: 'Operazione cloud non disponibile' }, 501, config))
   }
 
   axios.get = (url, config = {}) => axios.request({ ...config, method: 'get', url })
@@ -671,9 +819,20 @@ export const installApiTransportBridge = async () => {
     const rawUrl = typeof input === 'string' ? input : input?.url || ''
     const method = String(init?.method || 'get').toLowerCase()
     const { endpoint } = splitEndpointAndQuery(rawUrl)
-    if (endpoint === '/api/pms/events') {
-      const directUrl = PMS_API_BASE_URL && rawUrl.startsWith('/') ? `${PMS_API_BASE_URL}${rawUrl}` : rawUrl
-      return originalFetch(directUrl, init)
+    if ((endpoint.startsWith('/api/pms/hotel/') && (method !== 'get' || ['/api/pms/hotel/conflicts', '/api/pms/hotel/sync_h5s'].includes(endpoint)))
+      || endpoint === '/api/pms/updatereservation') {
+      let data = init?.body
+      if (typeof data === 'string') data = JSON.parse(data)
+      try {
+        const response = await axios.request({ method, url: rawUrl, data })
+        return createFetchLikeResponse(response.data, response.status)
+      } catch (error) {
+        if (error.response) return createFetchLikeResponse(error.response.data, error.response.status)
+        throw error
+      }
+    }
+    if (['/api/pms/newreservation', '/api/pms/checkin', '/api/pms/checkout'].includes(endpoint)) {
+      return createFetchLikeResponse({ error: 'Operazione hotel cloud non ancora disponibile' }, 501)
     }
     const bypass = buildRemoteStatsUrl({ url: rawUrl })
 
@@ -688,7 +847,7 @@ export const installApiTransportBridge = async () => {
           return createFetchLikeResponse(firebaseStatsPayload, 200)
         }
       }
-      return originalFetch(input, init)
+      return createFetchLikeResponse({ error: `Endpoint cloud non disponibile: ${endpoint}` }, 501)
     }
 
     if (!isApiEndpoint(rawUrl)) {
@@ -700,16 +859,6 @@ export const installApiTransportBridge = async () => {
       return createFetchLikeResponse(response, 200)
     }
 
-    let body = init?.body
-    if (typeof body === 'string') {
-      try {
-        body = JSON.parse(body)
-      } catch {
-        // lascia body stringa se non JSON
-      }
-    }
-
-    const mutationResponse = await queueMutation({ method, url: rawUrl, data: body })
-    return createFetchLikeResponse(mutationResponse, 200)
+    return createFetchLikeResponse({ success: false, error: `Scrittura cloud non disponibile: ${endpoint}` }, 501)
   }
 }

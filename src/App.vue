@@ -80,7 +80,7 @@
             </router-link>
 
             <router-link
-              v-if="hasPermission('beach-bookings') && isPmsTypeAllowed(['beach'])"
+              v-if="!isFirebaseRemoteMode() && (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach']))"
               to="/beach-tableau"
               :class="['menu-item', { active: route.path === '/beach-tableau' }]"
               aria-label="Vai al piano spiaggia"
@@ -108,7 +108,7 @@
             </router-link>
 
             <router-link
-              v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])"
+              v-if="!isFirebaseRemoteMode() && (hasPermission('home') && isPmsTypeAllowed(['hotel']))"
               to="/housekeeping"
               :class="['menu-item', { active: route.path.startsWith('/housekeeping') }]"
               aria-label="Piano pulizie"
@@ -118,7 +118,7 @@
             </router-link>
 
             <router-link
-              v-if="canShowHotelBeachMenus && (hasPermission('listino') || hasPermission('listino_beach'))"
+              v-if="!isFirebaseRemoteMode() && (canShowHotelBeachMenus && (hasPermission('listino') || hasPermission('listino_beach')))"
               to="/services"
               :class="['menu-item', { active: route.path === '/services' }]"
               aria-label="Servizi"
@@ -132,7 +132,7 @@
             </router-link>
 
             <router-link
-              v-if="hasPermission('customers')"
+              v-if="!isFirebaseRemoteMode() && (hasPermission('customers'))"
               to="/customers"
               :class="['menu-item', { active: route.path === '/customers' }]"
               aria-label="Gestione Clienti"
@@ -146,7 +146,7 @@
             </router-link>
 
             <router-link
-              v-if="(hasPermission('home') && isPmsTypeAllowed(['hotel'])) || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach']))"
+              v-if="!isFirebaseRemoteMode() && ((hasPermission('home') && isPmsTypeAllowed(['hotel'])) || (hasPermission('beach-bookings') && isPmsTypeAllowed(['beach'])))"
               to="/quotes"
               :class="['menu-item', { active: route.path === '/quotes' }]"
               aria-label="Preventivi"
@@ -159,7 +159,7 @@
               <span class="label">Preventivi</span>
             </router-link>
 
-            <router-link v-if="hasPermission('home') && isPmsTypeAllowed(['hotel'])" to="/hotel-events"
+            <router-link v-if="!isFirebaseRemoteMode() && (hasPermission('home') && isPmsTypeAllowed(['hotel']))" to="/hotel-events"
               :class="['menu-item', { active: route.path === '/hotel-events' }]" aria-label="Registro eventi hotel">
               <span class="icon" aria-hidden="true">≡</span><span class="label">Registro eventi</span>
             </router-link>
@@ -205,7 +205,7 @@
             <span class="toolbar-eyebrow">Control panel</span>
             <h1>{{ activeSection.title }}</h1>
           </div>
-          <div class="notification-center">
+          <div v-if="!isFirebaseRemoteMode()" class="notification-center">
             <button type="button" class="notification-button" aria-label="Notifiche operative"
               :aria-expanded="isNotificationOpen ? 'true' : 'false'" @click="toggleNotifications">
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -217,7 +217,6 @@
               <div class="notification-popover-title"><strong>Notifiche</strong><span>Ultime {{ MAX_NOTIFICATIONS }}</span></div>
               <div v-if="!notifications.length" class="notification-empty">Nessuna notifica ricevuta.</div>
               <article v-for="notification in notifications" :key="notification.id" class="notification-item">
-                <strong>{{ notification.title }}</strong>
                 <p>{{ notification.message }}</p>
                 <small>{{ notificationOperator(notification) }} · {{ formatNotificationTime(notification.time) }}</small>
               </article>
@@ -237,7 +236,7 @@
         </section>
       </main>
       <div v-if="activeToast" class="operational-toast" role="status">
-        <strong>{{ activeToast.title }}</strong><span>{{ activeToast.message }}</span>
+        <span>{{ activeToast.message }}</span>
       </div>
     </div>
 
@@ -250,6 +249,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from './composables/useAuth'
 import axios from 'axios'
+import { isFirebaseRemoteMode } from './services/firebaseClient'
 
 const route = useRoute()
 const router = useRouter()
@@ -310,6 +310,7 @@ const connectNotificationStream = async () => {
       for (const message of messages) {
         try {
           const event = JSON.parse(message.trim())
+          window.dispatchEvent(new CustomEvent('pms-event', { detail: event }))
           if (event.type === 'operational_notification' && event.data) receiveOperationalNotification(event.data)
         } catch {}
       }
@@ -322,6 +323,7 @@ const connectNotificationStream = async () => {
   }
 }
 const startNotificationStream = () => {
+  if (isFirebaseRemoteMode()) return
   if (!notificationStreamStopped) return
   notificationStreamStopped = false
   axios.get('/api/pms/notifications', { params: { limit: MAX_NOTIFICATIONS }, mbarDirect: true })
@@ -337,13 +339,17 @@ const stopNotificationStream = () => {
   notificationAbortController = null
 }
 
+const cloudSettingsRoutes = ['/listino', '/settings/hotel-pricing']
 const areaRoutes = computed(() => router.getRoutes().filter(item => item.meta.area
+  && (!isFirebaseRemoteMode() || cloudSettingsRoutes.includes(item.path))
   && (!item.meta.permission || hasPermission(item.meta.permission))
   && (!item.meta.permissions || item.meta.permissions.some(permission => hasPermission(permission)))
   && (!item.meta.pmsTypes || isPmsTypeAllowed(item.meta.pmsTypes))
   && (!item.meta.requiresHospitalityStudioPms || canShowHotelBeachMenus.value)))
 const navigationAreas = computed(() => router.getRoutes().filter(item => item.meta.areaOverview
-  && areaRoutes.value.some(child => child.meta.area === item.path)).sort((a, b) => a.meta.areaOrder - b.meta.areaOrder))
+  && (isFirebaseRemoteMode()
+    ? item.path === '/impostazioni' && userRole.value === 'admin'
+    : areaRoutes.value.some(child => child.meta.area === item.path))).sort((a, b) => a.meta.areaOrder - b.meta.areaOrder))
 const activeArea = computed(() => navigationAreas.value.find(item => item.path === route.path || item.path === route.meta.area))
 const activeAreaItems = computed(() => areaRoutes.value.filter(item => item.meta.area === activeArea.value?.path)
   .sort((a, b) => a.meta.areaOrder - b.meta.areaOrder))
@@ -752,7 +758,7 @@ const handleLogout = () => {
 .notification-popover-title { position: sticky; top: 0; display: flex; justify-content: space-between; padding: 14px 16px; background: white; border-bottom: 1px solid rgba(148, 163, 184, .2); }
 .notification-popover-title span, .notification-item small { color: var(--ds-text-soft); font-size: .76rem; }
 .notification-item { padding: 13px 16px; border-bottom: 1px solid rgba(148, 163, 184, .16); }
-.notification-item p { margin: 5px 0; font-size: .86rem; line-height: 1.35; }
+.notification-item p { margin: 0 0 7px; font-size: .9rem; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .notification-empty { padding: 28px 16px; color: var(--ds-text-soft); text-align: center; }
 .operational-toast { position: fixed; z-index: 50; right: 24px; bottom: 24px; width: min(390px, calc(100vw - 32px)); padding: 15px 17px; display: flex; flex-direction: column; gap: 4px; border-radius: 16px; background: #17324d; color: white; box-shadow: 0 20px 45px rgba(15, 23, 42, .28); }
 .operational-toast span { font-size: .87rem; opacity: .9; }

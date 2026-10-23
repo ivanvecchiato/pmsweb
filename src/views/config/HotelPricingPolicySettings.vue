@@ -181,8 +181,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { doc, onSnapshot } from 'firebase/firestore'
+import { getFirebaseDb, isFirebaseRemoteMode } from '@/services/firebaseClient'
 import { usePricing } from '@/composables/usePricing'
 
 const { loadHotelPricingPolicy } = usePricing()
@@ -351,9 +353,27 @@ const save = async () => {
   }
 }
 
+const handlePmsEvent = event => {
+  if (isFirebaseRemoteMode() || event.detail?.type !== 'hotel_pricing_policy_updated') return
+  loadForm()
+}
+let unsubscribeCloudPolicy = null
+
 onMounted(async () => {
+  if (isFirebaseRemoteMode()) {
+    unsubscribeCloudPolicy = onSnapshot(doc(getFirebaseDb(), 'pms_configs', 'current'), { includeMetadataChanges: true }, snapshot => {
+      if (!snapshot.metadata.fromCache) loadForm()
+    })
+  } else {
+    window.addEventListener('pms-event', handlePmsEvent)
+  }
   await loadHotelPaymentMethods()
   await loadForm()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pms-event', handlePmsEvent)
+  if (unsubscribeCloudPolicy) unsubscribeCloudPolicy()
 })
 </script>
 

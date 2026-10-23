@@ -1,0 +1,401 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields:
+    //   - uid: string (required) - Firebase Auth UID
+    //   - roomNumber: string (required) - Assigned room number
+    //   - displayName: string (required) - Full name
+    //   - checkInDate: string (optional, date format)
+    //   - checkOutDate: string (optional, date format)
+    //   - role: string (required, enum: guest, admin)
+    //
+    // Collection: services
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - description: string (required)
+    //   - price: number (required)
+    //   - category: string (required, enum: spa, transport, leisure, other)
+    //   - imageUrl: string (optional)
+    //   - requiresBooking: bool (required)
+    //
+    // Collection: bookings
+    // Fields:
+    //   - id: string (required)
+    //   - userId: string (required) - Owner UID
+    //   - serviceId: string (required)
+    //   - date: string (required, date format)
+    //   - time: string (required)
+    //   - status: string (required, enum: pending, confirmed, cancelled)
+    //   - notes: string (optional)
+    //
+    // Collection: consumptions
+    // Fields:
+    //   - id: string (required)
+    //   - userId: string (required) - Owner UID
+    //   - description: string (required)
+    //   - amount: number (required)
+    //   - date: string (required, date-time format)
+    //   - source: string (required, enum: bar, restaurant, service, other)
+    //
+    // Collection: hotelInfo
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required)
+    //   - content: string (required)
+    //   - category: string (required, enum: general, dining, beach, spa)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && (
+        (resource != null && 'uid' in resource.data && request.auth.uid == resource.data.uid) ||
+        (resource != null && !('uid' in resource.data))
+      );
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        (request.auth.token.email == "ivan.vecchiato@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDate(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}$");
+    }
+
+    function isValidDateTime(dateTimeStr) {
+      return dateTimeStr is string && dateTimeStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['accessCode', 'roomNumber', 'displayName', 'role']) &&
+             hasOnlyAllowedFields(['uid', 'accessCode', 'roomNumber', 'displayName', 'role', 'checkInDate', 'checkOutDate', 'notificationPrefs']) &&
+             data.accessCode is string && data.accessCode.size() > 0 &&
+             data.roomNumber is string && data.roomNumber.size() > 0 &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             data.role in ['guest', 'admin'];
+    }
+
+    function isValidService(data) {
+      return hasRequiredFields(['id', 'name', 'description', 'price', 'category', 'requiresBooking']) &&
+             hasOnlyAllowedFields(['id', 'name', 'description', 'price', 'category', 'imageUrl', 'requiresBooking']) &&
+             data.id is string && data.name is string && data.price is number && data.price >= 0 &&
+             data.category in ['spa', 'transport', 'leisure', 'other'] &&
+             data.requiresBooking is bool;
+    }
+
+    function isValidBooking(data) {
+      return hasRequiredFields(['id', 'userId', 'serviceId', 'date', 'time', 'status']) &&
+             hasOnlyAllowedFields(['id', 'userId', 'serviceId', 'date', 'time', 'status', 'notes']) &&
+             data.userId is string && data.serviceId is string &&
+             isValidDate(data.date) && data.time is string &&
+             data.status in ['pending', 'confirmed', 'cancelled'];
+    }
+
+    function isValidConsumption(data) {
+      return hasRequiredFields(['id', 'userId', 'description', 'amount', 'date', 'source']) &&
+             hasOnlyAllowedFields(['id', 'userId', 'description', 'amount', 'date', 'source']) &&
+             data.userId is string && data.description is string &&
+             data.amount is number && data.amount >= 0 &&
+             isValidDateTime(data.date) &&
+             data.source in ['bar', 'restaurant', 'service', 'other'];
+    }
+
+    function isValidHotelInfo(data) {
+      return hasRequiredFields(['id', 'title', 'content', 'category']) &&
+             hasOnlyAllowedFields(['id', 'title', 'content', 'category']) &&
+             data.title is string && data.content is string &&
+             data.category in ['general', 'dining', 'beach', 'spa'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.uid || isAdmin());
+      // Allow searching for users (e.g. by accessCode or uid)
+      allow list: if isAuthenticated(); 
+      // Allow creation if authenticated (reception or seeding)
+      allow create: if isAuthenticated() && isValidUser(request.resource.data);
+      // Allow update if authenticated and valid data
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    (!('uid' in resource.data) || request.auth.uid == resource.data.uid || isAdmin());
+    }
+
+    match /notifications/{notificationId} {
+      // Allow authenticated users to list notifications. 
+      // In a production app, we would use a more restrictive query, 
+      // but for this prototype we'll allow listing and rely on the app to filter,
+      // or ensure the get rule protects individual sensitive ones.
+      allow read, list: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /services/{serviceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && isValidService(request.resource.data);
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
+      allow create: if isAuthenticated() && isValidBooking(request.resource.data) && (isOwner(request.resource.data.userId) || isAdmin());
+      allow update: if isAuthenticated() && isValidBooking(request.resource.data) && (isOwner(resource.data.userId) || isAdmin());
+      allow delete: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
+    }
+
+    match /consumptions/{consumptionId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
+      allow write: if isAdmin() && isValidConsumption(request.resource.data);
+    }
+
+    match /hotelInfo/{infoId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && isValidHotelInfo(request.resource.data);
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // PMS web: credenziali online, letture operative; scritture soltanto dal backend.
+    function isPmsOperator() {
+      let profile = get(/databases/$(database)/documents/pms_web_users/$(request.auth.uid)).data;
+      return request.auth != null
+        && exists(/databases/$(database)/documents/pms_web_users/$(request.auth.uid))
+        && profile.enabled == true && profile.operatorId != null
+        && profile.role in ['admin', 'staff']
+        && (profile.role == 'admin'
+          || profile.get('permissions', {}).get('home', false) == true
+          || profile.get('permissions', {}).get('customers', false) == true);
+    }
+
+    match /pms_web_users/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /{collection}/{id} {
+      allow read: if collection in ['rooms', 'pms_configs', 'pms_services', 'pms_hotel_rates', 'pms_hotel_timetable', 'pms_hotel_reservations', 'pms_hotel_reservation_history', 'pms_hotel_documents']
+        && isPmsOperator();
+    }
+
+    function isPmsBookingOperator() {
+      let profile = get(/databases/$(database)/documents/pms_web_users/$(request.auth.uid)).data;
+      return isPmsOperator() && (profile.role == 'admin' || profile.get('permissions', {}).get('customers', false) == true);
+    }
+
+    function isPmsAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/pms_web_users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/pms_web_users/$(request.auth.uid)).data.enabled == true
+        && get(/databases/$(database)/documents/pms_web_users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /pms_configs/{id} {
+      allow update: if id == 'current' && isPmsAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hotel'])
+        && request.resource.data.hotel.diff(resource.data.hotel).affectedKeys().hasOnly(['pricing']);
+    }
+
+    match /pms_hotel_rates/{id} {
+      allow create, update: if isPmsAdmin();
+      allow delete: if isPmsAdmin();
+    }
+
+    match /pms_hotel_timetable/{id} {
+      allow create, update: if isPmsAdmin();
+    }
+
+    function pmsRevision(id) {
+      return exists(/databases/$(database)/documents/pms_hotel_reservations/$(id))
+        ? get(/databases/$(database)/documents/pms_hotel_reservations/$(id)).data.revision
+        : exists(/databases/$(database)/documents/pms_hotel_reservation_tombstones/$(id))
+          ? get(/databases/$(database)/documents/pms_hotel_reservation_tombstones/$(id)).data.revision : 0;
+    }
+
+    function pmsCommit(id, revision) {
+      let version = getAfter(/databases/$(database)/documents/pms_hotel_reservation_versions/$(id)/revisions/$(string(revision))).data;
+      return isPmsBookingOperator() && revision == pmsRevision(id) + 1
+        && version.revision == revision && version.uid == request.auth.uid
+        && version.operator == get(/databases/$(database)/documents/pms_web_users/$(request.auth.uid)).data.operatorId
+        && version.committed_at == request.time;
+    }
+
+    function pmsRoomGuard(roomId) {
+      let path = /databases/$(database)/documents/pms_room_inventory/$(roomId);
+      return getAfter(path).data.revision == (exists(path) ? get(path).data.revision : 0) + 1;
+    }
+
+    match /pms_hotel_reservations/{id} {
+      allow create, update: if pmsCommit(id, request.resource.data.revision)
+        && request.resource.data.id == id && !('deposits' in request.resource.data)
+        && request.resource.data.roomId is string
+        && isValidDate(request.resource.data.checkin) && isValidDate(request.resource.data.checkout)
+        && request.resource.data.checkout > request.resource.data.checkin
+        && request.resource.data.price_total is number && request.resource.data.price_total >= 0
+        && (!exists(/databases/$(database)/documents/pms_hotel_reservations/$(id))
+          ? request.resource.data.status == 0 : request.resource.data.status in [resource.data.status, -100])
+        && (!exists(/databases/$(database)/documents/pms_hotel_reservations/$(id))
+          ? !request.resource.data.keys().hasAny(['document_id', 'payment_status', 'payment_timestamp'])
+          : request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revision', 'roomId', 'room', 'roomType', 'checkin', 'checkout', 'checkin_timestamp', 'checkout_timestamp', 'duration', 'board', 'adults', 'kids', 'kidsAges', 'pax', 'extraBeds', 'fixedPrice', 'person_pricing', 'pricing_mode', 'price_per_day', 'price_per_room', 'price_total', 'amount', 'accountholder', 'notes', 'guests', 'status', 'cancelled_timestamp', 'cancellation_reason']))
+        && pmsRoomGuard(request.resource.data.roomId)
+        && (!exists(/databases/$(database)/documents/pms_hotel_reservations/$(id))
+          || resource.data.roomId == null || resource.data.roomId == request.resource.data.roomId || pmsRoomGuard(resource.data.roomId))
+        && getAfter(/databases/$(database)/documents/pms_hotel_reservation_versions/$(id)/revisions/$(string(request.resource.data.revision))).data.snapshot
+          .diff(request.resource.data).affectedKeys().hasOnly(['deposits']);
+      allow delete: if get(/databases/$(database)/documents/pms_hotel_reservation_versions/$(id)/revisions/$(string(resource.data.revision))).data.snapshot.deposits.size() == 0
+        && pmsCommit(id, resource.data.revision + 1)
+        && getAfter(/databases/$(database)/documents/pms_hotel_reservation_tombstones/$(id)).data.revision == resource.data.revision + 1
+        && getAfter(/databases/$(database)/documents/pms_hotel_reservation_versions/$(id)/revisions/$(string(resource.data.revision + 1))).data.snapshot == null
+        && (resource.data.roomId == null || pmsRoomGuard(resource.data.roomId));
+
+      match /deposits/{depositId} {
+        allow read: if isPmsOperator();
+        function currentReservation() {
+          return getAfter(/databases/$(database)/documents/pms_hotel_reservations/$(id)).data;
+        }
+        function mutableDeposit() {
+          let jobPath = /databases/$(database)/documents/pms_fiscal_jobs/$(id + '_' + depositId);
+          return resource.data.fiscal_status in ['pending', 'cancelled']
+            && (!exists(jobPath) || !(get(jobPath).data.status in ['processing', 'uncertain', 'completed']));
+        }
+        function validDeposit() {
+          let data = request.resource.data;
+          return data.id == depositId && data.amount is number && data.amount > 0
+            && isValidDate(data.payment_date) && data.payment_method_id is int
+            && data.payment_mode is string && data.annulled is bool && data.fiscal_requested is bool
+            && data.position is int && data.position >= 0
+            && data.reservation_revision == currentReservation().revision
+            && pmsCommit(id, data.reservation_revision);
+        }
+        allow create: if validDeposit() && request.resource.data.fiscal_status == 'pending'
+          && request.resource.data.fiscal_requested == false && request.resource.data.annulled == false
+          && request.resource.data.document_id == '' && request.resource.data.progressivo == 0
+          && request.resource.data.chiusura == 0 && request.resource.data.fiscal_timestamp == 0
+          && request.resource.data.operator == get(/databases/$(database)/documents/pms_web_users/$(request.auth.uid)).data.operatorId;
+        allow update: if isPmsBookingOperator()
+          && request.resource.data.reservation_revision == currentReservation().revision
+          && pmsCommit(id, request.resource.data.reservation_revision)
+          && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['position', 'reservation_revision'])
+            || (mutableDeposit() && validDeposit()
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['position', 'reservation_revision', 'amount', 'payment_date', 'payment_mode', 'payment_method_id', 'electronic', 'operator', 'annulled', 'annulled_at', 'fiscal_status', 'fiscal_requested'])
+              && (!resource.data.fiscal_requested || request.resource.data.fiscal_requested)
+              && request.resource.data.fiscal_status == (request.resource.data.annulled ? 'cancelled' : 'pending')
+              && (!request.resource.data.fiscal_requested || resource.data.fiscal_requested
+                || getAfter(/databases/$(database)/documents/pms_fiscal_jobs/$(id + '_' + depositId)).data.status == 'pending')));
+      }
+    }
+
+    match /pms_hotel_reservation_versions/{id}/revisions/{revision} {
+      allow read: if isPmsOperator();
+      allow create: if pmsCommit(id, request.resource.data.revision)
+        && revision == string(request.resource.data.revision)
+        && request.resource.data.source in ['cloud', 'resolution']
+        && ((request.resource.data.snapshot == null
+            && getAfter(/databases/$(database)/documents/pms_hotel_reservation_tombstones/$(id)).data.revision == request.resource.data.revision)
+          || (request.resource.data.snapshot != null
+            && request.resource.data.snapshot.revision == request.resource.data.revision
+            && getAfter(/databases/$(database)/documents/pms_hotel_reservations/$(id)).data.revision == request.resource.data.revision))
+        && (pmsRevision(id) == 0 || getAfter(/databases/$(database)/documents/pms_hotel_reservation_history/$('sync_' + id + '_' + revision)).data.revision == request.resource.data.revision);
+    }
+
+    match /pms_hotel_reservation_history/{historyId} {
+      allow create: if isPmsBookingOperator()
+        && historyId == 'sync_' + request.resource.data.reservation_id + '_' + string(request.resource.data.revision)
+        && pmsCommit(request.resource.data.reservation_id, request.resource.data.revision)
+        && request.resource.data.snapshot == get(/databases/$(database)/documents/pms_hotel_reservation_versions/$(request.resource.data.reservation_id)/revisions/$(string(pmsRevision(request.resource.data.reservation_id)))).data.snapshot
+        && request.resource.data.operator.id == get(/databases/$(database)/documents/pms_web_users/$(request.auth.uid)).data.operatorId;
+    }
+
+    match /pms_hotel_reservation_tombstones/{id} {
+      allow read: if isPmsOperator();
+      allow create, update: if pmsCommit(id, request.resource.data.revision)
+        && request.resource.data.id == id && request.resource.data.deleted_at == request.time
+        && !existsAfter(/databases/$(database)/documents/pms_hotel_reservations/$(id));
+      allow delete: if isPmsBookingOperator()
+        && pmsCommit(id, getAfter(/databases/$(database)/documents/pms_hotel_reservations/$(id)).data.revision);
+    }
+
+    match /pms_room_inventory/{roomId} {
+      allow read: if isPmsOperator();
+      allow create, update: if isPmsBookingOperator()
+        && request.resource.data.keys().hasOnly(['revision'])
+        && request.resource.data.revision == (resource == null ? 0 : resource.data.revision) + 1;
+    }
+
+    match /{path=**}/proposals/{proposalId} {
+      allow read: if isPmsBookingOperator();
+    }
+    match /pms_hotel_reservation_conflicts/{id}/proposals/{proposalId} {
+      allow create: if isPmsBookingOperator() && request.resource.data.source == 'cloud'
+        && request.resource.data.uid == request.auth.uid && request.resource.data.status == 'pending'
+        && request.resource.data.created_at == request.time
+        && request.resource.data.operator == get(/databases/$(database)/documents/pms_web_users/$(request.auth.uid)).data.operatorId
+        && request.resource.data.authoritative_revision_at_detection == pmsRevision(id);
+      allow update: if isPmsBookingOperator() && resource.data.status == 'pending'
+        && request.resource.data.status == 'resolved' && request.resource.data.resolved_at == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolution_revision', 'resolution_choice', 'resolved_by', 'resolved_at'])
+        && pmsCommit(id, request.resource.data.resolution_revision)
+        && getAfter(/databases/$(database)/documents/pms_hotel_reservation_versions/$(id)/revisions/$(string(request.resource.data.resolution_revision))).data.proposal_id == proposalId;
+    }
+
+    match /pms_fiscal_jobs/{jobId} {
+      allow read: if isPmsOperator();
+      function validRequest() {
+        let data = request.resource.data;
+        let deposit = getAfter(/databases/$(database)/documents/pms_hotel_reservations/$(data.reservation_id)/deposits/$(data.deposit_id)).data;
+        return isPmsBookingOperator() && jobId == data.reservation_id + '_' + data.deposit_id
+          && data.keys().hasOnly(['reservation_id', 'deposit_id', 'type', 'status', 'operator', 'updated_at'])
+          && data.type == 'deposit' && data.status in ['pending', 'cancelled'] && data.updated_at == request.time
+          && deposit.fiscal_requested && deposit.fiscal_status in ['pending', 'cancelled']
+          && data.status == (deposit.annulled ? 'cancelled' : 'pending')
+          && pmsCommit(data.reservation_id, deposit.reservation_revision)
+          && data.operator == get(/databases/$(database)/documents/pms_web_users/$(request.auth.uid)).data.operatorId;
+      }
+      allow create: if validRequest();
+      allow update: if resource.data.status in ['pending', 'cancelled'] && validRequest();
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -118,7 +118,8 @@
             <tbody>
               <tr v-for="booking in filteredBookings" :key="booking.id">
                 <td>
-                  <div class="customer-name">{{ booking.customerName || '-' }}</div>
+                  <button v-if="isFirebaseRemoteMode()" type="button" class="customer-name" @click="selectedReservationId = String(booking.id)">{{ booking.customerName || '-' }}</button>
+                  <div v-else class="customer-name">{{ booking.customerName || '-' }}</div>
                   <div class="muted">#{{ booking.id }}</div>
                   <div class="muted booking-date">Prenotazione {{ formatDate(booking.bookingDate) }}</div>
                 </td>
@@ -141,18 +142,28 @@
         </div>
       </div>
     </div>
+    <HotelBookingPlanner
+      v-if="selectedReservationId"
+      :key="selectedReservationId"
+      :requested-reservation-id="selectedReservationId"
+      standalone-dialog
+      @dialog-closed="selectedReservationId = ''; loadBookings()"
+    />
   </div>
 </template>
 
 <script setup>
 import axios from 'axios'
 import { computed, onMounted, reactive, ref } from 'vue'
+import HotelBookingPlanner from './HotelBookingPlanner.vue'
+import { isFirebaseRemoteMode } from '@/services/firebaseClient'
 
 const currentYear = new Date().getFullYear()
 const today = new Date()
 const yesterday = new Date(today)
 yesterday.setDate(today.getDate() - 1)
 const bookings = ref([])
+const selectedReservationId = ref('')
 const isLoading = ref(false)
 const errorMessage = ref('')
 const lastUpdated = ref('')

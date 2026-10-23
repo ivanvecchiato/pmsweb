@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "dist",
+    "public": "dist-cloud",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -11,6 +11,13 @@
         "source": "**",
         "destination": "/index.html"
       }
+    ],
+    "predeploy": [
+      "npm run build:cloud"
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   }
 }

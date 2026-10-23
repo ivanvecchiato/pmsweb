@@ -109,8 +109,9 @@
         <div v-for="(deposit, index) in selectedAccount.deposits || []" :key="`deposit-${index}`" class="line-row">
           <span>
             Caparra · {{ formatDate(deposit.payment_date) }} · {{ deposit.payment_mode || '-' }}
-            · <span v-if="deposit.invoice_progressive">Documento H5S {{ deposit.invoice_progressive }}</span>
-            <span v-else class="document-error">documento non trovato</span>
+            · <span v-if="deposit.document_id">Documento fiscale PMS {{ deposit.progressivo || '-' }}/{{ deposit.chiusura || '-' }}</span>
+            <span v-else-if="deposit.invoice_progressive">Documento H5S {{ deposit.invoice_progressive }}</span>
+            <span v-else class="document-error">documento fiscale non emesso</span>
           </span>
           <span>{{ formatCurrency(deposit.amount) }}</span>
         </div>

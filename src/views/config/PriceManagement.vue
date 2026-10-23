@@ -2,16 +2,25 @@
   <div class="config-container" @mouseup="handleMouseUp">
     <div class="sidebar">
       <h2>Listini</h2>
+      <button class="btn btn-save-range" @click="startNewPricelist">+ Nuovo listino</button>
       <div v-for="price in pricelists" :key="price.id" 
        class="price-card" 
        :class="{ active: selectedPricelist?.id === price.id }"
        :style="{ borderLeftColor: price.color }"
-       @click="selectedPricelist = price">
+       @click="selectPricelist(price)">
         
         <div class="price-card-info">
           <strong>{{ price.description }}</strong>
           <span class="base-price-badge">Base: €{{ price.basePrice || 0 }}</span>
         </div>
+        <button class="btn-delete-pricelist" type="button" title="Elimina listino" aria-label="Elimina listino" @click.stop="deletePricelist(price)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="m19 6-1 14H6L5 6" />
+            <path d="M10 11v5M14 11v5" />
+          </svg>
+        </button>
       </div>
       
       <div v-if="selectionStart && selectionEnd" class="range-actions">
@@ -31,14 +40,29 @@
             <h3>{{ selectedPricelist.description }}</h3>
             <span class="id-badge">ID: {{ selectedPricelist.id }}</span>
           </div>
-          <button class="btn-glyph-save" @click="savePrices(selectedPricelist)" title="Salva modifiche">
+          <div class="editor-actions">
+            <button v-if="isCreating" class="btn btn-cancel" @click="cancelNewPricelist">Annulla</button>
+            <button class="btn-glyph-save" @click="savePrices(selectedPricelist)" :title="isCreating ? 'Crea listino' : 'Salva modifiche'">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
               <polyline points="17 21 17 13 7 13 7 21"></polyline>
               <polyline points="7 3 7 8 15 8"></polyline>
             </svg>
-            Salva
-          </button>
+            {{ isCreating ? 'Crea listino' : 'Salva' }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="isCreating" class="price-grid new-pricelist-fields">
+          <label>Nome listino
+            <input v-model.trim="selectedPricelist.description" type="text" maxlength="80" required>
+          </label>
+          <label>Prezzo base (€)
+            <input v-model.number="selectedPricelist.basePrice" type="number" min="0" step="0.01">
+          </label>
+          <label>Colore
+            <input v-model="selectedPricelist.color" type="color">
+          </label>
         </div>
 
         <div class="price-grid">
@@ -103,8 +127,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { getFirebaseDb, isFirebaseRemoteMode } from '@/services/firebaseClient';
 
 const pricelists = ref([]); 
 const timetable = ref([]);   
@@ -120,6 +146,8 @@ const toast = ref({
   message: '',
   type: 'success' // può essere 'success' o 'error'
 });
+let unsubscribeCloudRates = null;
+let unsubscribeCloudTimetable = null;
 
 const showToast = (msg, type = 'success') => {
   toast.value.message = msg;
@@ -136,34 +164,66 @@ const isCreating = ref(false);
 
 const startNewPricelist = () => {
   isCreating.value = true;
-  // Creiamo un oggetto con la struttura richiesta dal tuo pricesDB.json
   selectedPricelist.value = {
-    id: Date.now(), // ID temporaneo, il backend genererà quello definitivo
+    id: 0,
     description: '',
     color: '#3b82f6',
     basePrice: 0,
-    prices: [
-      { roomType: 'FM', tariffa: 0 },
-      { roomType: 'JSFM', tariffa: 0 },
-      { roomType: 'SNG', tariffa: 0 },
-      // ... aggiungi qui tutti i tuoi tipi camera standard
-    ],
+    prices: (pricelists.value[0]?.prices || []).map(rate => ({ ...rate, tariffa: 0 })),
     surcharges: { hb: 0, fb: 0 }
   };
+};
+
+const selectPricelist = price => {
+  isCreating.value = false;
+  selectedPricelist.value = price;
+};
+
+const cancelNewPricelist = () => {
+  isCreating.value = false;
+  selectedPricelist.value = null;
+};
+
+const deletePricelist = async pricelist => {
+  if (!window.confirm(`Eliminare il listino "${pricelist.description}"? Verranno rimosse anche tutte le assegnazioni dal calendario.`)) return;
+  try {
+    await axios.delete('/api/pms/deleterate', { params: { id: pricelist.id, type: 'hotel' } });
+    pricelists.value = pricelists.value.filter(price => String(price.id) !== String(pricelist.id));
+    timetable.value.forEach(day => {
+      if (String(day.pricelist) === String(pricelist.id)) day.pricelist = 0;
+    });
+    if (String(selectedPricelist.value?.id) === String(pricelist.id)) selectedPricelist.value = null;
+    showToast('Listino eliminato');
+  } catch (err) {
+    showToast('Errore durante l’eliminazione del listino', 'error');
+  }
 };
 
 const savePrices = async (pricelist) => {
   try {
     const endpoint = '/api/pms/saverate';
+    const creating = isCreating.value;
+    const existingIds = new Set(pricelists.value.map(price => String(price.id)));
+    if (creating && !String(pricelist.description || '').trim()) {
+      showToast('Inserisci il nome del listino', 'error');
+      return;
+    }
+    if (creating && isFirebaseRemoteMode()) pricelist.id = crypto.randomUUID();
+    pricelist.description = String(pricelist.description || '').trim();
 
     await axios.post(endpoint, pricelist);
     
-    if (isCreating.value) {
-      pricelists.value.push({ ...pricelist });
+    if (creating) {
       isCreating.value = false;
+      await loadData();
+      selectedPricelist.value = pricelists.value.find(price => creating && isFirebaseRemoteMode()
+        ? String(price.id) === String(pricelist.id)
+        : !existingIds.has(String(price.id)) && price.description === pricelist.description) || null;
+      showToast("Nuovo listino creato!");
+      return;
     }
     
-    showToast(isCreating.value ? "Nuovo listino creato!" : "Listino aggiornato!");
+    showToast("Listino aggiornato!");
   } catch (err) {
     showToast("Errore durante il salvataggio", "error");
   }
@@ -258,13 +318,22 @@ const saveRangeAssignment = async () => {
 // Caricamento dati
 const loadData = async () => {
   try {
-    const resPrices = await axios.get('/api/pms/getrates');
-    const resTime = await axios.get('/api/pms/gettimetable');
+    const type = isFirebaseRemoteMode() ? '?type=hotel' : '';
+    const resPrices = await axios.get(`/api/pms/getrates${type}`);
+    const resTime = await axios.get(`/api/pms/gettimetable${type}`);
+    const selectedId = selectedPricelist.value?.id;
+    const newPricelist = isCreating.value ? selectedPricelist.value : null;
     pricelists.value = resPrices.data;
+    selectedPricelist.value = newPricelist || pricelists.value.find(price => String(price.id) === String(selectedId)) || null;
     timetable.value = resTime.data;
   } catch (e) {
     console.error("Errore caricamento dati configurazione", e);
   }
+};
+
+const handlePmsEvent = event => {
+  if (isFirebaseRemoteMode() || !['hotel_rates_updated', 'hotel_timetable_updated'].includes(event.detail?.type)) return;
+  loadData();
 };
 
 // Assegnazione listino al giorno
@@ -285,7 +354,25 @@ const getDayStyle = (day) => {
 const getDayOfMonth = (dateStr) => new Date(dateStr).getDate();
 const getMonthName = (dateStr) => new Date(dateStr).toLocaleDateString('it-IT', { month: 'short' });
 
-onMounted(loadData);
+onMounted(() => {
+  loadData();
+  if (isFirebaseRemoteMode()) {
+    unsubscribeCloudRates = onSnapshot(collection(getFirebaseDb(), 'pms_hotel_rates'), { includeMetadataChanges: true }, snapshot => {
+      if (!snapshot.metadata.fromCache) loadData();
+    });
+    unsubscribeCloudTimetable = onSnapshot(collection(getFirebaseDb(), 'pms_hotel_timetable'), { includeMetadataChanges: true }, snapshot => {
+      if (!snapshot.metadata.fromCache) loadData();
+    });
+  } else {
+    window.addEventListener('pms-event', handlePmsEvent);
+  }
+});
+
+onUnmounted(() => {
+  window.removeEventListener('pms-event', handlePmsEvent);
+  if (unsubscribeCloudRates) unsubscribeCloudRates();
+  if (unsubscribeCloudTimetable) unsubscribeCloudTimetable();
+});
 </script>
 
 <style scoped>
@@ -331,8 +418,8 @@ onMounted(loadData);
 
 .price-card {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
   padding: 14px 16px;
   margin-bottom: 12px;
   border-left: 5px solid #cbd5e1;
@@ -354,6 +441,8 @@ onMounted(loadData);
 
 .price-card-info {
   display: flex;
+  flex: 1;
+  min-width: 0;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
@@ -362,6 +451,24 @@ onMounted(loadData);
 .price-card-info strong {
   font-size: 0.96rem;
   color: var(--ds-text);
+}
+
+.btn-delete-pricelist {
+  display: inline-flex;
+  flex: 0 0 36px;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(220, 38, 38, 0.16);
+  border-radius: 11px;
+  color: #dc2626;
+  background: rgba(254, 226, 226, 0.72);
+  cursor: pointer;
+}
+
+.btn-delete-pricelist:hover {
+  background: #fee2e2;
 }
 
 .base-price-badge,
@@ -438,6 +545,50 @@ onMounted(loadData);
   padding-bottom: 14px;
   margin-bottom: 22px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.editor-actions button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.editor-actions .btn {
+  width: auto;
+}
+
+.new-pricelist-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--ds-text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.new-pricelist-fields input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  font: inherit;
+  font-weight: 600;
+  color: var(--ds-text);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.new-pricelist-fields input[type="color"] {
+  padding: 6px;
 }
 
 .header-titles {

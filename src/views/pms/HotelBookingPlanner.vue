@@ -41,14 +41,16 @@
       <button @click="addBooking()" class="btn btn-primary">
         + Nuova Prenotazione
       </button>
-      <button @click="createQuote" class="btn btn-secondary">
+      <button v-if="isFirebaseRemoteMode()" @click="loadReservationConflicts" class="btn btn-secondary">Conflitti</button>
+      <button v-if="!isFirebaseRemoteMode()" @click="createQuote" class="btn btn-secondary">
         📋 Preventivo
       </button>
     </div>
     </div>
 
     <div v-if="!standaloneDialog" class="content">
-      <div class="grid-wrapper">
+      <div v-if="isLoadingCloudPlanner" class="planner-loading">Attendere...</div>
+      <div v-else class="grid-wrapper">
         <div class="grid-header">
           <div class="header-row">
             <div class="room-label">Camera</div>
@@ -78,8 +80,13 @@
               @mousemove="handleMouseMoveGrid($event, room)"
               @mouseenter="hoveredRoomId = room.id" 
               @mouseleave="hoveredRoomId = null"
+              @mousedown="startPeriodSelection($event, room)"
               @click="addBooking(room, $event)"
             >
+              <div v-if="periodSelection?.room.id === room.id" class="period-selection" :style="{
+                left: Math.min(periodSelection.startDay, periodSelection.endDay) * cellWidth + 'px',
+                width: (Math.abs(periodSelection.endDay - periodSelection.startDay) + 1) * cellWidth + 'px'
+              }"></div>
               <div v-if="hoveredRoomId === room.id" :style="mouseLineStyle">
                 <div class="mouse-tooltip">
                   <span class="tooltip-date">{{ hoverDate }}</span>
@@ -136,6 +143,38 @@
 
 <transition name="fade">
   <Teleport to="body">
+    <div v-if="showReservationConflicts" class="modal-overlay" @click.self="showReservationConflicts = false">
+      <div class="modal-content">
+        <div class="modal-header"><h2>Conflitti prenotazioni</h2><button class="close-btn" @click="showReservationConflicts = false" aria-label="Chiudi">×</button></div>
+        <p>La versione confermata rimane operativa. Una proposta diventa definitiva solo dopo la conferma della risoluzione.</p>
+        <p v-if="loadingConflicts">Caricamento…</p>
+        <p v-else-if="!reservationConflicts.length">Nessun conflitto da risolvere.</p>
+        <section v-for="conflict in reservationConflicts" :key="`${conflict.id}-${conflict.proposalId}`" class="reservation-conflict">
+          <h3>Prenotazione {{ conflict.id }}</h3>
+          <div class="reservation-conflict-versions">
+            <div v-for="version in [{ title: 'Versione confermata', booking: conflict.current, revision: conflict.currentRevision }, { title: 'Proposta da valutare', booking: conflict.snapshot, revision: conflict.base_revision }]" :key="version.title">
+              <strong>{{ version.title }}</strong><p>Revisione {{ version.revision }}</p>
+              <template v-if="version.booking">
+                <p>{{ version.booking.accountholder?.firstname }} {{ version.booking.accountholder?.lastname }}</p>
+                <p>Camera {{ version.booking.room }} · {{ version.booking.checkin }} → {{ version.booking.checkout }}</p>
+                <p>{{ version.booking.adults }} adulti · {{ version.booking.kids }} bambini · {{ version.booking.board }}</p>
+                <p>Soggiorno €{{ Number(version.booking.price_total || 0).toFixed(2) }}</p>
+                <p>Acconti €{{ (version.booking.deposits || []).filter(item => !item.annulled).reduce((sum, item) => sum + Number(item.amount || 0), 0).toFixed(2) }}</p>
+                <p v-for="(note, index) in version.booking.notes" :key="index">{{ note }}</p>
+                <p v-if="Number(version.booking.status) === -100">Prenotazione annullata</p>
+              </template>
+              <p v-else>{{ version.title === 'Versione confermata' && version.revision === 0 ? 'Inserimento non confermato' : 'Prenotazione eliminata' }}</p>
+            </div>
+          </div>
+          <p v-if="conflict.reason === 'room_occupied'">La camera della proposta risulta occupata nel periodo richiesto.</p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" :disabled="loadingConflicts" @click="resolveReservationConflict(conflict, 'current')">Conserva la versione confermata</button>
+            <button class="btn btn-primary" :disabled="loadingConflicts" @click="resolveReservationConflict(conflict, 'proposal')">Adotta la proposta</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
     <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
       <div class="modal-content">
       <div class="modal-header">
@@ -149,7 +188,7 @@
       
       <form @submit.prevent="submitNewBooking" class="booking-form">
         <div v-if="editingBooking" class="reservation-history">
-          <router-link :to="{ path: '/hotel-events', query: { reservation_id: editingBooking.id } }">Registro eventi della prenotazione</router-link>
+          <router-link v-if="!isFirebaseRemoteMode()" :to="{ path: '/hotel-events', query: { reservation_id: editingBooking.id } }">Registro eventi della prenotazione</router-link>
           <button type="button" class="reservation-history-toggle" @click="toggleReservationHistory">
             <span>{{ showReservationHistory ? 'Nascondi modifiche' : 'Visualizza modifiche' }}</span>
             <span>{{ showReservationHistory ? '−' : '+' }}</span>
@@ -440,12 +479,22 @@
                 </div>
                 <div class="deposit-actions">
                   <button
-                    v-if="dep.documentId"
+                    v-if="dep.documentId && !isFirebaseRemoteMode()"
                     type="button"
                     class="deposit-document-link"
                     @click="openDepositDocument(dep)"
                   >Documento {{ dep.progressivo || '' }}</button>
+                  <span v-if="isFirebaseRemoteMode() && dep.documentId">Documento {{ dep.progressivo }}/{{ dep.chiusura }}</span>
+                  <span v-if="isFirebaseRemoteMode() && !dep.documentId && !dep.annulled && !(Number(dep.invoiceProgressive) > 0)" class="deposit-fiscal-status">{{ ['uncertain', 'historical'].includes(dep.fiscal_status) ? 'Fiscalizzazione da verificare' : dep.fiscal_requested ? 'Emissione richiesta · in attesa della stampante locale' : 'Documento fiscale non richiesto' }}</span>
                   <button
+                    v-if="isFirebaseRemoteMode() && editingBooking && isModalReadOnly && !selectedReservationHistory && dep.fiscal_status === 'pending' && !dep.annulled && !dep.fiscal_requested"
+                    type="button"
+                    class="deposit-document-link"
+                    :disabled="depositFiscalPrinting !== null"
+                    @click="requestDepositFiscal(dep, index)"
+                  >Richiedi documento fiscale</button>
+                  <button
+                    v-if="!isFirebaseRemoteMode()"
                     type="button"
                     class="deposit-print deposit-print-fiscal"
                     :disabled="depositFiscalPrinting !== null || Boolean(dep.documentId) || Number(dep.invoiceProgressive) > 0 || dep.annulled"
@@ -473,7 +522,8 @@
                     v-if="!isModalReadOnly && !dep.annulled"
                     type="button"
                     class="deposit-remove"
-                    :disabled="depositAnnulPrinting !== null"
+                    :disabled="depositAnnulPrinting !== null || (isFirebaseRemoteMode() && Boolean(dep.documentId))"
+                    :title="isFirebaseRemoteMode() && dep.documentId ? 'L’annullo fiscale richiede la stampante locale' : 'Storna acconto'"
                     @click="removeDeposit(dep, index)"
                   >Rimuovi</button>
                 </div>
@@ -487,7 +537,7 @@
         <section v-if="editingBooking" class="dialog-section dialog-section-full reservation-services-section">
           <div class="reservation-services-header">
             <h4 class="section-title">Servizi extra</h4>
-            <button v-if="!isModalReadOnly" type="button" class="text-action" @click="openAddServiceFromDetails">Aggiungi</button>
+            <button v-if="!isModalReadOnly && !isFirebaseRemoteMode()" type="button" class="text-action" @click="openAddServiceFromDetails">Aggiungi</button>
           </div>
           <div v-if="editingBooking.extra?.services?.length" class="existing-services reservation-services-list">
             <div v-for="(svc, i) in editingBooking.extra.services" :key="i" class="existing-service-row">
@@ -501,14 +551,14 @@
               <div class="existing-service-actions">
                 <span class="existing-service-price">{{ svc.price != null ? '€' + (svc.price * (svc.quantity || 1)).toFixed(2) : '—' }}</span>
                 <button
-                  v-if="svc.awaitingReturn && !isModalReadOnly"
+                  v-if="svc.awaitingReturn && !isModalReadOnly && !isFirebaseRemoteMode()"
                   type="button"
                   class="service-return"
                   :disabled="returningServiceIndex !== null"
                   @click="returnService(editingBooking, i)"
                 >Restituisci</button>
                 <button
-                  v-if="!isModalReadOnly && !svc.awaitingReturn"
+                  v-if="!isModalReadOnly && !svc.awaitingReturn && !isFirebaseRemoteMode()"
                   type="button"
                   class="service-remove"
                   title="Elimina servizio"
@@ -652,7 +702,7 @@
         </div>
       </dl>
       <div class="booking-popup-actions">
-        <template v-if="isCheckoutContextMenu">
+        <template v-if="isCheckoutContextMenu && !isFirebaseRemoteMode()">
           <button type="button" class="booking-action-item" @click="openViewFromMenu">
             Visualizza
           </button>
@@ -667,16 +717,16 @@
           <button type="button" class="booking-action-item" @click="openEditFromMenu">
             Modifica
           </button>
-          <button type="button" class="booking-action-item" @click="openGuestRegistrationFromMenu">
+          <button v-if="!isFirebaseRemoteMode()" type="button" class="booking-action-item" @click="openGuestRegistrationFromMenu">
             Registra ospiti
           </button>
-          <button v-if="bookingStatusActionLabel" type="button" class="booking-action-item" @click="runBookingStatusAction">
+          <button v-if="bookingStatusActionLabel && !isFirebaseRemoteMode()" type="button" class="booking-action-item" @click="runBookingStatusAction">
             {{ bookingStatusActionLabel }}
           </button>
-          <button type="button" class="booking-action-item" @click="openAddServiceFromMenu">
+          <button v-if="!isFirebaseRemoteMode()" type="button" class="booking-action-item" @click="openAddServiceFromMenu">
             Aggiungi Servizio
           </button>
-          <button v-if="isCheckedInContextMenu" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
+          <button v-if="isCheckedInContextMenu && !isFirebaseRemoteMode()" type="button" class="booking-action-item" @click="openPendingPaymentFromMenu">
             Paga conto
           </button>
         </template>
@@ -824,6 +874,8 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
+import { getFirebaseDb, isFirebaseRemoteMode } from '@/services/firebaseClient';
 import trashIcon from '@/assets/trash.svg';
 import { watch } from 'vue';
 import { useRouter } from 'vue-router'
@@ -848,8 +900,10 @@ const {
 } = usePricing();
 const { currentUser, getLoginUsers, pmsIntegrationType: providerType } = useAuth();
 const operators = ref([]);
+const isCloudPlanner = isFirebaseRemoteMode();
+const isLoadingCloudPlanner = ref(isCloudPlanner);
 
-const rooms = ref([
+const rooms = ref(isCloudPlanner ? [] : [
   { id: 1, name: 'Camera 101 - Singola' },
   { id: 2, name: 'Camera 102 - Doppia' },
   { id: 3, name: 'Camera 103 - Suite' },
@@ -865,7 +919,7 @@ const days = ref(20);
 const daysToShift = 7;
 
 // Converti le prenotazioni con date assolute
-const bookings = ref([
+const bookings = ref(isCloudPlanner ? [] : [
   { id: 1, roomId: 1, startDate: new Date(2026, 0, 3), duration: 4, guest: 'Mario Rossi', color: '#3b82f6' },
   { id: 2, roomId: 1, startDate: new Date(2026, 0, 9), duration: 3, guest: 'Laura Bianchi', color: '#ef4444' },
   { id: 3, roomId: 2, startDate: new Date(2026, 0, 2), duration: 7, guest: 'Giovanni Verdi', color: '#10b981' },
@@ -875,6 +929,8 @@ const bookings = ref([
 
 const dragging = ref(null);
 const resizing = ref(null);
+const periodSelection = ref(null);
+let suppressNextGridClick = false;
 const selectedBooking = ref(null);
 const tempBooking = ref(null);
 var movingReservation = ref(null);
@@ -891,6 +947,11 @@ let pmsEventAbortController = null;
 let pmsReconnectTimeout = null;
 let pmsStreamStopped = false;
 let pmsRefreshTimeout = null;
+let unsubscribeCloudRooms = null;
+let unsubscribeCloudReservations = null;
+let unsubscribeCloudRates = null;
+let unsubscribeCloudTimetable = null;
+let unsubscribeCloudConfigs = null;
 let suppressNextBookingClick = false;
 let standaloneDialogOpened = false;
 
@@ -975,6 +1036,38 @@ const mouseLineStyle = computed(() => {
 });
 
 const showModal = ref(false);
+const showReservationConflicts = ref(false);
+const reservationConflicts = ref([]);
+const loadingConflicts = ref(false);
+
+const loadReservationConflicts = async () => {
+  showReservationConflicts.value = true;
+  loadingConflicts.value = true;
+  try {
+    reservationConflicts.value = (await axios.get('/api/pms/hotel/conflicts')).data;
+  } catch (error) {
+    alert(error.response?.data?.error || 'Impossibile caricare i conflitti');
+  } finally {
+    loadingConflicts.value = false;
+  }
+};
+
+const resolveReservationConflict = async (conflict, choice) => {
+  if (loadingConflicts.value || !window.confirm('Confermi questa scelta come nuova versione definitiva della prenotazione?')) return;
+  loadingConflicts.value = true;
+  try {
+    const response = await axios.post('/api/pms/hotel/resolve_conflict', {
+      id: conflict.id, proposalId: conflict.proposalId, baseRevision: conflict.currentRevision, choice
+    });
+    showPlannerToast(`Risoluzione confermata: revisione ${response.data.revision}`);
+    getReservations();
+  } catch (error) {
+    alert(error.response?.data?.error || 'Risoluzione non riuscita');
+  } finally {
+    await loadReservationConflicts();
+  }
+};
+
 const editingBooking = ref(null);
 const isModalReadOnly = ref(false);
 const showReservationHistory = ref(false);
@@ -1226,6 +1319,7 @@ const depositFiscalPrinting = ref(null);
 const depositProformaPrinting = ref(null);
 const depositAnnulPrinting = ref(null);
 const newBookingData = ref({
+  id: isFirebaseRemoteMode() ? crypto.randomUUID() : '',
   roomId: '',
   guestName: '',
   guestSurname: '',
@@ -1246,6 +1340,9 @@ const normalizeDeposits = (deposits) => {
   if (!Array.isArray(deposits)) return [];
   return deposits
     .map(dep => ({
+      id: dep.id,
+      fiscal_status: dep.fiscal_status,
+      ...(isFirebaseRemoteMode() ? { fiscal_requested: dep.fiscal_requested === true } : {}),
       amount: Number(dep?.amount ?? 0),
       paymentMode: dep?.payment_mode || dep?.paymentMode || '',
       paymentMethodId: dep?.payment_method_id ?? dep?.paymentMethodId ?? '',
@@ -1442,6 +1539,8 @@ const addDeposit = () => {
   }
 
   newBookingData.value.deposits.push({
+    id: isFirebaseRemoteMode() ? crypto.randomUUID() : '',
+    fiscal_status: 'pending',
     amount,
     paymentMode: paymentMethod.name,
     paymentMethodId: paymentMethod.id,
@@ -1536,6 +1635,24 @@ const printDepositFiscal = async (deposit, index) => {
   } catch (error) {
     console.error('Errore stampa fiscale deposito:', error);
     alert(error.response?.data?.error || 'Stampa fiscale del deposito non riuscita');
+  } finally {
+    depositFiscalPrinting.value = null;
+  }
+};
+
+const requestDepositFiscal = async (deposit, index) => {
+  if (!isFirebaseRemoteMode() || !editingBooking.value || !isModalReadOnly.value || selectedReservationHistory.value) return;
+  depositFiscalPrinting.value = index;
+  try {
+    const response = await axios.post('/api/pms/hotel/deposit/request_fiscal', {
+      id: editingBooking.value.id, baseRevision: editingBooking.value.revision, depositId: deposit.id
+    });
+    editingBooking.value.revision = response.data.revision;
+    deposit.fiscal_requested = true;
+    getReservations();
+    showPlannerToast('Emissione fiscale richiesta');
+  } catch (error) {
+    alert(error.response?.data?.error || 'Richiesta di emissione fiscale non riuscita');
   } finally {
     depositFiscalPrinting.value = null;
   }
@@ -1777,6 +1894,7 @@ const saveRegisteredGuest = async (guest) => {
   try {
     const response = await axios.post('/api/pms/hotel/update_reservation', {
       id: guestRegistrationBooking.value.id,
+      ...(isFirebaseRemoteMode() ? { baseRevision: guestRegistrationBooking.value.revision } : {}),
       operator: currentUser.value.id,
       updatedBy: currentUser.value.id,
       updatedAt: new Date().toISOString(),
@@ -1830,7 +1948,8 @@ const handleGlobalClick = () => {
   }
 };
 
-const addBooking = (room = null, event = null) => {
+const addBooking = (room = null, event = null, duration = 1) => {
+  if (suppressNextGridClick && event) return;
   closeBookingActions();
   selectedBooking.value = null;
   editingBooking.value = null;
@@ -1855,9 +1974,10 @@ const addBooking = (room = null, event = null) => {
     checkin = toISODate(startDate.value);
   }
 
-  const checkout = addDaysISO(checkin, 1);
+  const checkout = addDaysISO(checkin, duration);
 
   newBookingData.value = {
+    id: isFirebaseRemoteMode() ? crypto.randomUUID() : '',
     roomId: room?.id ?? rooms.value[0]?.id ?? '',
     guestName: '',
     guestSurname: '',
@@ -1890,6 +2010,8 @@ const loadBookingIntoDialog = (booking) => {
   end.setDate(end.getDate() + booking.duration);
 
   newBookingData.value = {
+    id: booking.id,
+    ...(isFirebaseRemoteMode() ? { baseRevision: booking.revision } : {}),
     roomId: booking.roomId,
     guestName: booking.guestName || booking.guest || '',
     guestSurname: booking.guestSurname || '',
@@ -2132,6 +2254,8 @@ const submitNewBooking = async () => {
 
   const normalizedDeposits = normalizeDeposits(newBookingData.value.deposits || []);
   const backendDeposits = normalizedDeposits.map(dep => ({
+    id: dep.id,
+    fiscal_status: dep.fiscal_status,
     amount: dep.amount,
     payment_mode: dep.paymentMode || '',
     payment_method_id: dep.paymentMethodId,
@@ -2155,6 +2279,7 @@ const submitNewBooking = async () => {
   const bookingNotes = String(newBookingData.value.notes || '').trim();
 
   const payload = {
+    ...(isFirebaseRemoteMode() ? { id: newBookingData.value.id, baseRevision: editingBooking.value?.revision ?? 0 } : {}),
     roomId: newBookingData.value.roomId,
     firstname: newBookingData.value.guestName,
     lastname: newBookingData.value.guestSurname,
@@ -2229,7 +2354,8 @@ const submitNewBooking = async () => {
     const status = err?.response?.status;
     const data = err?.response?.data;
     console.error('Errore salvataggio prenotazione:', status, data || err);
-    alert("Errore durante il salvataggio della prenotazione");
+    alert(data?.error || "Errore durante il salvataggio della prenotazione");
+    if (status === 409) getReservations();
   }
 };
 
@@ -2631,7 +2757,24 @@ const handleMouseDown = (e, booking, type) => {
   }
 };
 
+const startPeriodSelection = (event, room) => {
+  if (event.button !== 0) return;
+  const rect = event.currentTarget.getBoundingClientRect();
+  const day = Math.max(0, Math.min(days.value - 1, Math.floor((event.clientX - rect.left) / cellWidth)));
+  periodSelection.value = { room, element: event.currentTarget, startDay: day, endDay: day };
+};
+
 const handleMouseMove = (e) => {
+  if (periodSelection.value) {
+    if (!(e.buttons & 1)) {
+      periodSelection.value = null;
+      return;
+    }
+    e.preventDefault();
+    const rect = periodSelection.value.element.getBoundingClientRect();
+    periodSelection.value.endDay = Math.max(0, Math.min(days.value - 1, Math.floor((e.clientX - rect.left) / cellWidth)));
+    return;
+  }
   if (dragging.value) {
     const deltaX = e.clientX - dragging.value.startX;
     const deltaY = e.clientY - dragging.value.startY;
@@ -2699,6 +2842,7 @@ const updateReservation = async (booking) => {
   console.log('Aggiornamento prenotazione:', booking.id);
   const obj = {
     id: booking.id,
+    ...(isFirebaseRemoteMode() ? { baseRevision: booking.revision } : {}),
     roomId: booking.roomId,
     checkin: toISODate(booking.startDate), // Usa l'helper invece di toISOString
     duration: booking.duration,
@@ -2715,11 +2859,33 @@ const updateReservation = async (booking) => {
   } catch (error) {
     movingReservation.value = null;
     console.error('Errore nell\'aggiornamento:', error);
+    alert(error.response?.data?.error || 'Aggiornamento non riuscito');
+    if (error.response?.status === 409) getReservations();
     return false;
   }
 };
 
 const handleMouseUp = async (event) => {
+  if (periodSelection.value) {
+    const selection = periodSelection.value;
+    periodSelection.value = null;
+    const rect = selection.element.getBoundingClientRect();
+    if (selection.startDay !== selection.endDay && event.clientX >= rect.left && event.clientX < rect.right
+      && event.clientY >= rect.top && event.clientY < rect.bottom) {
+      const firstDay = Math.min(selection.startDay, selection.endDay);
+      addBooking(selection.room, {
+        currentTarget: selection.element,
+        clientX: rect.left + firstDay * cellWidth
+      }, Math.abs(selection.endDay - selection.startDay) + 1);
+      suppressNextGridClick = true;
+      suppressNextBookingClick = true;
+      setTimeout(() => {
+        suppressNextGridClick = false;
+        suppressNextBookingClick = false;
+      }, 0);
+    }
+    return;
+  }
   if (dragging.value || resizing.value) {
     const activeDrag = dragging.value;
     const isDragMove = Boolean(dragging.value);
@@ -2818,6 +2984,7 @@ const confirmCancel = async () => {
   try {
     const response = await axios.post('/api/pms/hotel/cancel_reservation', {
       id: editingBooking.value.id,
+      ...(isFirebaseRemoteMode() ? { baseRevision: editingBooking.value.revision } : {}),
       cancellation_reason: cancelReason.value.trim()
     });
     editingBooking.value.rawStatus = response.data.status;
@@ -2853,6 +3020,11 @@ const getReservations = (direct = false) => {
   axios.get(url, direct ? { mbarDirect: true } : {})
     .then(response => {
       convertReservations(response.data);
+      if (isCloudPlanner) isLoadingCloudPlanner.value = false;
+      if (isFirebaseRemoteMode() && showModal.value && isModalReadOnly.value && !selectedReservationHistory.value && editingBooking.value) {
+        const fresh = bookings.value.find(booking => booking.id === editingBooking.value.id);
+        if (fresh && fresh.revision !== editingBooking.value.revision) loadBookingIntoDialog(fresh);
+      }
     })
     .catch(error => {
       console.error('Errore nel caricamento:', error);
@@ -2897,6 +3069,7 @@ const convertReservations = (apiReservations) => {
 
     return {
       id: res.id,
+      revision: res.revision,
       roomId,
       startDate: startDateObj,
       duration,
@@ -3018,6 +3191,14 @@ const handlePmsEvent = (event) => {
     showPlannerToast('Operazione eseguita, ma non registrata nel log hotel. Non ripetere l’operazione.', 'error');
     return;
   }
+  if (['hotel_rates_updated', 'hotel_timetable_updated', 'hotel_pricing_policy_updated'].includes(event.type)) {
+    Promise.all([loadPricelists('hotel'), loadTimetable('hotel'), loadHotelPricingPolicy()])
+      .then(() => {
+        if (showModal.value && !isModalReadOnly.value) scheduleHotelPricingRefresh();
+      })
+      .catch(error => console.error('Errore aggiornamento tariffe hotel:', error));
+    return;
+  }
   if (!String(event.type || '').startsWith('reservation_')) return;
   const data = event.data || {};
   if (event.type === 'reservation_services_updated' && Array.isArray(data.services)) {
@@ -3086,6 +3267,51 @@ onMounted(() => {
   getLoginUsers()
     .then(data => { operators.value = data; })
     .catch(error => console.error('Errore caricamento operatori:', error));
+  if (isFirebaseRemoteMode()) {
+    unsubscribeCloudRooms = onSnapshot(collection(getFirebaseDb(), 'rooms'), { includeMetadataChanges: true }, snapshot => {
+      if (!snapshot.metadata.fromCache) getRooms();
+    }, error => {
+      console.error('Errore aggiornamento camere Firebase:', error);
+      showPlannerToast('Errore aggiornamento camere dal cloud', 'error');
+    });
+    unsubscribeCloudReservations = onSnapshot(collection(getFirebaseDb(), 'pms_hotel_reservations'), { includeMetadataChanges: true }, snapshot => {
+      if (snapshot.metadata.fromCache) return;
+      if (pmsRefreshTimeout) clearTimeout(pmsRefreshTimeout);
+      pmsRefreshTimeout = setTimeout(() => getReservations(true), 150);
+    }, error => {
+      console.error('Errore aggiornamento prenotazioni Firebase:', error);
+      showPlannerToast('Errore aggiornamento prenotazioni dal cloud', 'error');
+    });
+    unsubscribeCloudRates = onSnapshot(collection(getFirebaseDb(), 'pms_hotel_rates'), { includeMetadataChanges: true }, async snapshot => {
+      if (snapshot.metadata.fromCache) return;
+      await loadPricelists('hotel');
+      if (unsubscribeCloudRates && showModal.value && !isModalReadOnly.value) scheduleHotelPricingRefresh();
+    }, error => {
+      console.error('Errore aggiornamento listini Firebase:', error);
+      showPlannerToast('Errore aggiornamento listini dal cloud', 'error');
+    });
+    unsubscribeCloudTimetable = onSnapshot(collection(getFirebaseDb(), 'pms_hotel_timetable'), { includeMetadataChanges: true }, async snapshot => {
+      if (snapshot.metadata.fromCache) return;
+      await loadTimetable('hotel');
+      if (unsubscribeCloudTimetable && showModal.value && !isModalReadOnly.value) scheduleHotelPricingRefresh();
+    }, error => {
+      console.error('Errore aggiornamento calendario tariffe Firebase:', error);
+      showPlannerToast('Errore aggiornamento calendario tariffe dal cloud', 'error');
+    });
+    unsubscribeCloudConfigs = onSnapshot(doc(getFirebaseDb(), 'pms_configs', 'current'), { includeMetadataChanges: true }, async snapshot => {
+      if (snapshot.metadata.fromCache) return;
+      try {
+        await loadHotelPricingPolicy();
+        if (unsubscribeCloudConfigs && showModal.value && !isModalReadOnly.value) scheduleHotelPricingRefresh();
+      } catch (error) {
+        showPlannerToast('Errore aggiornamento policy prezzi dal cloud', 'error');
+      }
+    }, error => {
+      console.error('Errore aggiornamento policy prezzi Firebase:', error);
+      showPlannerToast('Errore aggiornamento policy prezzi dal cloud', 'error');
+    });
+    return;
+  }
   const pmsApiBaseUrl = String(import.meta.env.VITE_PMS_API_BASE_URL || '').trim().replace(/\/+$/, '');
   const eventNode = `pmsweb-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   pmsEventsUrl = `${pmsApiBaseUrl}/api/pms/events?node=${encodeURIComponent(eventNode)}&agent=web`;
@@ -3094,6 +3320,14 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (unsubscribeCloudRooms) unsubscribeCloudRooms();
+  if (unsubscribeCloudReservations) unsubscribeCloudReservations();
+  if (unsubscribeCloudRates) unsubscribeCloudRates();
+  if (unsubscribeCloudTimetable) unsubscribeCloudTimetable();
+  if (unsubscribeCloudConfigs) unsubscribeCloudConfigs();
+  unsubscribeCloudRates = null;
+  unsubscribeCloudTimetable = null;
+  unsubscribeCloudConfigs = null;
   window.removeEventListener('mousemove', handleMouseMove);
   window.removeEventListener('mouseup', handleMouseUp);
   window.removeEventListener('click', handleGlobalClick);
@@ -3107,6 +3341,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.reservation-conflict { border-top: 1px solid #dbe2ea; padding: 1rem 0; }
+.reservation-conflict-versions { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.reservation-conflict-versions > div { background: #f8fafc; padding: 1rem; border-radius: 8px; }
+@media (max-width: 700px) { .reservation-conflict-versions { grid-template-columns: 1fr; } }
+
 * {
   box-sizing: border-box;
 }
@@ -3326,6 +3565,15 @@ onUnmounted(() => {
   min-width: 100%;
 }
 
+.planner-loading {
+  display: flex;
+  min-height: 24rem;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
 .grid-header {
   position: sticky;
   top: 0;
@@ -3404,6 +3652,15 @@ onUnmounted(() => {
 .day-slot {
   flex-shrink: 0;
   border-right: 1px solid var(--planner-border);
+}
+
+.period-selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(29, 140, 242, 0.18);
+  border: 1px solid var(--planner-primary);
+  pointer-events: none;
 }
 
 /* Riduciamo anche i margini verticali della barra prenotazione */

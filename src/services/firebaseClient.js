@@ -1,34 +1,16 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
-
-const isFirebaseConfigured = () => {
-  return Boolean(
-    import.meta.env.VITE_FIREBASE_API_KEY &&
-      import.meta.env.VITE_FIREBASE_AUTH_DOMAIN &&
-      import.meta.env.VITE_FIREBASE_PROJECT_ID &&
-      import.meta.env.VITE_FIREBASE_APP_ID
-  )
-}
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
+import { connectAuthEmulator, getAuth } from 'firebase/auth'
 
 let firebaseApp = null
 let firestoreDb = null
+let firebaseAuth = null
 
-export const isFirebaseRemoteMode = () => {
-  const configuredSource = String(import.meta.env.VITE_DATA_SOURCE || '').trim().toLowerCase()
-  if (configuredSource === 'api') return false
-
-  if (typeof window === 'undefined') return false
-
-  const host = String(window.location.hostname || '').toLowerCase()
-  const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
-  if (import.meta.env.DEV || isLocalHost) return false
-
-  if (configuredSource === 'firebase') return true
-  return host.endsWith('.web.app') || host.endsWith('.firebaseapp.com')
-}
+export const isFirebaseRemoteMode = () => import.meta.env.VITE_DATA_SOURCE === 'firebase'
 
 export const getFirebaseDb = () => {
-  if (!isFirebaseConfigured()) {
+  if (!import.meta.env.VITE_FIREBASE_API_KEY || !import.meta.env.VITE_FIREBASE_AUTH_DOMAIN
+    || !import.meta.env.VITE_FIREBASE_PROJECT_ID || !import.meta.env.VITE_FIREBASE_APP_ID) {
     throw new Error('Firebase non configurato: valorizza le variabili VITE_FIREBASE_*')
   }
 
@@ -46,7 +28,23 @@ export const getFirebaseDb = () => {
 
   if (!firestoreDb) {
     firestoreDb = getFirestore(firebaseApp)
+    if (import.meta.env.DEV && import.meta.env.VITE_FIRESTORE_EMULATOR_HOST) {
+      const [host, port] = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST.split(':')
+      connectFirestoreEmulator(firestoreDb, host, Number(port))
+    }
   }
 
   return firestoreDb
+}
+
+export const getFirebaseAuth = () => {
+  getFirebaseDb()
+  if (!firebaseAuth) {
+    firebaseAuth = getAuth(firebaseApp)
+    firebaseAuth.languageCode = 'it'
+    if (import.meta.env.DEV && import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_URL) {
+      connectAuthEmulator(firebaseAuth, import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_URL)
+    }
+  }
+  return firebaseAuth
 }

@@ -35,7 +35,22 @@
           </div>
         </div>
 
-        <div v-if="isLoadingUsers" class="login-status">Caricamento utenti...</div>
+        <form v-if="remoteMode" @submit.prevent="handleOnlineLogin">
+          <div class="form-group">
+            <label for="login-email">Email</label>
+            <input id="login-email" v-model="email" type="email" autocomplete="username" required class="form-input" />
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input id="login-password" v-model="password" type="password" autocomplete="current-password" required class="form-input" />
+          </div>
+          <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+          <div v-if="resetMessage" class="login-status">{{ resetMessage }}</div>
+          <button type="submit" class="btn-login" :disabled="isLoading">{{ isLoading ? 'Verifica...' : 'Accedi' }}</button>
+          <button type="button" class="selected-user" :disabled="isLoading || !email" @click="handlePasswordReset">Recupera password</button>
+        </form>
+
+        <div v-else-if="isLoadingUsers" class="login-status">Caricamento utenti...</div>
         <div v-else-if="!selectedUser" class="user-selector">
           <button
             v-for="user in users"
@@ -103,9 +118,14 @@
 import { nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth.js'
+import { isFirebaseRemoteMode } from '@/services/firebaseClient'
 
 const router = useRouter()
-const { getLoginUsers, login } = useAuth()
+const { getLoginUsers, login, loginOnline, resetOnlinePassword } = useAuth()
+const remoteMode = isFirebaseRemoteMode()
+const email = ref('')
+const password = ref('')
+const resetMessage = ref('')
 
 const users = ref([])
 const selectedUser = ref(null)
@@ -167,7 +187,42 @@ const handleLogin = async () => {
   isLoading.value = false
 }
 
+const handleOnlineLogin = async () => {
+  errorMessage.value = ''
+  resetMessage.value = ''
+  isLoading.value = true
+  try {
+    await loginOnline(email.value, password.value)
+    password.value = ''
+    await router.push('/')
+  } catch (error) {
+    errorMessage.value = error.code?.startsWith('auth/')
+      ? 'Accesso non riuscito. Verifica le credenziali e la connessione.'
+      : 'Accesso non riuscito. Verifica che l’operatore sia abilitato nel cloud.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const handlePasswordReset = async () => {
+  errorMessage.value = ''
+  resetMessage.value = ''
+  isLoading.value = true
+  try {
+    await resetOnlinePassword(email.value)
+    resetMessage.value = 'Se l’account è disponibile, riceverai un’email per reimpostare la password.'
+  } catch {
+    errorMessage.value = 'Impossibile richiedere il recupero password. Verifica email e connessione.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
 onMounted(async () => {
+  if (remoteMode) {
+    isLoadingUsers.value = false
+    return
+  }
   try {
     users.value = await getLoginUsers()
   } catch (error) {

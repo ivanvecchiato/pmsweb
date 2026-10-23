@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+import { isFirebaseRemoteMode } from '../services/firebaseClient'
 
 const getAuthorizedFallbackRoute = ({ hasPermission, isPmsTypeAllowed }) => {
   if (hasPermission('home') && isPmsTypeAllowed(['hotel'])) return '/'
@@ -31,6 +32,7 @@ const router = createRouter({
     },
     {
       path: '/impostazioni',
+      name: 'Settings',
       component: () => import('@/views/AreaOverview.vue'),
       meta: { requiresAuth: true, areaOverview: true, title: 'Impostazioni', description: 'Configurazione della suite, utenti e tariffe.', areaOrder: 3, icon: 'M3 7h18M6 12h12M8 17h8' }
     },
@@ -236,6 +238,22 @@ router.beforeEach(async (to, from, next) => {
 
   if (isAuthenticated.value) {
     await loadPmsType()
+  }
+
+  if (isFirebaseRemoteMode() && to.name === 'Login' && isAuthenticated.value) {
+    next('/')
+    return
+  }
+
+  const cloudSettingsRoutes = ['/impostazioni', '/listino', '/settings/hotel-pricing']
+  if (isFirebaseRemoteMode() && !['Login', 'Tableau', 'Bookings'].includes(to.name) && !cloudSettingsRoutes.includes(to.path)) {
+    next(isAuthenticated.value ? '/' : '/login')
+    return
+  }
+
+  if (isFirebaseRemoteMode() && cloudSettingsRoutes.includes(to.path) && userRole.value !== 'admin') {
+    next(isAuthenticated.value ? '/' : '/login')
+    return
   }
 
   if (to.meta.isPublic) {

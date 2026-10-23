@@ -16,14 +16,31 @@
     "deploy:firebase": "firebase deploy --only hosting",
     "firebase:login": "firebase login",
     "build:deploy:vercel": "npm run build && npm run deploy:vercel",
-    "build:deploy:firebase": "npm run build && npm run deploy:firebase",
+    "build:deploy:firebase": "npm run deploy:firebase",
     "seed:firebase": "node scripts/seed-firebase-cache.mjs",
     "seed:firebase:remote": "MBAR_API=http://localhost:8088 node scripts/seed-firebase-cache.mjs",
     "backfill:documenti:dry": "node scripts/backfill-documenti-firestore.mjs",
     "backfill:documenti": "node scripts/backfill-documenti-firestore.mjs --write",
     "backfill:documenti:cleanup": "node scripts/backfill-documenti-firestore.mjs --write --cleanup-legacy",
     "sync:documenti:raw:dry": "node scripts/sync-documenti-raw-firestore.mjs",
-    "sync:documenti:raw": "node scripts/sync-documenti-raw-firestore.mjs --write"
+    "sync:documenti:raw": "node scripts/sync-documenti-raw-firestore.mjs --write",
+    "dev:cloud": "node scripts/prepare-cloud-client.mjs && vite --mode cloud",
+    "build:local": "vite build --mode production",
+    "build:cloud": "node scripts/prepare-cloud-client.mjs && vite build --mode cloud",
+    "preview:cloud": "vite preview --mode cloud --port 5178",
+    "test:cloud-tableau": "node scripts/test-cloud-tableau.mjs",
+    "test:local-transport": "node --test tests/local-transport.test.mjs",
+    "test:cloud-sync": "node scripts/test-cloud-sync.mjs",
+    "test:cloud-reservations": "node scripts/prepare-cloud-client.mjs && node scripts/test-cloud-client-reservations.mjs",
+    "test:cloud-fiscal": "node scripts/test-cloud-fiscal.mjs",
+    "test:cloud-pricing": "node scripts/prepare-cloud-client.mjs && node scripts/test-cloud-pricing.mjs",
+    "test:cloud-h5s": "node scripts/test-cloud-h5s.mjs",
+    "prepare:server-cloud": "node scripts/prepare-server-cloud-integration.mjs",
+    "audit:cloud-realignment": "node scripts/realign-hotel-cloud.mjs",
+    "test:cloud-realignment": "node scripts/test-cloud-realignment.mjs",
+    "deploy:firebase:rules": "firebase deploy --only firestore:rules,firestore:indexes",
+    "test:cloud-browser": "node scripts/test-cloud-client-browser.mjs",
+    "test:cloud-documents": "node scripts/test-cloud-documents-browser.mjs"
   },
   "dependencies": {
     "axios": "^1.13.2",
@@ -41,6 +58,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "vite": "^7.3.0",
-    "vite-plugin-vue-devtools": "^8.0.5"
+    "vite-plugin-vue-devtools": "^8.0.5",
+    "firebase-admin": "^13.10.0"
   }
 }
