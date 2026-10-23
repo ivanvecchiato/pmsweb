@@ -1,124 +1,99 @@
 # Gestionale PMS cloud
 
-## Stato attuale dopo la revisione
+## Architettura concordata
 
-Tutte le modifiche di questa sessione ai file preesistenti dell’app sono state rimosse. Il sorgente locale è tornato allo stato iniziale della sessione, preservando la modifica preesistente dell’utente “Hospitality Suite” e gli asset dell’utente.
+Un solo progetto e una sola codebase, con gli stessi componenti Vue per tableau e piano camere. Il target viene scelto in fase di build/deploy, non dall'indirizzo del browser o dalla disponibilità del server locale.
 
-Il lavoro cloud, inclusi i nuovi file e i test, è conservato in `docs/cloud-development.patch` e non è attivo nell’app. Le sezioni di avanzamento sotto descrivono il lavoro archiviato, non funzionalità attualmente presenti nel sorgente locale. La prosecuzione cloud dovrà avvenire in una copia di lavoro separata, senza applicare questa patch all’app locale.
+- `npm run dev` / `npm run build:local`: API LAN, login operatore/PIN e comportamento locale esistenti; output `dist`.
+- `npm run dev:cloud` / `npm run build:cloud`: Firebase Authentication e Firestore, senza fallback LAN; output `dist-cloud`.
+- `npm run deploy:firebase`: predeploy cloud automatico e pubblicazione di `dist-cloud`.
+- `npm run build:deploy:mbar`: build locale e installazione locale. Lo script rifiuta una build marcata cloud prima di modificare la destinazione.
 
-Il riallineamento dei dati Firestore (73 camere identiche al server) e l’aggiunta dell’indice cloud restano effettuati: non hanno modificato API o database locali.
+I file attivi nel repository costituiscono l’implementazione corrente. La vecchia patch archiviata e le proposte di patch server già applicate sono state rimosse.
 
-## Obiettivo
+## Obiettivo e perimetro
 
-Gestionale autonomo per gli operatori remoti, anche ad albergo chiuso e server locale spento. Il cloud non è un fallback della LAN. Prima versione: tableau hotel, piano camere, elenco e dettaglio prenotazioni, creazione, modifica, spostamento, annullamento, prezzi, dati intestatario, storico e acconti. Gli acconti contribuiscono subito al saldo; la fiscalizzazione è differita al server locale con stampante disponibile.
+Gestionale autonomo per operatori remoti, utilizzabile anche ad albergo chiuso e con il server locale spento. Prima versione: tableau hotel, piano camere, elenco e dettaglio prenotazioni, inserimento, modifica, spostamento, annullamento, prezzi, intestatario, storico e acconti.
 
-## Avanzamento
+Gli acconti devono essere gestibili anche durante l'inserimento e contribuire subito al saldo, sia nell'uso locale sia in quello cloud. L'operatore può richiedere esplicitamente il documento da entrambe le versioni, ma la richiesta cloud viene soltanto accodata: l'emissione fiscale avviene esclusivamente sul server locale, collegato alla stampante. Se il server o la stampante non sono disponibili, la richiesta resta in attesa. Pagamento e stato fiscale restano distinti, con riconciliazione degli esiti incerti prima di ritentare una stampa. Il documento di acconto e quello di saldo mantengono il collegamento alla prenotazione e il saldo conserva i riferimenti ai documenti degli acconti.
 
-- Implementato il primo passo: autenticazione Firebase email/password, recupero password, ripristino sessione prima del router, profilo operatore osservato in tempo reale.
-- Il login LAN conserva il contratto `/api/pms/web-login`.
-- Implementato il tableau cloud in consultazione: piano camere dalla collezione Firestore `rooms`, prenotazioni per sovrapposizione di date, aggiornamenti in tempo reale, dettaglio con prezzo e acconti, storico pubblicato e arrivi/partenze dalla stessa sorgente.
-- Le letture dell’elenco prenotazioni e del dettaglio passano ora dalle collezioni hotel.
-- Da implementare: backend cloud di validazione/salvataggio, disponibilità atomica, prezzi per nuove operazioni, gestione acconti, sincronizzazione bidirezionale e fiscalizzazione differita.
-- Non pubblicare questa fase come gestionale cloud completo: il bridge attuale accoda ancora le mutazioni senza consumer.
+La sincronizzazione deve essere realtime in entrambe le direzioni mentre server e cloud sono connessi, con recupero delle variazioni alla riconnessione. Una copia iniziale o una sincronizzazione al solo riavvio non soddisfano il requisito.
 
-## Configurazione dell'accesso online
+## Integrazione server attiva
 
-1. Abilitare Email/Password in Firebase Authentication e configurare il dominio autorizzato e il template italiano di recupero password.
-2. Creare l'account operatore in Authentication. Non copiare i PIN locali nel cloud.
-3. Creare con un ambiente amministrativo fidato `pms_web_users/{uid}`:
+Il 20 ottobre 2026 è stata installata e attivata l'integrazione nel server `mbar-server`, su autorizzazione dell'utente. L'installazione è di test: i dati sono stati riallineati direttamente, senza backup, archivi, retrocompatibilità o fallback. Le copie di backup create durante la preparazione sono state eliminate.
 
-```json
-{
-  "operatorId": 1,
-  "name": "Operatore",
-  "role": "staff",
-  "enabled": true,
-  "permissions": { "home": true, "customers": true }
-}
-```
+Firestore e server contengono le stesse 2038 prenotazioni, 73 camere, 7 listini hotel, 365 giorni di calendario e 3 servizi. Sono state inizializzate la revisione 1 e le versioni confermate, insieme agli identificativi dei 1224 acconti. I 1217 riferimenti di fattura sono conservati come acconti esterni; i 7 privi di riferimento fiscale restano da verificare e non generano stampe automatiche. Le 19 prenotazioni storiche prive di camera restano non assegnate.
 
-`operatorId` corrisponde all'ID operatore locale. `uid` è l'ID di Authentication, utilizzato come ID del documento. Profilo e permessi non sono scrivibili dal browser. Per disabilitare un accesso, disabilitare il profilo e l'account Authentication.
+L'attivazione ha una sola configurazione persistente: `database/hotel/cloud-sync.json`, campo `enabled`. Non dipende da variabili d'ambiente o da un secondo processo. Il connettore parte nel normale avvio del server, riceve gli aggiornamenti Firestore e usa SSE per i client locali. I record che coincidono già con il checkpoint non generano migliaia di transazioni di controllo all'avvio.
 
-4. Integrare nelle regole Firestore effettive, prima del rilascio, il controllo di accesso al proprio profilo:
+Sul collegamento reale è stata verificata una prenotazione fittizia: inserimento via API locale ricevuto da Firestore, modifica cloud recepita dal server senza riavvio con evento SSE, successiva modifica locale e cancellazione sincronizzata. Il record di collaudo è stato eliminato.
 
-```text
-match /pms_web_users/{uid} {
-  allow get: if request.auth != null && request.auth.uid == uid;
-  allow list, create, update, delete: if false;
-}
-```
+## Implementazione corrente
 
-Questo frammento non protegge le altre collezioni: ogni lettura e operazione PMS dovrà verificare il profilo abilitato e i permessi. Controllare che non esistano regole più ampie che autorizzano scritture sui profili: le autorizzazioni Firestore si sommano. Il client locale non cambia protocollo di autenticazione.
+- Target locale/cloud espliciti e directory di build distinte; nessun progetto o tableau duplicato.
+- Login cloud email/password, recupero password, ripristino sessione e profilo operatore osservato in tempo reale. La sessione locale salvata non autorizza l'accesso cloud.
+- Profilo `pms_web_users/{uid}` con `operatorId`, `name`, `role`, `enabled` e `permissions`. Il collegamento all'operatore locale non migra PIN o credenziali.
+- Letture hotel da collezioni canoniche: `rooms`, `pms_hotel_reservations`, `pms_hotel_reservation_history`, `pms_configs`, servizi, tariffe e timetable.
+- Query prenotazioni per sovrapposizione `checkout >= from` e `checkin <= to`: comprende soggiorni iniziati prima della finestra e partenze nel giorno iniziale. Gli annullamenti con stato `-100` sono esclusi dal planning e dai movimenti.
+- Aggiornamenti di camere, prenotazioni, listini, calendario tariffario e policy tramite listener Firestore direttamente nel tableau, usando i metodi di caricamento già presenti. Il preventivo aperto viene aggiornato senza riaprire la pagina; prezzi manuali e visualizzazioni storiche rimangono protetti. I listener vengono chiusi allo smontaggio. Nessuna conversione in stream SSE e nessuna connessione al server locale nel target cloud.
+- Backend HTTP Firebase Functions autenticato: preventivo prezzo, inserimento con acconti, modifica, cambio camera, annullamento e risoluzione dei conflitti. Gli endpoint cloud usano il medesimo contratto delle prenotazioni locali; l'operatore viene verificato dal token e dal profilo, non dal payload.
+- Motore prezzi condiviso con il server, con 48 confronti sul codice originale. Disponibilità camera verificata nel commit transazionale, anche per due inserimenti concorrenti con identificativi diversi.
+- Acconti con identificativo stabile e stato fiscale separato. Coda persistente elaborata in locale quando la stampante è disponibile; esiti incerti conservati senza ristampa automatica. Il proforma PDF usa il renderer del server, generato per il deploy cloud.
+- Confronto fra proposta e versione confermata nel tableau. Una risoluzione accettata produce una nuova revisione definitiva. Lo stesso dialogo prenotazione è utilizzabile dall'elenco cloud.
+- Importazione H5S nel backend cloud, con mapping generato dal gateway esistente e credenziali private in Secret Manager (`PMS_H5S_CONFIG`). I depositi già importati dal provider non generano una nuova emissione fiscale.
+- La navigazione cloud espone il perimetro di questa prima versione: tableau, movimenti ed elenco prenotazioni. Le altre aree del gestionale restano fuori da questo rilascio. Check-in/out, consegna servizi con stampa e annulli fiscali non fanno parte dell'operatività remota ad albergo chiuso; gli extra esistenti restano consultabili. L'annullo di un documento fiscale emesso richiede la stampante locale.
 
-5. Impostare `VITE_DATA_SOURCE=firebase` e le variabili Firebase. La scelta esplicita funziona anche in sviluppo su localhost, per poter verificare i flussi cloud senza il server LAN. Lasciare `VITE_PMS_API_BASE_URL` vuoto.
+Il perimetro prenotazioni è implementato e collaudato con emulatori e browser isolato. Il connettore server e il riallineamento sono stati eseguiti sull’installazione di test reale; restano configurazione e pubblicazione del backend Firebase e della webapp.
 
-## Ordine dei prossimi interventi
+## Accesso reale
 
-1. Verificare dati pubblicati e contratti con mbar-server e client Mood/GeminiPos. Sono già presenti `pms_hotel_reservations`, tariffe, timetable, configurazioni e coda locale Firestore.
-2. Portare camere e letture hotel su dati Firestore canonici; gestire intervalli sovrapposti alla finestra e listener, senza API LAN.
-3. Backend cloud per prezzi e operazioni prenotazione. Firestore autorevole, revisione verificata, identificativo operazione idempotente e occupazione per camera/notte aggiornata atomicamente.
-4. Registrare acconti con stato fiscale separato; mantenere storico, importi e riferimenti fiscali. In caso di esito stampa incerto riconciliare prima di ritentare.
-5. Adattare la replica locale: importazione variazioni, checkpoint, conflitti, annullamenti persistenti e prevenzione dei cicli di pubblicazione. Le operazioni locali offline restano da confermare rispetto alla disponibilità cloud.
-6. Esporre solo flussi completi nel menu cloud. Collaudare a server spento, con due operatori concorrenti e dopo riavvio del server locale.
+Primo amministratore creato in Firebase Authentication: `ivan.vecchiato@gmail.com`, associato a `Ivan`, identificativo locale `2`, verificato nella collezione utenti locale in sola lettura. Il profilo `pms_web_users/66jcRn9TzwWBsYpgbRJuXVZPuim2` è abilitato con ruolo `admin`. Account locale e PIN non sono stati modificati. Nessuna password iniziale è stata impostata o inviata.
 
-## Verifiche richieste prima del rilascio
+L'accesso richiede Email/Password abilitato, dominio autorizzato, account Authentication e profilo abilitato. La password viene impostata tramite il recupero password Firebase, senza password iniziale condivisa.
 
-Accesso valido, password errata, recupero password, refresh della pagina, logout, profilo assente/disabilitato e revoca durante la sessione. Il browser non deve poter leggere altri profili, modificare i propri permessi o usare una sessione LAN salvata per accedere al cloud. Successivamente verificare inserimento/modifica/spostamento/annullamento e acconti senza rete hotel; recupero replica e assenza duplicati alla riapertura.
+Prima del rilascio verificare le regole effettive del progetto: il browser può leggere il proprio profilo, ma non elencare utenti o modificare ruoli/permessi. Ogni collezione PMS deve richiedere un profilo abilitato con i permessi previsti. Il file `firestore.rules` conserva le regole di produzione lette il 20 ottobre e aggiunge soltanto le letture PMS per operatori abilitati. Profili, prenotazioni ed esiti fiscali non sono scrivibili dal browser. Gli emulatori usano lo stesso file. Le nuove regole non sono state pubblicate.
 
-## Tableau cloud: configurazione e collaudo
+## Dati di test e piano camere
 
-Il tableau cloud di questa fase è esplicitamente in consultazione. Non costituisce il rilascio finale del gestionale concordato: creazione, modifica, spostamento, annullamento e inserimento acconti saranno attivati con il backend cloud. Le mutazioni hotel non vengono più accodate con una falsa risposta di successo; restituiscono un errore 501. Il percorso locale resta operativo con le API esistenti.
+Il tableau legge `rooms` con documenti identificati da `room_code`. Le prenotazioni hanno `roomId` riferito a `roomDB.id`, `room` uguale a `room_code` e una revisione confermata. Il riallineamento diretto è eseguibile con `node scripts/realign-hotel-cloud.mjs --apply`, esclusivamente a server fermo. Il comando sostituisce i dati PMS cloud e inizializza il checkpoint senza backup o archivi.
 
-Prerequisiti di lettura:
+## Stato pubblicazione — 20 ottobre 2026
 
-- `pms_configs/current`: configurazioni hotel, spiaggia e metodi di pagamento, già pubblicate dal server.
-- `pms_hotel_reservations`: documenti con ID locale, `id`, `roomId`, `checkin` e `checkout` in formato `YYYY-MM-DD`, stato, intestatario, importi e acconti. La query usa `checkout >= from` e `checkin <= to`; comprende anche le partenze nel giorno iniziale, mentre il planning disegna solo le notti occupate. Gli annullamenti (`status = -100`) sono esclusi dal planning e dai movimenti.
-- `rooms`: piano camere pubblicato nel formato del metodo server `syncRooms`, con documento identificato da `room_code`. Il tableau cloud legge questa collezione, non `api_cache`. Il seed riallinea anche le chiavi obsolete. Per preparare soltanto le letture hotel: `npm run seed:firebase -- --hotel-only`, con il server locale disponibile nella fase iniziale di preparazione dei dati.
-- `pms_hotel_reservation_history`: storico già pubblicato dal server. Il bootstrap PMS esaminato non importa tutto lo storico pregresso; la sua migrazione completa è ancora da pianificare.
-- `pms_services`, tariffe e timetable nelle collezioni già utilizzate dal server.
-- Indice composto sulle prenotazioni: `checkout ASC`, `checkin ASC`, definito in `firestore.indexes.json`. Integrare questo indice con quelli già presenti nel progetto prima del rilascio. Gli emulatori non verificano la disponibilità degli indici di produzione.
-- Regole Firestore che autorizzano le letture ai soli operatori abilitati con il permesso hotel. Le regole del progetto reale non sono state modificate o pubblicate.
+Il tentativo reale di deploy del backend è stato bloccato da Firebase: `mpos-dbce8` è sul piano Spark e Cloud Build / Artifact Registry richiedono Blaze. Il comando non ha pubblicato Functions, regole o indici; Hosting non è stato avviato per evitare una webapp priva delle operazioni sulle prenotazioni. Serve attivare Blaze da https://console.firebase.google.com/project/mpos-dbce8/usage/details, poi configurare il segreto e completare i passi seguenti. Il sito Hosting preesistente `mpos-dbce8.web.app` contiene già MBAR PMS; non rappresenta la nuova versione cloud verificata.
 
-Il tableau cloud non apre lo stream SSE locale, non richiede l’elenco operatori del login LAN e non ricalcola i prezzi del dettaglio tramite API locali. Mostra gli importi registrati nella prenotazione. Il centro notifiche locale non viene avviato nell’ambiente cloud.
+L'importazione H5S usa lo stesso `pms_reservation_id` delle prenotazioni locali, senza prefissi o identificativi alternativi. Il metodo `mapDeposits` è condiviso fra il produttore nativo, il gateway e il mapping generato per le Functions: identificativi stabili e stato fiscale `external`. Gli aggiornamenti del provider sostituiscono i suoi acconti e preservano quelli locali. Il test verifica anche il primo aggiornamento dei depositi storici riallineati, l'assenza di duplicazioni e il rifiuto di movimenti senza ID canonico. La configurazione di test è stata normalizzata a `hotel.providerType: h5s` mediante l'API esistente.
 
-Il cambio periodo sostituisce il listener precedente; lo smontaggio lo rilascia. I callback di periodi superati vengono ignorati. Le modifiche ricevute aggiornano anche popup e dettaglio aperti, salvo la consultazione di uno snapshot storico. Gli errori sono mostrati a video, senza dati dimostrativi o falsi elenchi vuoti. Le letture dalla cache sono indicate come non ancora confermate dal cloud.
+## Prima della pubblicazione
 
-### Prova riproducibile con emulatori
+1. Pubblicare Functions, regole PMS e indici con `npm run deploy:firebase:backend`; la configurazione conserva gli indici degli altri client. Configurare il segreto H5S senza esporre credenziali al browser.
+2. Verificare Email/Password e recupero password per l'amministratore già associato a Ivan.
+3. Pubblicare Hosting e ripetere il collaudo dalla webapp pubblicata, anche con il server spento e alla riconnessione.
+4. Verificare la stampante fisica prima dell'uso fiscale. Le prove fiscali eseguite usano una stampante simulata; sul server di test la stampante attualmente non risponde.
 
-Avviare gli emulatori di prova con un runtime Java 21 o superiore:
+## Collaudo riproducibile
+
+Con Java 21 disponibile:
 
 ```sh
-npx firebase emulators:start --only auth,firestore --project demo-pmsweb --config tests/firebase/firebase.json
-```
-
-In un altro terminale:
-
-```sh
+npx firebase emulators:start --only auth,firestore,functions --project demo-pmsweb --config tests/firebase/firebase.json
 npm run test:cloud-tableau
+npm run test:local-transport
+npm run test:cloud-pricing
+npm run test:cloud-reservations
+npm run test:cloud-sync
+npm run test:cloud-fiscal
+npm run test:cloud-h5s
+npm run build:local
+npm run build:cloud
 ```
 
-Il test crea un account e prenotazioni fittizi soltanto nel progetto `demo-pmsweb` sugli emulatori localhost. Verifica soggiorni lunghi, confini degli intervalli, dettaglio e acconti, storico, camere e moduli, letture Axios/fetch, aggiornamenti tramite listener e codice della vista arrivi/partenze. Impedisce ogni richiesta HTTP al server LAN e verifica che le scritture hotel non producano falsi salvataggi. Le regole sotto `tests/firebase` servono esclusivamente al collaudo, non al deploy.
+I test usano esclusivamente emulatori su localhost (Auth 9199, Firestore 8180, Functions 5001), dati fittizi e copie temporanee del server. Non avviano il server reale o le periferiche. `npm run prepare:cloud-functions` genera modelli, utilità, mapping H5S e renderer proforma dal codice server prima del collaudo e del deploy.
 
-Per aprire l’app sugli stessi emulatori:
+Verificati: letture e listener del tableau, autenticazione e revoca profilo, divieto di scritture dirette e autoassegnazione permessi, prezzi camera/persona, CRUD HTTP, acconti in inserimento, proforma PDF, disponibilità concorrente, conflitti e risoluzione, replica nei due versi con checkpoint e riavvio, modifiche realtime delle camere, consumer fiscale e recupero degli esiti incerti, importazione H5S con risposta fittizia. Sei test locali mantengono il trasporto LAN e verificano le quattro combinazioni target/provider. Build locale e cloud riuscite.
 
-```sh
-VITE_DATA_SOURCE=firebase VITE_PMS_API_BASE_URL= VITE_FIREBASE_PROJECT_ID=demo-pmsweb VITE_FIREBASE_AUTH_DOMAIN=demo-pmsweb.firebaseapp.com VITE_FIREBASE_AUTH_EMULATOR_URL=http://127.0.0.1:9199 VITE_FIRESTORE_EMULATOR_HOST=127.0.0.1:8180 npm run dev
-```
+Nel browser Chrome isolato, con tutte le connessioni esterne bloccate, sono stati verificati login, inserimento con acconto, modifica e cambio camera, conflitto fra due operatori, confronto delle versioni e risoluzione definitiva, apertura dall'elenco e annullamento con conservazione dell'acconto. Con la finestra prenotazione aperta sono verificati anche variazione realtime del listino, cambio del calendario tariffario, passaggio camera/persona e modifica dello sconto sul terzo letto, con ricalcolo visibile e conservazione del prezzo manuale. Nessun server LAN è stato usato. Il test riproducibile è `scripts/test-cloud-browser.mjs` (Playwright disponibile tramite `PLAYWRIGHT_MODULE_PATH`).
 
-Gli emulatori del client sono abilitati solo in sviluppo. Il test stampa solo il risultato delle verifiche; gli account sono fittizi e usano la password di prova `TableauTest123!`. Per il login manuale recuperare l’email dell’account nell’emulatore Authentication.
+Il collegamento server–Firestore è stato verificato anche sul progetto reale dell’installazione di test. Restano da verificare le stesse operazioni dalla webapp pubblicata. Non sono stati eseguiti deploy di Hosting/Functions o prove su stampante fisica.
 
-Verifiche eseguite: build di produzione, controllo del diff, integrazione Firestore/Auth e controllo nel browser di login, planning con soggiorno lungo, aggiornamento del nominativo e dettaglio con prezzo/note/acconto. Non eseguiti deploy o collaudo su Firestore di produzione; navigazione tra periodi, storico e movimenti richiedono ancora il collaudo completo dell’interfaccia oltre ai controlli di integrazione.
-
-## Collegamento ai dati reali
-
-L’indirizzo `127.0.0.1:5178` usato nel primo collaudo era collegato agli emulatori del progetto `demo-pmsweb`, con dati fittizi. Per il normale sviluppo si usa la configurazione `.env` corrente (`VITE_DATA_SOURCE=api`), senza le variabili emulatore del comando di prova. Il login locale è distinto da quello Firebase.
-
-Nella verifica del 12 ottobre 2026 il server `127.0.0.1:8088` ha risposto con 73 camere e nessuna prenotazione per il periodo 2–21 ottobre. Il progetto Firestore reale contiene 1.847 prenotazioni complessive. La query cloud non poteva essere eseguita perché mancava l’indice delle date: la creazione dell’indice è stata avviata tramite la sessione Firebase CLI esistente, conservando gli altri indici. Al controllo successivo risultava ancora `CREATING`: la query resta bloccata finché non passa a `READY`. Il file del repository è stato riallineato agli indici esportati prima dell’aggiunta.
-
-Non risultavano profili in `pms_web_users`: l’uso del cloud reale richiede ancora la configurazione degli account Authentication e dei corrispondenti profili operatore. L’assenza di dati in un periodo deve essere distinta da un problema di connessione, da un indice mancante o dall’apertura dell’ambiente emulato.
-
-## Correzione della sorgente piano camere
-
-La lettura cloud inizialmente cercava `/api/pms/getrooms` in `api_cache`, ma quel documento non era presente. La collezione effettivamente pubblicata dal server è `rooms`; conteneva 65 camere rispetto alle 73 del server. Sono state riallineate le camere e rimosse tre vecchie chiavi per camere rinumerate, dopo backup e verifica delle copie canoniche. Il confronto finale ha confermato 73 documenti cloud, identici ai 73 oggetti restituiti dal server.
-
-La correzione del trasporto dati riguarda il percorso Firebase. I rami di caricamento locale di camere, prenotazioni e movimenti sono stati riportati alla logica precedente e confrontati con Git HEAD: i tre corpi dei rami locali corrispondono al codice originale. Questo controllo non sostituisce il collaudo completo dell’interfaccia locale. Nessuna modifica è stata apportata a API o database locali. Il riallineamento eseguito non implementa il realtime bidirezionale, che rimane un requisito obbligatorio ancora aperto.
+Il provider hotel (`local` o `h5s`) e il target del deploy (`locale` o `cloud`) sono indipendenti. `refreshPlanner` richiede la sincronizzazione H5S in base al solo provider; il target determina quale backend esegue la richiesta. Il backend cloud non contatta il server LAN.

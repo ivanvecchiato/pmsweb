@@ -43,50 +43,38 @@ Vite proxia `/api/*` verso `http://localhost:8088` (mbar-server in locale).
 
 ## Modalità web (Firebase Hosting)
 
-L'app è pubblicata su Firebase Hosting. Non c'è un backend remoto:
-i dati vengono letti/scritti su **Firestore**.
+La stessa codebase viene compilata con un target esplicito: `npm run build:local`
+produce `dist/` con API e autenticazione LAN; `npm run build:cloud` produce
+`dist-cloud/` con Firebase Authentication e Firestore. Il dominio del browser
+non cambia il target e il cloud non ripiega sul server locale.
 
-Le statistiche (`/api/mbar/*`) vengono calcolate in tempo reale dalla collezione
-`order_facts`, che mbar-server popola automaticamente a ogni chiusura conto.
+Il tableau condiviso legge camere e prenotazioni dalle collezioni canoniche
+Firestore e riceve aggiornamenti realtime. Il login online usa email/password
+e un profilo operatore abilitato. Il backend cloud gestisce prenotazioni, prezzi, conflitti e acconti con fiscalizzazione
+differita. La replica bidirezionale è installata e attiva sul server di test, con dati riallineati
+direttamente senza backup o fallback. Prima del rilascio restano backend e regole Firebase.
 
-### Come funziona il bridge
+### Configurazione e sviluppo
 
-- Tutte le `GET /api/*` cercano i dati nella collezione `api_cache` di Firestore.
-- Le `GET /api/mbar/*` (statistiche) aggregano i dati dalla collezione `order_facts`.
-- Le `POST/PUT/PATCH/DELETE` vengono accodate in `api_mutations`. Il server attuale non ha un consumer per questa collezione: il seed aggiorna le letture, ma non applica le modifiche accodate.
-
-Per aggiornare soltanto le viste spiaggia nella cache eseguire `npm run seed:firebase -- --beach-only`.
-Il seed legge il documento esistente e scrive su Firestore solo quando la risposta dell'API cambia.
-Il piano a zone e i listini canonici occupano un documento ciascuno nella cache; il tableau legge le prenotazioni dalla collezione `pms_beach_reservations` per la data selezionata.
-
-### Setup `.env` per il deploy Firebase
-
-```env
-VITE_DATA_SOURCE=firebase
-
-VITE_PMS_API_BASE_URL=
-VITE_FIREBASE_BRIDGE_BYPASS_PREFIXES=/api/mbar/
-
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=...
-VITE_FIREBASE_PROJECT_ID=...
-VITE_FIREBASE_STORAGE_BUCKET=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
-
-VITE_FIREBASE_API_COLLECTION=api_cache
-VITE_FIREBASE_MUTATIONS_COLLECTION=api_mutations
-VITE_FIREBASE_STATS_DOCS_COLLECTION=order_facts
-```
-
-> **Importante:** lasciare `VITE_PMS_API_BASE_URL` vuoto.
-> Se valorizzato, il bridge tenta di chiamare quell'URL invece di usare Firestore.
-
-### Build e deploy su Firebase Hosting
+Configurare le variabili `VITE_FIREBASE_*` in `.env` come indicato in
+`.env.example`. Il target cloud forza l'uso di Firebase e disabilita gli URL
+API LAN indipendentemente da `VITE_DATA_SOURCE` nel file `.env`.
 
 ```sh
-npm run build:deploy:firebase
+npm run dev:cloud
+npm run build:cloud
+npm run preview:cloud
 ```
+
+### Deploy su Firebase Hosting
+
+```sh
+npm run deploy:firebase
+```
+
+Il predeploy compila il target cloud e Hosting pubblica solo `dist-cloud/`.
+Il deploy locale rifiuta le build marcate cloud. Prerequisiti, limiti attuali,
+account e collaudi sono descritti in [docs/PIANO-CLOUD.md](docs/PIANO-CLOUD.md).
 
 ### Migrazione dati storici
 
