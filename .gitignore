@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 .DS_Store
 dist
+dist-cloud
 dist-ssr
 coverage
 *.local
@@ -38,3 +39,14 @@ package-lock.json
 yarn.lock
 .env
 .firebase
+functions/pms-utils.js
+functions/data/
+functions/hotelProforma.js
+functions/h5sMapping.js
+functions/alloggiati.js
+functions/.secret.local
+
+!functions/package-lock.json
+
+# Artefatti browser generati dal motore prezzi installato
+src/generated/hotel/
