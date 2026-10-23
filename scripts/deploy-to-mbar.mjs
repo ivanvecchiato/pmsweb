@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +15,12 @@ console.log(`[deploy] Target htdocs: ${targetHtdocs}`);
 
 if (!existsSync(distDir)) {
   console.error(`[deploy] ERRORE: cartella dist non trovata: ${distDir}`);
+  process.exit(1);
+}
+
+const targetMarker = path.join(distDir, 'app-target.json');
+if (existsSync(targetMarker) && JSON.parse(readFileSync(targetMarker, 'utf8')).target === 'cloud') {
+  console.error('[deploy] ERRORE: una build cloud non può essere installata sul server locale. Eseguire npm run build:local.');
   process.exit(1);
 }
 
