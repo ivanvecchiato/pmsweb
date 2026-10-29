@@ -590,7 +590,8 @@ const convertToBooking = async () => {
       }
     }
     
-    await convertQuoteToBooking(selectedQuoteId.value, currentQuote.value.type, bookingData)
+    const result = await convertQuoteToBooking(selectedQuoteId.value, currentQuote.value.type, bookingData)
+    if (!result) return
     // Redirect alla pagina di prenotazione appropriata
     const redirectRoute = currentQuote.value.type === 'hotel' ? '/hotel-bookings' : '/beach-bookings'
     router.push(redirectRoute)

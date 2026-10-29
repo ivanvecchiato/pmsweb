@@ -125,6 +125,44 @@ const getStatsRowsFromFirestore = async ({ from, to }) => {
 }
 
 const buildStatsResponseFromFirestore = async ({ endpoint, params }) => {
+  if (endpoint === '/api/mbar/documents') {
+    const snapshot = await getDocs(collection(getFirebaseDb(), 'pms_bar_documents'))
+    const from = params.from ? new Date(`${params.from}T00:00:00`).getTime() : null
+    const to = params.to ? new Date(`${params.to}T23:59:59`).getTime() : null
+    const reservationName = lower(params.reservationName)
+    const documents = snapshot.docs.map(entry => ({ ...entry.data(), id: entry.id })).filter(document => {
+      const timestamp = Number(document.timestamp)
+      if (!Number.isFinite(timestamp) || (from !== null && timestamp < from) || (to !== null && timestamp > to)) return false
+      const name = document?.table?.conto?.booking?.name || document?.reservation?.name
+        || `${document?.reservation?.guest?.firstname || document?.reservation?.accountholder?.firstname || ''} ${document?.reservation?.guest?.lastname || document?.reservation?.accountholder?.lastname || ''}`
+      return !reservationName || lower(name).includes(reservationName)
+    }).map(document => ({
+      firestore_id: document.firestore_id || document.id,
+      progressivo: document.progressivo ?? '',
+      chiusura: document.chiusura ?? '',
+      docType: document.docType ?? null,
+      payment: document.payment ?? null,
+      timestamp: Number(document.timestamp) || 0,
+      totale: Number(document.totale) || 0,
+      reservationName: document?.table?.conto?.booking?.name || document?.reservation?.name || '',
+      room: String(document?.reservation?.room || document?.table?.name || '').trim(),
+      tableName: String(document?.table?.name || '').trim()
+    })).sort((left, right) => right.timestamp - left.timestamp)
+    return { documents }
+  }
+
+  if (endpoint === '/api/mbar/document_detail') {
+    const snapshot = await getDocs(collection(getFirebaseDb(), 'pms_bar_documents'))
+    const selected = snapshot.docs.map(entry => ({ ...entry.data(), id: entry.id })).find(document =>
+      (params.firestoreId && String(document.firestore_id || document.id) === String(params.firestoreId))
+      || (String(document.progressivo ?? '') === String(params.progressivo ?? '')
+        && String(document.chiusura ?? '') === String(params.chiusura ?? '')
+        && String(document.docType ?? '') === String(params.docType ?? '')
+        && String(document.timestamp ?? '') === String(params.timestamp ?? ''))
+    )
+    return selected ? { document: selected } : { document: null }
+  }
+
   const from = params.from || ''
   const to = params.to || ''
   const rows = await getStatsRowsFromFirestore({ from, to })
@@ -528,6 +566,183 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
     return { response: documents, source: 'pms_hotel_documents' }
   }
 
+  if (String(method).toLowerCase() === 'get' && endpoint.startsWith('/api/pms/hotel/reports/')) {
+    const report = endpoint.slice('/api/pms/hotel/reports/'.length)
+    const request = parseMergedParams({ inlineQuery, params })
+    const from = request.from
+    const to = request.to
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(to || '') || from >= to) {
+      throw new Error('Intervallo report non valido')
+    }
+
+    if (report === 'presences') {
+      const [presenceSnapshot, roomSnapshot] = await Promise.all([
+        getDocs(collection(db, 'pms_hotel_presences')),
+        getDocs(collection(db, 'rooms'))
+      ])
+      const roomById = new Map(roomSnapshot.docs.map(entry => [String(entry.data().id), entry.data()]))
+      const fromMs = Date.parse(`${from}T00:00:00Z`)
+      const toMs = Date.parse(`${to}T00:00:00Z`)
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date())
+      const days = new Map()
+      const nationalities = new Map()
+      const origins = new Map()
+      const roomTypes = new Map()
+      const channels = new Map()
+      const availableRoomTypes = new Map()
+      const availableChannels = new Set()
+      const rows = []
+      const totals = { guests: 0, nights: 0, arrivals: 0, departures: 0, adults: 0, minors: 0, ageUnknown: 0 }
+      for (const entry of presenceSnapshot.docs) {
+        const presence = entry.data()
+        if (presence.source === 'h5s' || Number(presence.status) === -100) continue
+        if (Number(presence.checkin_timestamp) >= toMs || Number(presence.checkout_timestamp) < fromMs) continue
+        const checkin = String(presence.checkin || '')
+        const checkout = String(presence.checkout || '')
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(checkin) || !/^\d{4}-\d{2}-\d{2}$/.test(checkout) || checkout < checkin) continue
+        const arrival = checkin >= from && checkin < to
+        const departure = Number(presence.status) === 2 && checkout >= from && checkout < to
+        const stayFrom = checkin > from ? checkin : from
+        const stayTo = [checkout, to, today].sort()[0]
+        const nights = stayTo > stayFrom ? (Date.parse(`${stayTo}T00:00:00Z`) - Date.parse(`${stayFrom}T00:00:00Z`)) / 86400000 : 0
+        if (!arrival && !departure && !nights) continue
+        const roomType = roomById.get(String(presence.room_id))?.room_type
+        const typeId = String(roomType?.id || '')
+        if (!typeId || !roomType?.label) continue
+        const channel = presence.channel || 'Non indicato'
+        availableRoomTypes.set(typeId, roomType.label)
+        availableChannels.add(channel)
+        if (request.roomType && typeId !== request.roomType) continue
+        if (request.channel && channel !== request.channel) continue
+        const birth = String(presence.birth_date || '')
+        const validBirth = /^\d{4}-\d{2}-\d{2}$/.test(birth)
+        const age = validBirth ? Number(checkin.slice(0, 4)) - Number(birth.slice(0, 4)) - (checkin.slice(5) < birth.slice(5) ? 1 : 0) : null
+        const ageGroup = age == null || age < 0 ? 'unknown' : age < 18 ? 'minor' : 'adult'
+        totals.guests++
+        totals.nights += nights
+        if (arrival) totals.arrivals++
+        if (departure) totals.departures++
+        if (ageGroup === 'minor') totals.minors++
+        else if (ageGroup === 'adult') totals.adults++
+        else totals.ageUnknown++
+        const nationality = presence.nationality_iso2 || 'Non indicata'
+        const origin = presence.state_iso2 || 'Non indicata'
+        nationalities.set(nationality, (nationalities.get(nationality) || 0) + 1)
+        origins.set(origin, (origins.get(origin) || 0) + 1)
+        const type = roomTypes.get(typeId) || { id: typeId, label: roomType.label, guests: 0 }
+        type.guests++
+        roomTypes.set(typeId, type)
+        channels.set(channel, (channels.get(channel) || 0) + 1)
+        rows.push({
+          id: presence.id || entry.id,
+          reservationId: presence.reservation_id,
+          guest: `${presence.firstname || ''} ${presence.lastname || ''}`.trim(),
+          room: presence.room,
+          roomType: roomType.label,
+          checkin,
+          checkout,
+          nights,
+          arrival,
+          departure,
+          ageGroup,
+          nationality,
+          origin,
+          channel
+        })
+        if (arrival) {
+          const day = days.get(checkin) || { date: checkin, arrivals: 0, departures: 0, nights: 0 }
+          day.arrivals++
+          days.set(checkin, day)
+        }
+        if (departure) {
+          const day = days.get(checkout) || { date: checkout, arrivals: 0, departures: 0, nights: 0 }
+          day.departures++
+          days.set(checkout, day)
+        }
+        for (let cursor = Date.parse(`${stayFrom}T00:00:00Z`); cursor < Date.parse(`${stayTo}T00:00:00Z`); cursor += 86400000) {
+          const date = new Date(cursor).toISOString().slice(0, 10)
+          const day = days.get(date) || { date, arrivals: 0, departures: 0, nights: 0 }
+          day.nights++
+          days.set(date, day)
+        }
+      }
+      rows.sort((left, right) => left.checkin.localeCompare(right.checkin) || String(left.room).localeCompare(String(right.room)) || left.guest.localeCompare(right.guest))
+      return { response: {
+        period: { from, to }, totals,
+        filters: {
+          roomTypes: [...availableRoomTypes].sort((a, b) => a[1].localeCompare(b[1])).map(([id, label]) => ({ id, label })),
+          channels: [...availableChannels].sort()
+        },
+        days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)),
+        nationalities: [...nationalities].sort((a, b) => b[1] - a[1]).map(([code, guests]) => ({ code, guests })),
+        origins: [...origins].sort((a, b) => b[1] - a[1]).map(([code, guests]) => ({ code, guests })),
+        roomTypes: [...roomTypes.values()].sort((a, b) => b.guests - a.guests || a.label.localeCompare(b.label)),
+        channels: [...channels].sort((a, b) => b[1] - a[1]).map(([channel, guests]) => ({ channel, guests })),
+        rows
+      }, source: 'pms_hotel_presences' }
+    }
+
+    if (report === 'sales') {
+      const snapshot = await getDocs(collection(db, 'pms_hotel_documents'))
+      const days = new Map()
+      const channels = new Map()
+      const roomTypes = new Map()
+      const rows = []
+      const totals = { sales: 0, deposits: 0, stays: 0, services: 0, bar: 0, restaurant: 0, hotel: 0, cityTax: 0, documents: 0 }
+      for (const entry of snapshot.docs) {
+        const document = entry.data()
+        if (document.annulled === true || document.salesReportVersion !== 1) continue
+        const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(document.timestamp))
+        if (day < from || day >= to) continue
+        const deposit = document.documentType === 'deposit'
+        const amount = deposit ? Number(document.totale) : Number(document.totalPayments)
+        if (!Number.isFinite(amount)) throw new Error(`Importo non valido nel documento ${entry.id}`)
+        const components = deposit ? { deposits: amount, stays: 0, services: 0, bar: 0, restaurant: 0, hotel: 0, cityTax: 0 } : {
+          deposits: 0,
+          stays: Number(document.soggiorno) - (document.deposits || []).reduce((sum, item) => sum + Number(item.amount), 0),
+          services: (document.extra?.services || []).reduce((sum, item) => sum + Number(item.amount ?? Number(item.price) * Number(item.quantity)), 0),
+          bar: (document.extra?.bar || []).reduce((sum, item) => sum + Number(item.amount), 0),
+          restaurant: (document.extra?.restaurant || []).reduce((sum, item) => sum + Number(item.amount), 0),
+          hotel: (document.extra?.hotel || []).reduce((sum, item) => sum + Number(item.amount), 0),
+          cityTax: Number(document.cityTax)
+        }
+        if (Object.values(components).some(value => !Number.isFinite(value))) throw new Error(`Dettaglio non valido nel documento ${entry.id}`)
+        const row = {
+          id: document.id || entry.id,
+          reservationId: document.reservationId,
+          date: day,
+          closedAt: document.closedAt,
+          progressivo: document.progressivo,
+          type: deposit ? 'deposit' : 'account',
+          guest: `${document.accountholder?.firstname || ''} ${document.accountholder?.lastname || ''}`.trim(),
+          room: document.room,
+          roomType: document.roomType,
+          channel: document.channel,
+          amount: Number(amount.toFixed(2)),
+          components
+        }
+        rows.push(row)
+        totals.sales += amount
+        totals.documents++
+        Object.entries(components).forEach(([key, value]) => { totals[key] += value })
+        days.set(day, (days.get(day) || 0) + amount)
+        const channel = document.channel || 'Non classificato'
+        channels.set(channel, (channels.get(channel) || 0) + amount)
+        roomTypes.set(document.roomType, (roomTypes.get(document.roomType) || 0) + components.deposits + components.stays)
+      }
+      Object.keys(totals).forEach(key => { if (key !== 'documents') totals[key] = Number(totals[key].toFixed(2)) })
+      rows.sort((left, right) => String(right.closedAt || '').localeCompare(String(left.closedAt || '')))
+      return { response: {
+        period: { from, to }, totals,
+        days: [...days].sort((a, b) => a[0].localeCompare(b[0])).map(([date, amount]) => ({ date, amount: Number(amount.toFixed(2)) })),
+        channels: [...channels].sort((a, b) => b[1] - a[1]).map(([channel, amount]) => ({ channel, amount: Number(amount.toFixed(2)), percentage: totals.sales ? Number((amount / totals.sales * 100).toFixed(1)) : 0 })),
+        roomTypes: [...roomTypes].sort((a, b) => b[1] - a[1]).map(([roomType, amount]) => ({ roomType, amount: Number(amount.toFixed(2)), percentage: totals.deposits + totals.stays ? Number((amount / (totals.deposits + totals.stays) * 100).toFixed(1)) : 0 })),
+        rows
+      }, source: 'pms_hotel_documents' }
+    }
+    throw new Error(`Report hotel ${report} non disponibile da Firestore`)
+  }
+
   if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/hotel/reservation/history') {
     const reservationId = new URLSearchParams(query).get('reservationId')
     const snapshot = await getDocs(buildFsQuery(
@@ -679,7 +894,7 @@ export const installApiTransportBridge = async () => {
         const { calculateHotelQuote, createHotelDepositProforma } = await import('./cloudHotelDocuments.js')
         const data = parseAxiosData(config.data)
         const result = endpoint === '/api/pms/hotel/calculateprice'
-          ? await calculateHotelQuote(getFirebaseDb(), data)
+          ? await calculateHotelQuote(getFirebaseDb(), data, profile.role === 'admin' || profile.permissions?.override_pricing_policy === true)
           : await createHotelDepositProforma(getFirebaseDb(), data)
         return createAxiosLikeResponse(result, 200, config)
       } catch (error) {
@@ -730,19 +945,38 @@ export const installApiTransportBridge = async () => {
       }
 
       if (endpoint === '/api/pms/updatetimetable') {
+        const { normalizeMinimumStay } = await import('../generated/hotel/hotelPricing.js')
         if (!Array.isArray(data?.updates)) throw new axios.AxiosError('Aggiornamenti calendario non validi', 'ERR_BAD_REQUEST', config)
         for (let offset = 0; offset < data.updates.length; offset += 450) {
           const batch = writeBatch(getFirebaseDb())
-          data.updates.slice(offset, offset + 450).forEach(update => {
+          for (const update of data.updates.slice(offset, offset + 450)) {
             if (!/^\d{4}-\d{2}-\d{2}$/.test(String(update.date || ''))) throw new Error('Data calendario non valida')
-            batch.set(doc(getFirebaseDb(), 'pms_hotel_timetable', update.date), update, { merge: true })
-          })
+            const ref = doc(getFirebaseDb(), 'pms_hotel_timetable', update.date)
+            const current = await getDoc(ref)
+            if (!current.exists()) throw new Error(`Giorno non configurato nel calendario: ${update.date}`)
+            const values = { ...update }
+            if (update.minimumStay) {
+              const minimumStay = { ...current.data().minimumStay, roomTypes: { ...current.data().minimumStay?.roomTypes } }
+              if (Object.hasOwn(update.minimumStay, 'all')) {
+                if (update.minimumStay.all === null) delete minimumStay.all
+                else minimumStay.all = normalizeMinimumStay(update.minimumStay.all)
+              }
+              for (const [id, value] of Object.entries(update.minimumStay.roomTypes || {})) {
+                if (value === null) delete minimumStay.roomTypes[id]
+                else minimumStay.roomTypes[id] = normalizeMinimumStay(value)
+              }
+              values.minimumStay = minimumStay
+            }
+            batch.set(ref, values, { mergeFields: Object.keys(values) })
+          }
           await batch.commit()
         }
         return createAxiosLikeResponse({ success: true }, 200, config)
       }
 
       if (data?.section !== 'hotel' || !data.data?.pricing) throw new axios.AxiosError('Policy prezzi non valida', 'ERR_BAD_REQUEST', config)
+      const { normalizeMinimumStay } = await import('../generated/hotel/hotelPricing.js')
+      normalizeMinimumStay(data.data.pricing.minimumStay)
       await updateDoc(doc(getFirebaseDb(), 'pms_configs', 'current'), { 'hotel.pricing': data.data.pricing })
       return createAxiosLikeResponse({ success: true }, 200, config)
     }

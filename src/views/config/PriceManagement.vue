@@ -25,9 +25,20 @@
       
       <div v-if="selectionStart && selectionEnd" class="range-actions">
         <p class="selection-info">Range: {{ selectionStart }} / {{ selectionEnd }}</p>
-        <button class="btn btn-save-range" @click="saveRangeAssignment">
+        <button class="btn btn-save-range" :disabled="!selectedPricelist" @click="saveRangeAssignment">
           Applica Listino al Range
         </button>
+        <label>Minimum stay per
+          <select v-model="minimumStayRoomType">
+            <option value="">Tutte le tipologie</option>
+            <option v-for="type in roomTypes" :key="type.id" :value="String(type.id)">{{ type.label }}</option>
+          </select>
+        </label>
+        <label v-for="board in ['BB', 'HB', 'FB']" :key="board">
+          {{ board }} <input v-model.number="minimumStay[board]" type="number" min="1" step="1">
+        </label>
+        <button class="btn btn-save-range" @click="saveMinimumStay(false)">Applica minimum stay</button>
+        <button class="btn btn-cancel" @click="saveMinimumStay(true)">Rimuovi eccezione minimum stay</button>
         <button class="btn btn-cancel" @click="selectionStart = null">Annulla</button>
       </div>
     </div>
@@ -105,6 +116,8 @@
             @mouseenter="handleMouseEnter(day.date)">
           <span class="day-num">{{ getDayOfMonth(day.date) }}</span>
           <small>{{ getMonthName(day.date) }}</small>
+          <small v-if="day.minimumStay?.all">Min BB/HB/FB: {{ ['BB', 'HB', 'FB'].map(board => day.minimumStay.all[board]).join('/') }}</small>
+          <small v-if="Object.keys(day.minimumStay?.roomTypes || {}).length">Min per tipologia</small>
         </div>
       </div>
     </div>
@@ -135,6 +148,31 @@ import { getFirebaseDb, isFirebaseRemoteMode } from '@/services/firebaseClient';
 const pricelists = ref([]); 
 const timetable = ref([]);   
 const selectedPricelist = ref(null);
+const roomTypes = ref([]);
+const minimumStayRoomType = ref('');
+const minimumStay = ref({ BB: 3, HB: 3, FB: 3 });
+
+const saveMinimumStay = async (remove) => {
+  if (!selectionStart.value || !selectionEnd.value) return;
+  if (!remove && Object.values(minimumStay.value).some(value => !Number.isInteger(value) || value < 1)) {
+    showToast('Inserisci notti intere maggiori di zero', 'error');
+    return;
+  }
+  const from = selectionStart.value < selectionEnd.value ? selectionStart.value : selectionEnd.value;
+  const to = selectionStart.value < selectionEnd.value ? selectionEnd.value : selectionStart.value;
+  const value = remove ? null : { ...minimumStay.value };
+  const updates = timetable.value.filter(day => day.date >= from && day.date <= to).map(day => ({
+    date: day.date,
+    minimumStay: minimumStayRoomType.value ? { roomTypes: { [minimumStayRoomType.value]: value } } : { all: value }
+  }));
+  try {
+    await axios.post('/api/pms/updatetimetable', { updates });
+    await loadData();
+    showToast('Minimum stay aggiornato');
+  } catch (error) {
+    showToast(error.response?.data?.error || error.message, 'error');
+  }
+};
 
 // Stati per la selezione range
 const selectionStart = ref(null);
@@ -235,7 +273,6 @@ const isSunday = (dateStr) => {
 };
 
 const handleMouseDown = (date) => {
-  if (!selectedPricelist.value) return;
   selectionStart.value = date;
   selectionEnd.value = date;
   isSelecting.value = true;
@@ -261,14 +298,6 @@ const isInRange = (date) => {
   return d >= start && d <= end;
 };
 
-const getDayOfYear = (dateString) => {
-  const date = new Date(dateString);
-  const start = new Date(date.getFullYear(), 0, 0);
-  const diff = date - start;
-  const oneDay = 1000 * 60 * 60 * 24;
-  return Math.floor(diff / oneDay);
-};
-
 const toISODate = (date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -279,8 +308,8 @@ const toISODate = (date) => {
 const saveRangeAssignment = async () => {
   if (!selectedPricelist.value || !selectionStart.value || !selectionEnd.value) return;
 
-  const start = new Date(selectionStart.value);
-  const end = new Date(selectionEnd.value);
+  const start = new Date(selectionStart.value < selectionEnd.value ? selectionStart.value : selectionEnd.value);
+  const end = new Date(selectionStart.value < selectionEnd.value ? selectionEnd.value : selectionStart.value);
   const updates = [];
 
   let current = new Date(start);
@@ -289,9 +318,7 @@ const saveRangeAssignment = async () => {
     
     updates.push({
       date: dateStr,
-      pricelist: selectedPricelist.value.id,
-      // Aggiunta del progressivo annuale
-      day: getDayOfYear(dateStr) 
+      pricelist: selectedPricelist.value.id
     });
 
     current.setDate(current.getDate() + 1);
@@ -323,6 +350,7 @@ const loadData = async () => {
     const resTime = await axios.get(`/api/pms/gettimetable${type}`);
     const selectedId = selectedPricelist.value?.id;
     const newPricelist = isCreating.value ? selectedPricelist.value : null;
+    roomTypes.value = (await axios.get('/api/pms/getroomtypes')).data;
     pricelists.value = resPrices.data;
     selectedPricelist.value = newPricelist || pricelists.value.find(price => String(price.id) === String(selectedId)) || null;
     timetable.value = resTime.data;

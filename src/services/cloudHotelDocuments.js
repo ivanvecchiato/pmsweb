@@ -1,7 +1,7 @@
 import { collection, doc, getDocFromServer, getDocsFromServer, query, where } from 'firebase/firestore'
 import { prepareHotelReservation } from './hotelReservation.js'
 
-export async function calculateHotelQuote(db, data) {
+export async function calculateHotelQuote(db, data, canOverridePricingPolicy) {
   const [config, rooms, rates, timetable] = await Promise.all([
     getDocFromServer(doc(db, 'pms_configs', 'current')),
     getDocsFromServer(query(collection(db, 'rooms'), where('id', '==', String(data.roomId)))),
@@ -9,10 +9,10 @@ export async function calculateHotelQuote(db, data) {
     getDocsFromServer(collection(db, 'pms_hotel_timetable'))
   ])
   const reservation = await prepareHotelReservation({
-    config: config.data(), rooms: rooms.docs.map(entry => entry.data()),
+    canOverridePricingPolicy, config: config.data(), rooms: rooms.docs.map(entry => entry.data()),
     rates: rates.docs.map(entry => entry.data()), timeTable: timetable.docs.map(entry => entry.data()), fiscalJobs: new Map()
   }, { documentId: 'quote', action: 'quote', payload: JSON.parse(JSON.stringify({ ...data, deposits: undefined })) })
-  return { pricing_mode: reservation.pricing_mode, price_per_day: reservation.price_per_day, person_pricing: reservation.person_pricing || null, total_price: reservation.price_total }
+  return { minimumStay: reservation.minimumStay, pricing_mode: reservation.pricing_mode, price_per_day: reservation.price_per_day, person_pricing: reservation.person_pricing || null, total_price: reservation.price_total }
 }
 
 export async function createHotelDepositProforma(db, data) {

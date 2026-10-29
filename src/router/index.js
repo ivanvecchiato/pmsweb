@@ -246,12 +246,13 @@ router.beforeEach(async (to, from, next) => {
   }
 
   const cloudSettingsRoutes = ['/impostazioni', '/listino', '/settings/hotel-pricing']
-  if (isFirebaseRemoteMode() && !['Login', 'Tableau', 'Bookings'].includes(to.name) && !cloudSettingsRoutes.includes(to.path)) {
+  const cloudAdminRoutes = ['/conti-report', '/stats/products', '/stats/operators', '/stats/sales', '/stats/documents', '/pms/reports']
+  if (isFirebaseRemoteMode() && !['Login', 'Tableau', 'Bookings'].includes(to.name) && !cloudSettingsRoutes.includes(to.path) && !cloudAdminRoutes.includes(to.path)) {
     next(isAuthenticated.value ? '/' : '/login')
     return
   }
 
-  if (isFirebaseRemoteMode() && cloudSettingsRoutes.includes(to.path) && userRole.value !== 'admin') {
+  if (isFirebaseRemoteMode() && (cloudSettingsRoutes.includes(to.path) || cloudAdminRoutes.includes(to.path)) && userRole.value !== 'admin') {
     next(isAuthenticated.value ? '/' : '/login')
     return
   }

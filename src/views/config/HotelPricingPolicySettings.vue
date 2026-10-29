@@ -173,8 +173,19 @@
       </p>
     </section>
 
+    <section class="card">
+      <fieldset>
+        <legend>Minimum stay predefinito</legend>
+        <p>Numero minimo di notti, secondo il trattamento e il giorno di arrivo.</p>
+        <label v-for="board in ['BB', 'HB', 'FB']" :key="board">
+          {{ board }} <input v-model.number="form.minimumStay[board]" type="number" min="1" step="1" required>
+        </label>
+      </fieldset>
+    </section>
+
     <div class="footer-actions">
       <button type="button" class="btn btn-secondary" @click="loadForm" :disabled="loading">Ricarica</button>
+
       <button type="button" class="btn btn-primary" @click="save" :disabled="loading">Salva Policy</button>
     </div>
   </div>
@@ -192,6 +203,7 @@ const { loadHotelPricingPolicy } = usePricing()
 const loading = ref(false)
 const form = ref({
   mode: 'room',
+  minimumStay: { BB: 3, HB: 3, FB: 3 },
   boardChargeMode: 'per_person',
   extraBedDiscountPct: 0,
   thirdBedDiscountPct: 0,
@@ -269,6 +281,7 @@ const normalizeForm = (value) => {
   }
 
   return {
+    minimumStay: { ...value.minimumStay },
     mode: String(value?.mode || '').toLowerCase() === 'person' ? 'person' : 'room',
     boardChargeMode: 'per_person',
     extraBedDiscountPct: Math.max(0, Math.min(100, extraBedDiscountPct)),
@@ -329,6 +342,10 @@ const removeBand = (index) => {
 }
 
 const save = async () => {
+  if (Object.values(form.value.minimumStay).length !== 3 || Object.values(form.value.minimumStay).some(value => !Number.isInteger(value) || value < 1)) {
+    alert('Minimum stay: inserisci un numero intero di notti maggiore di zero per ogni trattamento')
+    return
+  }
   loading.value = true
   try {
     const normalizedPricing = normalizeForm(form.value)

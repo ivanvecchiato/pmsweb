@@ -421,7 +421,11 @@
                 </div>
               </div>
             </div>
-            <div v-else-if="bookingQuote" class="quote-box">
+            <p v-if="!editingBooking && serverPricing?.minimumStay?.violated" role="alert">
+              Soggiorno minimo: {{ serverPricing.minimumStay.required }} notti. Prenotazione di {{ serverPricing.minimumStay.nights }} notti.
+              {{ serverPricing.minimumStay.canOverride ? 'Puoi confermare una deroga al salvataggio.' : 'Non sei autorizzato alla deroga.' }}
+            </p>
+            <div v-if="bookingQuote" class="quote-box">
               <div v-if="!newBookingData.isManualPrice" class="quote-details">
                 <div v-for="day in bookingQuote.days" :key="day.date" class="quote-line">
                   <span>{{ day.date }}</span>
@@ -685,6 +689,7 @@
           <dt>Trattamento</dt>
           <dd>{{ actionMenuBooking.board.toUpperCase() }}</dd>
         </div>
+        <p v-if="actionMenuBooking.minimumStayOverride" role="note">Prenotazione inserita nonostante minimum stay ({{ actionMenuBooking.minimumStayOverride.nights }}/{{ actionMenuBooking.minimumStayOverride.required }} notti).</p>
         <div v-if="getReservationNotes(actionMenuBooking)" class="booking-popup-info booking-popup-notes">
           <svg class="booking-popup-icon" aria-hidden="true" viewBox="0 0 24 24">
             <path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h6" />
@@ -2340,6 +2345,17 @@ const submitNewBooking = async () => {
       return;
     }
 
+    await refreshHotelPricing();
+    const minimumStay = serverPricing.value?.minimumStay;
+    if (!minimumStay) throw new Error('Verifica minimum stay non disponibile');
+    if (minimumStay.violated) {
+      if (!minimumStay.canOverride) {
+        alert(`Soggiorno minimo di ${minimumStay.required} notti. Non sei autorizzato alla deroga.`);
+        return;
+      }
+      if (!window.confirm(`Il soggiorno di ${minimumStay.nights} notti è inferiore al minimo di ${minimumStay.required}. Inserire comunque la prenotazione? La deroga sarà registrata.`)) return;
+      payload.overrideMinimumStay = true;
+    }
     payload.createdBy = currentUser.value.id;
     payload.createdAt = new Date().toISOString();
     await postToFirstAvailableEndpoint([
@@ -2354,7 +2370,7 @@ const submitNewBooking = async () => {
     const status = err?.response?.status;
     const data = err?.response?.data;
     console.error('Errore salvataggio prenotazione:', status, data || err);
-    alert(data?.error || "Errore durante il salvataggio della prenotazione");
+    alert(data?.error || err.message || "Errore durante il salvataggio della prenotazione");
     if (status === 409) getReservations();
   }
 };
@@ -2420,7 +2436,7 @@ let pricingRefreshTimeout = null;
 const refreshHotelPricing = async () => {
   const data = newBookingData.value;
   const room = rooms.value.find(item => String(item.id) === String(data.roomId));
-  if (!room || !data.checkin || !data.checkout || data.isManualPrice) return;
+  if (!room || !data.checkin || !data.checkout) return;
   if (new Date(data.checkin) >= new Date(data.checkout)) return;
 
   const request = ++pricingRequest;
@@ -2434,7 +2450,9 @@ const refreshHotelPricing = async () => {
       adults: Number(data.adults || 0),
       kids: Number(data.kids || 0),
       kidsAges: normalizeKidsAges(data.kidsAges, data.kids),
-      pricing_mode: 'person',
+      operator: currentUser.value?.id,
+      fixedPrice: data.isManualPrice ? Number(data.manualPrice) : null,
+      pricing_mode: data.isManualPrice ? 'fixed' : 'person',
       person_pricing: data.person_pricing
     });
     if (request !== pricingRequest || response.data?.error) return;
@@ -3098,6 +3116,7 @@ const convertReservations = (apiReservations) => {
       priceTotal: res.fixedPrice ?? res.price_total ?? res.price_per_room ?? res.total_price ?? res.amount ?? null,
       pricing_mode: res.pricing_mode,
       person_pricing: res.person_pricing || null,
+      minimumStayOverride: res.minimumStayOverride,
       notes: Array.isArray(res.notes) ? res.notes : [],
       createdBy: res.createdBy,
       createdAt: res.createdAt || res.datetime,

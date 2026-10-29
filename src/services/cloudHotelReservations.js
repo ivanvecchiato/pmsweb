@@ -105,6 +105,7 @@ export async function executeHotelOperation(db, user, path, input) {
           jobs.set(depositId, snapshot.data())
         }
         const context = {
+          canOverridePricingPolicy: currentProfile.role === 'admin' || currentProfile.permissions?.override_pricing_policy === true,
           config: config.data(), rooms: pricingSnapshots.slice(0, rooms.size).map(entry => entry.data()),
           rates: pricingSnapshots.slice(rooms.size, rooms.size + rates.size).map(entry => entry.data()),
           timeTable: pricingSnapshots.slice(rooms.size + rates.size).map(entry => entry.data()), fiscalJobs: jobs

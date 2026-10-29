@@ -50,6 +50,11 @@
           <small v-if="form.access.mood" class="note">Mood richiede automaticamente l’accesso PmsWeb.</small>
         </section>
 
+        <section v-if="!form.permissions.globalAdmin && (form.access.pmsweb || form.access.mood)" class="permissions">
+          <h3>Policy prezzi</h3>
+          <label><input v-model="form.permissions.override_pricing_policy" type="checkbox"> Consenti deroga alle policy prezzi (minimum stay)</label>
+        </section>
+
         <section v-if="!form.permissions.globalAdmin && form.access.pmsweb" class="permissions">
           <h3>Permessi PmsWeb</h3>
           <label v-for="permission in webPermissions" :key="permission.key"><input v-model="form.permissions.web[permission.key]" type="checkbox"> {{ permission.label }}</label>

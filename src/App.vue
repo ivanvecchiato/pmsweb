@@ -340,15 +340,16 @@ const stopNotificationStream = () => {
 }
 
 const cloudSettingsRoutes = ['/listino', '/settings/hotel-pricing']
+const cloudAdminRoutes = ['/pms/reports', '/stats/products', '/stats/operators', '/stats/sales', '/stats/documents']
 const areaRoutes = computed(() => router.getRoutes().filter(item => item.meta.area
-  && (!isFirebaseRemoteMode() || cloudSettingsRoutes.includes(item.path))
+  && (!isFirebaseRemoteMode() || cloudAdminRoutes.includes(item.path) || cloudSettingsRoutes.includes(item.path))
   && (!item.meta.permission || hasPermission(item.meta.permission))
   && (!item.meta.permissions || item.meta.permissions.some(permission => hasPermission(permission)))
   && (!item.meta.pmsTypes || isPmsTypeAllowed(item.meta.pmsTypes))
   && (!item.meta.requiresHospitalityStudioPms || canShowHotelBeachMenus.value)))
 const navigationAreas = computed(() => router.getRoutes().filter(item => item.meta.areaOverview
   && (isFirebaseRemoteMode()
-    ? item.path === '/impostazioni' && userRole.value === 'admin'
+    ? userRole.value === 'admin' && ['/impostazioni', '/conti-report'].includes(item.path)
     : areaRoutes.value.some(child => child.meta.area === item.path))).sort((a, b) => a.meta.areaOrder - b.meta.areaOrder))
 const activeArea = computed(() => navigationAreas.value.find(item => item.path === route.path || item.path === route.meta.area))
 const activeAreaItems = computed(() => areaRoutes.value.filter(item => item.meta.area === activeArea.value?.path)

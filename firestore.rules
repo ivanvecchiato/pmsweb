@@ -228,6 +228,26 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/pms_web_users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    match /order_facts/{id} {
+      allow read: if isPmsAdmin();
+    }
+
+    match /devices/{id} {
+      allow read: if isPmsAdmin();
+    }
+
+    match /operatori/{id} {
+      allow read: if isPmsAdmin();
+    }
+
+    match /pms_bar_documents/{id} {
+      allow read: if isPmsAdmin();
+    }
+
+    match /pms_hotel_presences/{id} {
+      allow read: if isPmsAdmin();
+    }
+
     match /pms_configs/{id} {
       allow update: if id == 'current' && isPmsAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hotel'])
@@ -263,6 +283,25 @@ service cloud.firestore {
       return getAfter(path).data.revision == (exists(path) ? get(path).data.revision : 0) + 1;
     }
 
+    function pmsMinimumStay(booking) {
+      let profile = get(/databases/$(database)/documents/pms_web_users/$(request.auth.uid)).data;
+      let pricing = get(/databases/$(database)/documents/pms_configs/current).data.hotel.pricing;
+      let roomType = string(get(/databases/$(database)/documents/rooms/$(booking.roomId)).data.room_type.id);
+      let calendarPath = /databases/$(database)/documents/pms_hotel_timetable/$(booking.checkin);
+      let exceptions = exists(calendarPath) ? get(calendarPath).data.get('minimumStay', {}) : {};
+      let defaults = exceptions.get('all', pricing.minimumStay);
+      let minimum = exceptions.get('roomTypes', {}).get(roomType, defaults)[booking.board];
+      let nights = (booking.checkout_timestamp - booking.checkin_timestamp) / 86400000;
+      let override = booking.get('minimumStayOverride', {});
+      return minimum is int && minimum > 0 && booking.duration == nights
+        && timestamp.value(booking.checkin_timestamp) == timestamp.date(int(booking.checkin.split('-')[0]), int(booking.checkin.split('-')[1]), int(booking.checkin.split('-')[2]))
+        && timestamp.value(booking.checkout_timestamp) == timestamp.date(int(booking.checkout.split('-')[0]), int(booking.checkout.split('-')[1]), int(booking.checkout.split('-')[2]))
+        && (nights >= minimum ? override.size() == 0
+          : (profile.role == 'admin' || profile.get('permissions', {}).get('override_pricing_policy', false) == true)
+            && override.required == minimum && override.nights == nights && override.operator == profile.operatorId
+            && override.timestamp is int);
+    }
+
     match /pms_hotel_reservations/{id} {
       allow create, update: if pmsCommit(id, request.resource.data.revision)
         && request.resource.data.id == id && !('deposits' in request.resource.data)
@@ -273,7 +312,7 @@ service cloud.firestore {
         && (!exists(/databases/$(database)/documents/pms_hotel_reservations/$(id))
           ? request.resource.data.status == 0 : request.resource.data.status in [resource.data.status, -100])
         && (!exists(/databases/$(database)/documents/pms_hotel_reservations/$(id))
-          ? !request.resource.data.keys().hasAny(['document_id', 'payment_status', 'payment_timestamp'])
+          ? !request.resource.data.keys().hasAny(['document_id', 'payment_status', 'payment_timestamp']) && pmsMinimumStay(request.resource.data)
           : request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revision', 'roomId', 'room', 'roomType', 'checkin', 'checkout', 'checkin_timestamp', 'checkout_timestamp', 'duration', 'board', 'adults', 'kids', 'kidsAges', 'pax', 'extraBeds', 'fixedPrice', 'person_pricing', 'pricing_mode', 'price_per_day', 'price_per_room', 'price_total', 'amount', 'accountholder', 'notes', 'guests', 'status', 'cancelled_timestamp', 'cancellation_reason']))
         && pmsRoomGuard(request.resource.data.roomId)
         && (!exists(/databases/$(database)/documents/pms_hotel_reservations/$(id))

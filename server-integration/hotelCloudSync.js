@@ -178,6 +178,10 @@ async function applyHotelReservation(id) {
             operator: version.operator, source: 'client', reservation_id: id, roomId: reservation.roomId,
             data: { checkin: reservation.checkin, checkout: reservation.checkout, ...(remote ? { amount: remote.amount, pax: remote.pax } : {}) }
          });
+         if (remote?.minimumStayOverride) hotelEvents.addLogEntry({
+            type: 'reservation.minimum_stay_overridden', explanation: 'Prenotazione inserita nonostante minimum stay',
+            operator: remote.minimumStayOverride.operator, source: 'client', reservation_id: id, roomId: remote.roomId, data: remote.minimumStayOverride
+         });
       } else if (remote.status === -100 && (local.status !== remote.status || local.cancellation_reason !== remote.cancellation_reason)) {
          hotelEvents.addLogEntry({
             type: 'reservation.cancelled', explanation: 'Annullata prenotazione',

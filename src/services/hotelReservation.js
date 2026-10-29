@@ -1,5 +1,5 @@
 import Reservation from '../generated/hotel/data/hotel/Reservation.js';
-import hotelPricing, { normalizeHotelPricingPolicy, getKidAgesFromReservation, getHotelPricingState } from '../generated/hotel/hotelPricing.js';
+import hotelPricing, { evaluateMinimumStay, normalizeHotelPricingPolicy, getKidAgesFromReservation, getHotelPricingState } from '../generated/hotel/hotelPricing.js';
 
 // Stesso formato prenotazione e stessi metodi prezzo del server locale.
 export async function prepareHotelReservation(context, operation, previous = null) {
@@ -55,6 +55,12 @@ export async function prepareHotelReservation(context, operation, previous = nul
    }
    reservation.channel = previous?.channel || 'direct';
    const policy = normalizeHotelPricingPolicy(config.hotel.pricing);
+   const minimumStay = evaluateMinimumStay(policy, context.timeTable, String(room.room_type.id), reservation);
+   if (operation.action === 'create' && minimumStay.violated) {
+      if (context.canOverridePricingPolicy !== true) throw new Error('Minimum stay non rispettato: operatore non autorizzato alla deroga');
+      if (data.overrideMinimumStay !== true) throw new Error(`Soggiorno minimo di ${minimumStay.required} notti: confermare esplicitamente la deroga`);
+      reservation.minimumStayOverride = { required: minimumStay.required, nights: minimumStay.nights, operator: operation.operator, timestamp: Date.now() };
+   }
    if (data.isManualPrice !== undefined) reservation.pricing_mode = data.isManualPrice ? 'fixed' : policy.mode;
    else if (data.fixedPrice !== undefined || !previous) reservation.pricing_mode = data.fixedPrice != null ? 'fixed' : policy.mode;
    if (reservation.pricing_mode === 'fixed' && (!Number.isFinite(Number(reservation.fixedPrice)) || Number(reservation.fixedPrice) < 0)) throw new Error('Prezzo fisso non valido');
@@ -114,5 +120,6 @@ export async function prepareHotelReservation(context, operation, previous = nul
       reservation.deposits = deposits;
    }
    delete reservation.room_id;
+   if (operation.action === 'quote') reservation.minimumStay = { ...minimumStay, canOverride: context.canOverridePricingPolicy === true };
    return reservation;
 }

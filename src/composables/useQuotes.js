@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import axios from 'axios'
+import { useAuth } from '@/composables/useAuth'
 
 const quotes = ref([])
 const selectedQuote = ref(null)
@@ -79,8 +80,22 @@ const convertToBooking = async (quoteId, type, bookingDataOverride = null) => {
       quoteId: quoteId
     }
     const normalizedBookingData = normalizeBoardForBackend(bookingData)
+    if (type === 'hotel') {
+      const { currentUser } = useAuth()
+      normalizedBookingData.operator = currentUser.value.id
+      const response = await axios.post('/api/pms/hotel/calculateprice', normalizedBookingData)
+      if (response.data?.error) throw new Error(response.data.error)
+      const minimumStay = response.data?.minimumStay
+      if (!minimumStay) throw new Error('Verifica minimum stay non disponibile')
+      if (minimumStay.violated) {
+        if (!minimumStay.canOverride) throw new Error(`Soggiorno minimo di ${minimumStay.required} notti: non sei autorizzato alla deroga`)
+        if (!window.confirm(`Soggiorno minimo di ${minimumStay.required} notti. Inserire comunque la prenotazione di ${minimumStay.nights} notti? La deroga sarà registrata.`)) return null
+        normalizedBookingData.overrideMinimumStay = true
+      }
+    }
     
     const res = await axios.post(endpoint, normalizedBookingData)
+    if (res.data?.error || res.data?.success === false) throw new Error(res.data.error || "Inserimento non riuscito")
     await deleteQuote(quoteId)
     return res.data
   } catch (err) {
