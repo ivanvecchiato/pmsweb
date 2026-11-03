@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { useAuth } from '../composables/useAuth'
 import { collection, deleteDoc, doc, getDoc, getDocs, orderBy, query as buildFsQuery, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
+import { expandBeachRate, validateBeachRate } from '../generated/beach/pricing.js'
 import { getFirebaseAuth, getFirebaseDb, isFirebaseRemoteMode } from './firebaseClient'
 
 const API_CACHE_COLLECTION = import.meta.env.VITE_FIREBASE_API_COLLECTION || 'api_cache'
@@ -783,6 +784,11 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
     }
   }
 
+  if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/beach/getplan' && new URLSearchParams(query).get('mode') === 'flat') {
+    const snapshot = await getDocs(collection(db, 'pms_beach_plan'))
+    return { response: snapshot.docs.map(entry => entry.data()), source: 'pms_beach_plan' }
+  }
+
   if (String(method).toLowerCase() === 'get' && (endpoint === '/api/pms/getrates' || endpoint === '/api/pms/gettimetable')) {
     const type = new URLSearchParams(query).get('type')
     if (type === 'hotel' || type === 'beach') {
@@ -792,6 +798,10 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
       const snapshot = await getDocs(collection(db, collectionName))
       const response = []
       snapshot.forEach((entry) => response.push(entry.data()))
+      if (type === 'beach' && endpoint === '/api/pms/getrates' && new URLSearchParams(query).get('mode') !== 'canonical') {
+        const plan = await getDocs(collection(db, 'pms_beach_plan'))
+        return { response: response.map(rate => expandBeachRate(rate, plan.docs.map(entry => entry.data()))), source: collectionName }
+      }
       return { response, source: collectionName }
     }
   }
@@ -932,30 +942,46 @@ export const installApiTransportBridge = async () => {
       const profileSnapshot = user ? await getDoc(doc(getFirebaseDb(), 'pms_web_users', user.uid)) : null
       const profile = profileSnapshot?.data()
       if (!profile || profile.enabled !== true || profile.role !== 'admin') {
-        throw new axios.AxiosError('Solo un amministratore può modificare i prezzi hotel', 'ERR_FORBIDDEN', config, null,
+        throw new axios.AxiosError('Solo un amministratore può modificare i prezzi', 'ERR_FORBIDDEN', config, null,
           createAxiosLikeResponse({ error: 'Operatore non autorizzato' }, 403, config))
       }
 
       const data = parseAxiosData(config.data)
+      const pricingParams = new URLSearchParams(queryStringFromParams(config.params) || splitEndpointAndQuery(url).query)
+      const pricingType = pricingParams.get('type') || 'hotel'
       if (endpoint === '/api/pms/saverate') {
         if (data?.id == null) throw new axios.AxiosError('Identificativo listino non valido', 'ERR_BAD_REQUEST', config)
         const { operator, updatedBy, ...rate } = data
-        await setDoc(doc(getFirebaseDb(), 'pms_hotel_rates', String(rate.id)), rate)
+        if (!['hotel', 'beach'].includes(pricingType)) throw new Error('Tipo modulo non valido')
+        if (pricingType === 'beach') {
+          const plan = await getDocs(collection(getFirebaseDb(), 'pms_beach_plan'))
+          const places = plan.docs.map(entry => entry.data())
+          validateBeachRate(rate, places)
+          if (rate.id === 0) rate.id = crypto.randomUUID()
+        }
+        await setDoc(doc(getFirebaseDb(), `pms_${pricingType}_rates`, String(rate.id)), rate)
         return createAxiosLikeResponse({ success: true, id: rate.id }, 200, config)
       }
 
       if (endpoint === '/api/pms/updatetimetable') {
-        const { normalizeMinimumStay } = await import('../generated/hotel/hotelPricing.js')
+        if (!['hotel', 'beach'].includes(pricingType)) throw new Error('Tipo modulo non valido')
         if (!Array.isArray(data?.updates)) throw new axios.AxiosError('Aggiornamenti calendario non validi', 'ERR_BAD_REQUEST', config)
+        if (pricingType === 'beach') {
+          for (const update of data.updates) {
+            const rate = await getDoc(doc(getFirebaseDb(), 'pms_beach_rates', String(update.pricelist)))
+            if (!rate.exists()) throw new Error('Salvare il listino prima di assegnarlo al calendario')
+          }
+        }
         for (let offset = 0; offset < data.updates.length; offset += 450) {
           const batch = writeBatch(getFirebaseDb())
           for (const update of data.updates.slice(offset, offset + 450)) {
             if (!/^\d{4}-\d{2}-\d{2}$/.test(String(update.date || ''))) throw new Error('Data calendario non valida')
-            const ref = doc(getFirebaseDb(), 'pms_hotel_timetable', update.date)
+            const ref = doc(getFirebaseDb(), `pms_${pricingType}_timetable`, update.date)
             const current = await getDoc(ref)
             if (!current.exists()) throw new Error(`Giorno non configurato nel calendario: ${update.date}`)
             const values = { ...update }
-            if (update.minimumStay) {
+            if (pricingType === 'hotel' && update.minimumStay) {
+              const { normalizeMinimumStay } = await import('../generated/hotel/hotelPricing.js')
               const minimumStay = { ...current.data().minimumStay, roomTypes: { ...current.data().minimumStay?.roomTypes } }
               if (Object.hasOwn(update.minimumStay, 'all')) {
                 if (update.minimumStay.all === null) delete minimumStay.all

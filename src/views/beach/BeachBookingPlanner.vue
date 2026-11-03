@@ -265,7 +265,7 @@ function toISODate(date) {
 const findFirstPricedDate = (fromDateStr) => {
   const fallback = fromDateStr || toISODate(new Date());
   const pricedDays = (timetable.value || [])
-    .filter((d) => d?.date && Number(d?.pricelist) > 0)
+    .filter((d) => d?.date && d.pricelist && String(d.pricelist) !== '0')
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
   const nextPricedDay = pricedDays.find((d) => d.date >= fallback);
@@ -274,7 +274,7 @@ const findFirstPricedDate = (fromDateStr) => {
 
 const ensureSelectedDateHasPricing = () => {
   const current = selectedDate.value || toISODate(new Date());
-  const hasPricing = (timetable.value || []).some((d) => d?.date === current && Number(d?.pricelist) > 0);
+  const hasPricing = (timetable.value || []).some((d) => d?.date === current && d.pricelist && String(d.pricelist) !== '0');
   if (!hasPricing) {
     selectedDate.value = findFirstPricedDate(current);
   }

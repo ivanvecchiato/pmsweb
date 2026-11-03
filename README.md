@@ -54,6 +54,21 @@ e un profilo operatore abilitato. Il backend cloud gestisce prenotazioni, prezzi
 differita. La replica bidirezionale è installata e attiva sul server di test, con dati riallineati
 direttamente senza backup o fallback. Prima del rilascio restano backend e regole Firebase.
 
+### Listini spiaggia
+
+Il configuratore conserva prezzi per zona/fila ed eccezioni per posto in
+`pms_beach_rates`; il calendario usa `pms_beach_timetable`. Il comando
+“Applica a tutta la fila” elimina le eccezioni della sola fila selezionata.
+Nel cloud soltanto gli amministratori possono salvare prezzi e assegnazioni.
+
+Il motore di validazione ed espansione dei prezzi viene generato dal modulo
+`beach/pricing.js` del server con `scripts/prepare-beach-pricing.mjs`.
+Il percorso predefinito del server è `../../node/mbar-server`; si può configurare
+con `MBAR_SERVER_ROOT`. Non modificare i file in `src/generated/beach`.
+`npm run test:beach-pricing` verifica configuratore, trasporto e sottoscrizioni
+server con persistenza simulata. Per il rilascio servono anche le regole
+Firestore aggiornate e il riavvio del server con le sottoscrizioni spiaggia.
+
 ### Configurazione e sviluppo
 
 Configurare le variabili `VITE_FIREBASE_*` in `.env` come indicato in
