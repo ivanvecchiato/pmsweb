@@ -92,7 +92,7 @@ for (const cloud of [false, true]) {
       })
       vm.runInContext(refreshSource + '\nglobalThis.refreshPlanner = refreshPlanner', context)
       await context.refreshPlanner()
-      assert.deepEqual(requests, provider === 'h5s' ? ['/api/pms/hotel/sync_h5s'] : [])
+      assert.deepEqual(requests, !cloud && provider === 'h5s' ? ['/api/pms/hotel/sync_h5s'] : [])
       assert.equal(refreshes, 1)
       assert.equal(context.isRefreshingPlanner.value, false)
     })

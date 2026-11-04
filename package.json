@@ -35,7 +35,6 @@
     "test:cloud-fiscal": "node scripts/test-cloud-fiscal.mjs",
     "test:minimum-stay": "node scripts/prepare-cloud-client.mjs && node scripts/test-minimum-stay.mjs",
     "test:cloud-pricing": "node scripts/prepare-cloud-client.mjs && node scripts/test-cloud-pricing.mjs",
-    "test:cloud-h5s": "node scripts/test-cloud-h5s.mjs",
     "prepare:server-cloud": "node scripts/prepare-server-cloud-integration.mjs",
     "audit:cloud-realignment": "node scripts/realign-hotel-cloud.mjs",
     "test:cloud-realignment": "node scripts/test-cloud-realignment.mjs",
