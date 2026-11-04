@@ -6,9 +6,9 @@ import axiosModule from 'axios'
 import { computed, ref } from 'vue'
 
 const transportSource = (await readFile(new URL('../src/services/apiTransport.js', import.meta.url), 'utf8'))
-  .replace(/^import .*\n/gm, '').replaceAll('import.meta.env', 'testEnv').replace('export const', 'const')
+  .replace(/^import .*\r?\n/gm, '').replaceAll('import.meta.env', 'testEnv').replace('export const', 'const')
 const authSource = (await readFile(new URL('../src/composables/useAuth.js', import.meta.url), 'utf8'))
-  .replace(/^import .*\n/gm, '').replaceAll('import.meta.env', 'testEnv').replace('export const', 'const')
+  .replace(/^import .*\r?\n/gm, '').replaceAll('import.meta.env', 'testEnv').replace('export const', 'const')
 
 test('locale: login PIN, utenti e sessione usano esclusivamente il protocollo esistente', async () => {
   const requests = []

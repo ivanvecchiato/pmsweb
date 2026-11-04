@@ -128,6 +128,10 @@ const isSunday = (dateStr) => new Date(dateStr).getDay() === 0;
 
 const saveRangeAssignment = async () => {
   if (!selectedPricelist.value || !selectionStart.value || !selectionEnd.value) return;
+  if (selectedPricelist.value.id === 0) {
+    alert('Salvare il listino prima di assegnarlo al calendario');
+    return;
+  }
 
   const s = new Date(selectionStart.value);
   const e = new Date(selectionEnd.value);
@@ -146,11 +150,7 @@ const saveRangeAssignment = async () => {
   }
 
   try {
-    const response = await axios.post('/api/pms/updatetimetable?type=beach', { updates });
-    if (response.data?.queued) {
-      alert('Assegnazione accodata su Firebase: il server attuale non applica ancora le mutazioni remote.');
-      return;
-    }
+    await axios.post('/api/pms/updatetimetable?type=beach', { updates });
     updates.forEach((upd) => {
       const idx = timetable.value.findIndex((d) => d.date === upd.date);
       if (idx !== -1) timetable.value[idx].pricelist = upd.pricelist;
@@ -165,7 +165,7 @@ const saveRangeAssignment = async () => {
 };
 
 // Caricamento dati
-const fetchData = async () => {
+const fetchData = async (selectedId = selectedPricelist.value?.id) => {
   try {
     const [resProd, resPrice, resTime] = await Promise.all([
       axios.get('/api/pms/beach/getplan?mode=flat'),
@@ -176,9 +176,11 @@ const fetchData = async () => {
     resources.value = normalizedResources;
     pricelists.value = (resPrice.data || []).map((list) => buildUiPricelist(list, normalizedResources));
     timetable.value = resTime.data || [];
-    if (pricelists.value.length > 0) selectedPricelist.value = pricelists.value[0];
+    selectedPricelist.value = pricelists.value.find(list => list.id === selectedId) ?? pricelists.value[0] ?? null;
+    return true;
   } catch (err) {
     console.error("Errore caricamento:", err);
+    return false;
   }
 };
 
@@ -189,11 +191,7 @@ const saveBeachPrices = async (list) => {
     // e gli override per (fila, colonna) specifici
     const payload = buildPmsPayload(list);
     const response = await axios.post('/api/pms/saverate?type=beach', payload);
-    if (response.data?.queued) {
-      alert('Modifica accodata su Firebase: il server attuale non applica ancora le mutazioni remote.');
-      return;
-    }
-    await fetchData();
+    if (!await fetchData(response.data.id ?? list.id)) throw new Error('Ricaricamento listini non riuscito');
     alert("Listino spiaggia aggiornato con successo!");
   } catch (err) {
     alert("Errore nel salvataggio");
@@ -210,6 +208,8 @@ const addPricelist = () => {
   const list = {
     id: 0,
     description: 'Nuovo listino',
+    startDate: '',
+    endDate: '',
     color: '#A5D6A7',
     rowDefaults,
     customPrices: {}
@@ -222,6 +222,9 @@ const addPricelist = () => {
 const setRowPrice = (rowNumber, price) => {
   if (!selectedPricelist.value.rowDefaults) selectedPricelist.value.rowDefaults = {};
   selectedPricelist.value.rowDefaults[rowNumber] = price;
+  resourcesByRow.value[rowNumber].forEach(place => {
+    delete selectedPricelist.value.customPrices[place.id];
+  });
 };
 
 onMounted(fetchData);
@@ -275,17 +278,17 @@ onMounted(fetchData);
               <h4>{{ items[0]?.sector }} · FILA {{ items[0]?.row }}</h4>
               <div class="default-setter">
                 <label>Prezzo Base Fila:</label>
-                <input type="number" 
+                <input type="number" min="0" step="0.01"
                        v-model.number="selectedPricelist.rowDefaults[row]" 
-                       @change="setRowPrice(row, selectedPricelist.rowDefaults[row])"
                        class="input-mini" />
+                <button type="button" class="switch-btn" @click="setRowPrice(row, selectedPricelist.rowDefaults[row])">Applica a tutta la fila</button>
               </div>
             </div>
 
             <div class="umbrellas-row">
               <div v-for="u in items" :key="u.id" class="umbrella-item">
                 <span class="u-label">Col. {{ u.column }}</span>
-                <input type="number" 
+                <input type="number" min="0" step="0.01"
                        v-model.number="selectedPricelist.customPrices[u.id]" 
                        :placeholder="selectedPricelist.rowDefaults[row]"
                        class="input-u" />

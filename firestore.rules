@@ -212,7 +212,7 @@ service cloud.firestore {
     }
 
     match /{collection}/{id} {
-      allow read: if collection in ['rooms', 'pms_configs', 'pms_services', 'pms_hotel_rates', 'pms_hotel_timetable', 'pms_hotel_reservations', 'pms_hotel_reservation_history', 'pms_hotel_documents']
+      allow read: if collection in ['rooms', 'pms_configs', 'pms_services', 'pms_hotel_rates', 'pms_hotel_timetable', 'pms_hotel_reservations', 'pms_hotel_reservation_history', 'pms_hotel_documents', 'pms_beach_plan', 'pms_beach_rates', 'pms_beach_timetable']
         && isPmsOperator();
     }
 
@@ -261,6 +261,21 @@ service cloud.firestore {
 
     match /pms_hotel_timetable/{id} {
       allow create, update: if isPmsAdmin();
+    }
+
+    match /pms_beach_rates/{id} {
+      allow create, update: if isPmsAdmin()
+        && string(request.resource.data.id) == id
+        && request.resource.data.id != 0
+        && request.resource.data.rowPrices is list
+        && request.resource.data.placeOverrides is list
+        && !('prices' in request.resource.data);
+    }
+
+    match /pms_beach_timetable/{id} {
+      allow update: if isPmsAdmin() && request.resource.data.date == id
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pricelist', 'day'])
+        && exists(/databases/$(database)/documents/pms_beach_rates/$(string(request.resource.data.pricelist)));
     }
 
     function pmsRevision(id) {
