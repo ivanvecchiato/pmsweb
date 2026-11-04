@@ -41,7 +41,9 @@
     "test:cloud-realignment": "node scripts/test-cloud-realignment.mjs",
     "deploy:firebase:rules": "firebase deploy --only firestore:rules,firestore:indexes",
     "test:cloud-browser": "node scripts/test-cloud-client-browser.mjs",
-    "test:cloud-documents": "node scripts/test-cloud-documents-browser.mjs"
+    "test:cloud-documents": "node scripts/test-cloud-documents-browser.mjs",
+    "test:cloud-reports": "node scripts/prepare-cloud-client.mjs && node --test tests/cloud-report-periods.test.mjs",
+    "test:cloud-analytics": "node scripts/test-analytics-cloud.mjs"
   },
   "dependencies": {
     "axios": "^1.13.2",

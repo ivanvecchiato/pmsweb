@@ -37,23 +37,30 @@ const splitEndpointAndQuery = (rawUrl) => {
   }
 }
 
-const dateFromMs = (ms) => {
-  const date = new Date(ms)
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
+const dateFromMs = (ms) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit'
+}).format(new Date(ms))
 
-const lower = (value) => String(value || '').toLowerCase()
-
-const parseDateRange = ({ from, to }) => {
-  const fromMs = from ? new Date(`${from}T00:00:00`).getTime() : null
-  const toMs = to ? new Date(`${to}T23:59:59`).getTime() : null
-  return {
-    fromMs: Number.isFinite(fromMs) ? fromMs : null,
-    toMs: Number.isFinite(toMs) ? toMs : null
-  }
+const parseDateRange = ({ from, to, exclusiveTo = false }) => {
+  const boundaries = [from, to].map((value, index) => {
+    if (!value) return null
+    let midnight = Date.parse(`${value}T00:00:00Z`)
+    if (!Number.isFinite(midnight)) throw new Error('Intervallo date non valido')
+    if (index === 1 && !exclusiveTo) midnight += 86400000
+    let timestamp = midnight
+    // Convertire la mezzanotte italiana senza dipendere dal fuso del dispositivo.
+    for (let pass = 0; pass < 2; pass++) {
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+      }).formatToParts(new Date(timestamp))
+      const values = Object.fromEntries(parts.map(part => [part.type, part.value]))
+      const represented = Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day), Number(values.hour), Number(values.minute), Number(values.second))
+      timestamp = midnight - (represented - timestamp)
+    }
+    return timestamp
+  })
+  return { fromMs: boundaries[0], toMs: boundaries[1] }
 }
 
 const toNumber = (value, fallback = 0) => {
@@ -101,16 +108,10 @@ const getStatsRowsFromFirestore = async ({ from, to }) => {
   const docsRef = collection(db, FIREBASE_STATS_DOCS_COLLECTION)
   const { fromMs, toMs } = parseDateRange({ from, to })
 
-  let snapshot
-  try {
-    const filters = []
-    if (fromMs !== null) filters.push(where('timestamp', '>=', fromMs))
-    if (toMs !== null) filters.push(where('timestamp', '<=', toMs))
-
-    snapshot = filters.length ? await getDocs(buildFsQuery(docsRef, ...filters)) : await getDocs(docsRef)
-  } catch {
-    snapshot = await getDocs(docsRef)
-  }
+  const filters = []
+  if (fromMs !== null) filters.push(where('timestamp', '>=', fromMs))
+  if (toMs !== null) filters.push(where('timestamp', '<', toMs))
+  const snapshot = filters.length ? await getDocs(buildFsQuery(docsRef, ...filters)) : await getDocs(docsRef)
 
   const rows = []
   snapshot.forEach((entry) => {
@@ -119,20 +120,22 @@ const getStatsRowsFromFirestore = async ({ from, to }) => {
 
   return rows.filter((row) => {
     if (fromMs !== null && row.insertTime < fromMs) return false
-    if (toMs !== null && row.insertTime > toMs) return false
+    if (toMs !== null && row.insertTime >= toMs) return false
     return true
   })
 }
 
 const buildStatsResponseFromFirestore = async ({ endpoint, params }) => {
   if (endpoint === '/api/mbar/documents') {
-    const snapshot = await getDocs(collection(getFirebaseDb(), 'pms_bar_documents'))
-    const from = params.from ? new Date(`${params.from}T00:00:00`).getTime() : null
-    const to = params.to ? new Date(`${params.to}T23:59:59`).getTime() : null
+    const { fromMs: from, toMs: to } = parseDateRange(params)
+    const filters = []
+    if (from !== null) filters.push(where('timestamp', '>=', from))
+    if (to !== null) filters.push(where('timestamp', '<', to))
+    const snapshot = await getDocs(buildFsQuery(collection(getFirebaseDb(), 'pms_bar_documents'), ...filters))
     const reservationName = lower(params.reservationName)
     const documents = snapshot.docs.map(entry => ({ ...entry.data(), id: entry.id })).filter(document => {
       const timestamp = Number(document.timestamp)
-      if (!Number.isFinite(timestamp) || (from !== null && timestamp < from) || (to !== null && timestamp > to)) return false
+      if (!Number.isFinite(timestamp) || (from !== null && timestamp < from) || (to !== null && timestamp >= to)) return false
       const name = document?.table?.conto?.booking?.name || document?.reservation?.name
         || `${document?.reservation?.guest?.firstname || document?.reservation?.accountholder?.firstname || ''} ${document?.reservation?.guest?.lastname || document?.reservation?.accountholder?.lastname || ''}`
       return !reservationName || lower(name).includes(reservationName)
@@ -575,9 +578,18 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
       throw new Error('Intervallo report non valido')
     }
 
+    if (report === 'occupancy') {
+      const [rooms, reservations] = await Promise.all([
+        getDocs(collection(db, 'rooms')),
+        getDocs(buildFsQuery(collection(db, 'pms_hotel_reservations'), where('checkin', '<', to), where('checkout', '>', from)))
+      ])
+      const { getHotelOccupancyReport } = await import('../generated/hotel/hotelOccupancy.js')
+      return { response: await getHotelOccupancyReport(rooms.docs.map(entry => entry.data()), reservations.docs.map(entry => entry.data()), from, to), source: 'pms_hotel_reservations' }
+    }
+
     if (report === 'presences') {
       const [presenceSnapshot, roomSnapshot] = await Promise.all([
-        getDocs(collection(db, 'pms_hotel_presences')),
+        getDocs(buildFsQuery(collection(db, 'pms_hotel_presences'), where('checkin', '<', to), where('checkout', '>=', from))),
         getDocs(collection(db, 'rooms'))
       ])
       const roomById = new Map(roomSnapshot.docs.map(entry => [String(entry.data().id), entry.data()]))
@@ -683,7 +695,8 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
     }
 
     if (report === 'sales') {
-      const snapshot = await getDocs(collection(db, 'pms_hotel_documents'))
+      const { fromMs, toMs } = parseDateRange({ from, to, exclusiveTo: true })
+      const snapshot = await getDocs(buildFsQuery(collection(db, 'pms_hotel_documents'), where('timestamp', '>=', fromMs), where('timestamp', '<', toMs)))
       const days = new Map()
       const channels = new Map()
       const roomTypes = new Map()
@@ -902,13 +915,6 @@ export const installApiTransportBridge = async () => {
         throw new axios.AxiosError(error.message, 'ERR_BAD_REQUEST', config, null,
           createAxiosLikeResponse({ error: error.message }, status, config))
       }
-    }
-    if (endpoint === '/api/pms/hotel/sync_h5s') {
-      const user = getFirebaseAuth().currentUser
-      if (!user) throw new axios.AxiosError('Accesso cloud richiesto', 'ERR_UNAUTHORIZED', config)
-      const base = import.meta.env.DEV && import.meta.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_URL
-        ? import.meta.env.VITE_FIREBASE_FUNCTIONS_EMULATOR_URL.replace(/\/$/, '') : '/api/pms/hotel'
-      return originalAxiosRequest({ ...config, url: `${base}/sync_h5s`, headers: { ...config.headers, Authorization: `Bearer ${await user.getIdToken()}` } })
     }
     if ((endpoint.startsWith('/api/pms/hotel/') && (method !== 'get' || endpoint === '/api/pms/hotel/conflicts'))
       || endpoint === '/api/pms/updatereservation') {

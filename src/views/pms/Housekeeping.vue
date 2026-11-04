@@ -6,7 +6,6 @@
       </div>
       <div class="header-actions">
         <router-link v-if="currentUser?.role === 'admin'" to="/housekeeping/activities" class="refresh-button">Registro pulizie</router-link>
-        <button type="button" class="refresh-button" :disabled="loadingRooms" @click="loadRooms">{{ loadingRooms ? 'Aggiornamento…' : 'Aggiorna camere' }}</button>
       </div>
     </header>
 
@@ -59,7 +58,6 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import axios from 'axios'
 import { collection, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import { useAuth } from '@/composables/useAuth'
 import { getFirebaseDb } from '@/services/firebaseClient'
@@ -80,10 +78,8 @@ const statuses = [
   { value: 'cleaning', label: 'In pulizia' },
   { value: 'ready', label: 'Pronta' }
 ]
-const rooms = ref([])
 const roomDocuments = ref([])
 const loaded = ref(false)
-const loadingRooms = ref(false)
 const saving = ref('')
 const error = ref('')
 const search = ref('')
@@ -107,59 +103,6 @@ const visibleRooms = computed(() => roomDocuments.value
   .filter(room => !statusFilter.value || room.status === statusFilter.value || (statusFilter.value === 'maintenance' && isMaintenance(room.status)))
   .filter(room => `${room.roomCode} ${room.guestName} ${room.roomType}`.toLocaleLowerCase('it').includes(search.value.toLocaleLowerCase('it')))
   .sort((a, b) => String(a.roomCode).localeCompare(String(b.roomCode), 'it', { numeric: true })))
-
-const seedRooms = async () => {
-  if (!loaded.value || !rooms.value.length) return
-  const db = getFirebaseDb()
-  for (const room of rooms.value) {
-    if (room.id == null) continue
-    const roomId = String(room.id)
-    const current = roomDocuments.value.find(item => String(item.roomId) === roomId)
-    const reservation = room.reservation
-    const guest = reservation?.guests?.[0] || reservation?.accountholder
-    const data = {
-      roomId,
-      roomCode: String(room.room_code || ''),
-      floor: String(room.floor || ''),
-      roomType: String(room.room_type?.label || ''),
-      reservationId: String(reservation?.id || ''),
-      reservationStatus: Number(reservation?.status ?? 2),
-      guestName: guest ? `${guest.firstname || ''} ${guest.lastname || ''}`.trim() : '',
-      checkin: String(reservation?.checkin || ''),
-      checkout: String(reservation?.checkout || '')
-    }
-    if (!current) {
-      await setDoc(doc(db, 'housekeeping_rooms', `room_${roomId}`), {
-        ...data, status: data.reservationStatus === 2 || data.reservationStatus === 4 ? 'dirty' : 'ready',
-        maintenanceRequired: false,
-        updatedBy: currentUser.value?.name || '',
-        updatedById: currentUser.value?.id || 0,
-        updatedAt: serverTimestamp()
-      }, { merge: true })
-      continue
-    }
-    if (current.status === 'ready' && current.reservationId !== data.reservationId && (data.reservationStatus === 2 || data.reservationStatus === 4)) data.status = 'dirty'
-    if (Object.entries(data).some(([key, value]) => current[key] !== value)) {
-      await setDoc(doc(db, 'housekeeping_rooms', current.documentId), data, { merge: true })
-    }
-  }
-}
-
-const loadRooms = async () => {
-  if (loadingRooms.value) return
-  loadingRooms.value = true
-  error.value = ''
-  try {
-    const response = await axios.post('/api/pms/getrooms', { includeReservations: true, renew: false }, { mbarDirect: true })
-    if (!Array.isArray(response.data)) throw new Error('Elenco camere non valido')
-    rooms.value = response.data.filter(room => !isOverRoomType(room.room_type?.label))
-    await seedRooms()
-  } catch (cause) {
-    error.value = `Impossibile aggiornare le camere: ${cause.message}`
-  } finally {
-    loadingRooms.value = false
-  }
-}
 
 const updateStatus = async (room, status, note) => {
   if (!['dirty', 'blocked', 'maintenance'].includes(status)) return
@@ -211,9 +154,7 @@ onMounted(() => {
       if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return
       roomDocuments.value = snapshot.docs.map(item => ({ ...item.data(), documentId: item.id }))
         .filter(room => !isOverRoomType(room.roomType))
-      const firstSnapshot = !loaded.value
       loaded.value = true
-      if (firstSnapshot) loadRooms()
     }, cause => { error.value = `Piano pulizie non disponibile: ${cause.message}` })
   } catch (cause) {
     error.value = `Piano pulizie non disponibile: ${cause.message}`

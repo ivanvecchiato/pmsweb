@@ -251,6 +251,34 @@
         }
       ],
       "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "pms_hotel_presences",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "checkin",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "checkout",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pms_hotel_reservations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "checkin",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "checkout",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

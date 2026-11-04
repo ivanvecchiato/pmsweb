@@ -2195,7 +2195,7 @@ const refreshPlanner = async () => {
 
   isRefreshingPlanner.value = true;
   try {
-    if (providerType.value === 'h5s') {
+    if (!isFirebaseRemoteMode() && providerType.value === 'h5s') {
       await axios.get('/api/pms/hotel/sync_h5s', { timeout: 60000 });
     }
 
