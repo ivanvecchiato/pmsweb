@@ -12,3 +12,6 @@
 - Non introdurre retrocompatibilità o fallback: usare il formato canonico e riallineare direttamente i dati di test.
 
 - Non sincronizzare nel cloud gli eventi H5S. La replica riguarda le prenotazioni canoniche, indipendentemente dal produttore H5S o Mood.
+
+- Se realizzi interfacce utente, evita etichette e descrizioni secondarie non necessarie. Lascia che il layut spieghi da sé
+
