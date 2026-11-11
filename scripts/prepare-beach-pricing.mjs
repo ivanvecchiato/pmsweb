@@ -7,3 +7,4 @@ const serverRoot = process.env.MBAR_SERVER_ROOT || path.resolve(root, '../../nod
 const destination = path.join(root, 'src/generated/beach');
 mkdirSync(destination, { recursive: true });
 copyFileSync(path.join(serverRoot, 'beach/pricing.js'), path.join(destination, 'pricing.js'));
+copyFileSync(path.join(serverRoot, 'beach/plan.js'), path.join(destination, 'plan.js'));

@@ -6,6 +6,9 @@ import { getFireDb } from '../../modules/firestore.js';
 import { databaseRoot } from '../../modules/dbPaths.js';
 import { enqueueSet, enqueueDelete, hasPendingFirestoreOperation } from '../../modules/firestoreOutbox.js';
 import db from '../../hotel/modules/db.js';
+import beachDb from '../../beach/modules/db.js';
+import { flattenBeachZones, validateBeachZones } from '../../beach/plan.js';
+import { validateBeachRate } from '../../beach/pricing.js';
 import hotelEvents from '../../hotel/modules/events.js';
 import configs from '../../modules/configs.js';
 import sse from '../../modules/sse.js';
@@ -269,50 +272,89 @@ function startHotelCloudSync() {
          }).catch(restart);
       }
    }, restart));
-   subscriptions.push(getFireDb().collection('pms_hotel_rates').onSnapshot(snapshot => {
-      for (const change of snapshot.docChanges()) {
-         changes = changes.then(async () => {
-            if (activeGeneration !== generation) return;
-            const id = change.doc.id;
-            if (hasPendingFirestoreOperation('pms_hotel_rates', id)) return;
-            const local = await db.hotelPricesdb.findOne(item => String(item.id) === id);
-            if (change.type === 'removed') {
-               if (local) await db.hotelPricesdb.deleteOne({ id: local.id });
-               sse.broadcast('hotel_rates_updated', { id, deleted: true });
-               return;
-            }
-            const remote = change.doc.data();
-            if (String(remote.id) !== id) throw new Error(`Identificativo listino cloud non valido: ${id}`);
-            if (isDeepStrictEqual(local, remote)) return;
-            if (local) await db.hotelPricesdb.updateOne(item => String(item.id) === id && isDeepStrictEqual(item, local), () => remote);
-            else await db.hotelPricesdb.insertOne(remote);
-            sse.broadcast('hotel_rates_updated', { id });
-         }).catch(error => {
-            log.e(`Hotel rates cloud sync ${change.doc.id}: ${error.message}`);
-            sse.broadcast('hotel_log_warning', { message: 'Aggiornamento cloud listino non applicato al server locale' });
-         });
-      }
-   }, restart));
-   subscriptions.push(getFireDb().collection('pms_hotel_timetable').onSnapshot(snapshot => {
-      for (const change of snapshot.docChanges()) {
-         if (change.type === 'removed') continue;
-         changes = changes.then(async () => {
-            if (activeGeneration !== generation) return;
-            const remote = change.doc.data();
-            const id = change.doc.id;
-            if (remote.date !== id) throw new Error(`Identificativo calendario cloud non valido: ${id}`);
-            if (hasPendingFirestoreOperation('pms_hotel_timetable', id)) return;
-            const local = await db.hotelTimeTableDB.findOne(item => item.date === id);
-            if (isDeepStrictEqual(local, remote)) return;
-            if (local) await db.hotelTimeTableDB.updateOne(item => item.date === id && isDeepStrictEqual(item, local), () => remote);
-            else await db.hotelTimeTableDB.insertOne(remote);
-            sse.broadcast('hotel_timetable_updated', { date: id });
-         }).catch(error => {
-            log.e(`Hotel timetable cloud sync ${change.doc.id}: ${error.message}`);
-            sse.broadcast('hotel_log_warning', { message: 'Aggiornamento cloud calendario tariffe non applicato al server locale' });
-         });
-      }
-   }, restart));
+   let receiveInitialBeachPlan;
+   const initialBeachPlan = new Promise(resolve => { receiveInitialBeachPlan = resolve; });
+   let beachPlanChanges = Promise.resolve();
+   subscriptions.push(getFireDb().collection('pms_beach_plan').onSnapshot(snapshot => {
+      beachPlanChanges = beachPlanChanges.then(async () => {
+         if (activeGeneration !== generation) return;
+         const local = await beachDb.planDB.findMany();
+         const ids = new Set([...local.map(zone => String(zone.id)), ...snapshot.docs.map(doc => doc.id), ...snapshot.docChanges().map(change => change.doc.id)]);
+         if ([...ids].some(id => hasPendingFirestoreOperation('pms_beach_plan', id))) return;
+         const records = snapshot.docs.map(doc => {
+            const zone = doc.data();
+            if (String(zone.id) !== doc.id) throw new Error(`Identificativo zona cloud non valido: ${doc.id}`);
+            return zone;
+         }).sort((a, b) => a.id - b.id);
+         const zones = validateBeachZones(records);
+         if (isDeepStrictEqual(local, zones)) return;
+         beachDb.planDB.documents = zones;
+         await beachDb.planDB.save();
+         sse.broadcast('beach_plan_updated', {});
+      });
+      receiveInitialBeachPlan();
+      beachPlanChanges = beachPlanChanges.catch(error => {
+         log.e(`Beach plan cloud sync: ${error.message}`);
+         sse.broadcast('hotel_log_warning', { message: 'Aggiornamento cloud planimetria non applicato al server locale' });
+      });
+   }, error => {
+      receiveInitialBeachPlan();
+      restart(error);
+   }));
+   for (const type of ['hotel', 'beach']) {
+      const ratesDb = type === 'beach' ? beachDb.beachPricesdb : db.hotelPricesdb;
+      const timetableDb = type === 'beach' ? beachDb.beachTimeTableDB : db.hotelTimeTableDB;
+      subscriptions.push(getFireDb().collection(`pms_${type}_rates`).onSnapshot(snapshot => {
+         for (const change of snapshot.docChanges()) {
+            changes = changes.then(async () => {
+               if (activeGeneration !== generation) return;
+               const id = change.doc.id;
+               if (hasPendingFirestoreOperation(`pms_${type}_rates`, id)) return;
+               const local = await ratesDb.findOne(item => String(item.id) === id);
+               if (change.type === 'removed') {
+                  if (local) await ratesDb.deleteOne({ id: local.id });
+                  sse.broadcast(`${type}_rates_updated`, { id, deleted: true });
+                  return;
+               }
+               const remote = change.doc.data();
+               if (type === 'beach') {
+                  await initialBeachPlan;
+                  await beachPlanChanges;
+                  if (activeGeneration !== generation) return;
+                  validateBeachRate(remote, flattenBeachZones(await beachDb.planDB.findMany()));
+               }
+               if (String(remote.id) !== id) throw new Error(`Identificativo listino cloud non valido: ${id}`);
+               if (isDeepStrictEqual(local, remote)) return;
+               if (local) await ratesDb.updateOne(item => String(item.id) === id && isDeepStrictEqual(item, local), () => remote);
+               else await ratesDb.insertOne(remote);
+               sse.broadcast(`${type}_rates_updated`, { id });
+            }).catch(error => {
+               log.e(`${type} rates cloud sync ${change.doc.id}: ${error.message}`);
+               sse.broadcast('hotel_log_warning', { message: 'Aggiornamento cloud listino non applicato al server locale' });
+            });
+         }
+      }, restart));
+      subscriptions.push(getFireDb().collection(`pms_${type}_timetable`).onSnapshot(snapshot => {
+         for (const change of snapshot.docChanges()) {
+            if (change.type === 'removed') continue;
+            changes = changes.then(async () => {
+               if (activeGeneration !== generation) return;
+               const remote = change.doc.data();
+               const id = change.doc.id;
+               if (remote.date !== id) throw new Error(`Identificativo calendario cloud non valido: ${id}`);
+               if (hasPendingFirestoreOperation(`pms_${type}_timetable`, id)) return;
+               const local = await timetableDb.findOne(item => item.date === id);
+               if (isDeepStrictEqual(local, remote)) return;
+               if (local) await timetableDb.updateOne(item => item.date === id && isDeepStrictEqual(item, local), () => remote);
+               else await timetableDb.insertOne(remote);
+               sse.broadcast(`${type}_timetable_updated`, { date: id });
+            }).catch(error => {
+               log.e(`${type} timetable cloud sync ${change.doc.id}: ${error.message}`);
+               sse.broadcast('hotel_log_warning', { message: 'Aggiornamento cloud calendario tariffe non applicato al server locale' });
+            });
+         }
+      }, restart));
+   }
    subscriptions.push(getFireDb().collection('pms_configs').doc('current').onSnapshot(snapshot => {
       if (!snapshot.exists) return;
       changes = changes.then(() => {

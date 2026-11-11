@@ -212,7 +212,7 @@ service cloud.firestore {
     }
 
     match /{collection}/{id} {
-      allow read: if collection in ['rooms', 'pms_configs', 'pms_services', 'pms_hotel_rates', 'pms_hotel_timetable', 'pms_hotel_reservations', 'pms_hotel_reservation_history', 'pms_hotel_documents', 'pms_beach_plan', 'pms_beach_rates', 'pms_beach_timetable']
+      allow read: if collection in ['rooms', 'pms_configs', 'pms_services', 'pms_hotel_rates', 'pms_hotel_timetable', 'pms_hotel_reservations', 'pms_hotel_reservation_history', 'pms_hotel_documents', 'pms_beach_plan', 'pms_beach_reservations', 'pms_beach_rates', 'pms_beach_timetable']
         && isPmsOperator();
     }
 
@@ -261,6 +261,15 @@ service cloud.firestore {
 
     match /pms_hotel_timetable/{id} {
       allow create, update: if isPmsAdmin();
+    }
+
+    match /pms_beach_plan/{id} {
+      allow create, update: if isPmsAdmin()
+        && string(request.resource.data.id) == id
+        && request.resource.data.rows is list
+        && request.resource.data.code is string
+        && request.resource.data.name is string;
+      allow delete: if isPmsAdmin();
     }
 
     match /pms_beach_rates/{id} {

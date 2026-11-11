@@ -165,22 +165,22 @@
       </p>
     </section>
 
+    <section class="card">
+      <h2>Minimum stay predefinito</h2>
+      <div class="params-grid">
+        <label v-for="board in ['BB', 'HB', 'FB']" :key="board">
+          {{ board }}
+          <input v-model.number="form.minimumStay[board]" type="number" min="1" step="1" required />
+        </label>
+      </div>
+    </section>
+
     <section class="card beach-note">
       <h2>Nota modalità Beach</h2>
       <p>
         In modalità beach il prezzo è per posto ombrellone, equivalente al modello "per camera"
         lato hotel. Questa policy è fissa e non modificabile.
       </p>
-    </section>
-
-    <section class="card">
-      <fieldset>
-        <legend>Minimum stay predefinito</legend>
-        <p>Numero minimo di notti, secondo il trattamento e il giorno di arrivo.</p>
-        <label v-for="board in ['BB', 'HB', 'FB']" :key="board">
-          {{ board }} <input v-model.number="form.minimumStay[board]" type="number" min="1" step="1" required>
-        </label>
-      </fieldset>
     </section>
 
     <div class="footer-actions">

@@ -20,7 +20,7 @@ const loadZones = async () => {
       rowTypes: zone.rows.map(row => ({ ...row.place_type })),
       placeOverrides: Object.fromEntries(zone.rows.flatMap((row, rowIndex) =>
         row.places.flatMap((place, columnIndex) => place?.place_type
-          ? [[`${rowIndex}:${columnIndex}`, place.place_type.id]] : [])))
+          ? [[`${rowIndex}:${columnIndex}`, { ...place.place_type }]] : [])))
     }));
   } catch (cause) {
     error.value = cause.message || 'Errore nel caricamento delle zone';
@@ -68,8 +68,7 @@ const generateBeachMap = async () => {
           place_type: sector.rowTypes[rowIndex],
           places: Array.from({ length: sector.cols }, (_, columnIndex) => {
             const place = { ...(existing?.rows[rowIndex]?.places[columnIndex] || {}) };
-            const overrideId = Number(sector.placeOverrides[`${rowIndex}:${columnIndex}`]);
-            const override = sector.rowTypes.find(type => type.id === overrideId);
+            const override = sector.placeOverrides[`${rowIndex}:${columnIndex}`];
             if (override && override.id !== sector.rowTypes[rowIndex].id) place.place_type = override;
             else delete place.place_type;
             return place;
@@ -137,9 +136,13 @@ const generateBeachMap = async () => {
           <div class="place-overrides">
             <label v-for="columnIndex in s.cols" :key="columnIndex">
               Posto {{ columnIndex }} · tipo
-              <select v-model.number="s.placeOverrides[`${rowIndex - 1}:${columnIndex - 1}`]">
-                <option value="">Della fila</option>
-                <option v-for="type in s.rowTypes.slice(0, s.rows)" :key="type.id" :value="type.id">{{ type.description }}</option>
+              <select v-model="s.placeOverrides[`${rowIndex - 1}:${columnIndex - 1}`]">
+                <option :value="null">Della fila</option>
+                <option
+                  v-if="s.placeOverrides[`${rowIndex - 1}:${columnIndex - 1}`] && !s.rowTypes.slice(0, s.rows).some(type => JSON.stringify(type) === JSON.stringify(s.placeOverrides[`${rowIndex - 1}:${columnIndex - 1}`]))"
+                  :value="s.placeOverrides[`${rowIndex - 1}:${columnIndex - 1}`]"
+                >{{ s.placeOverrides[`${rowIndex - 1}:${columnIndex - 1}`].description }}</option>
+                <option v-for="(type, typeIndex) in s.rowTypes.slice(0, s.rows)" :key="typeIndex" :value="type">{{ type.description }}</option>
               </select>
             </label>
           </div>

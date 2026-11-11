@@ -339,7 +339,7 @@ const stopNotificationStream = () => {
   notificationAbortController = null
 }
 
-const cloudSettingsRoutes = ['/listino', '/settings/hotel-pricing']
+const cloudSettingsRoutes = ['/listino', '/settings/hotel-pricing', '/listino_beach']
 const cloudAdminRoutes = ['/pms/reports', '/stats/products', '/stats/operators', '/stats/sales', '/stats/documents']
 const areaRoutes = computed(() => router.getRoutes().filter(item => item.meta.area
   && (!isFirebaseRemoteMode() || cloudAdminRoutes.includes(item.path) || cloudSettingsRoutes.includes(item.path))

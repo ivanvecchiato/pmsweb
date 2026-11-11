@@ -245,7 +245,7 @@ router.beforeEach(async (to, from, next) => {
     return
   }
 
-  const cloudSettingsRoutes = ['/impostazioni', '/listino', '/settings/hotel-pricing']
+  const cloudSettingsRoutes = ['/impostazioni', '/listino', '/settings/hotel-pricing', '/listino_beach']
   const cloudAdminRoutes = ['/conti-report', '/stats/products', '/stats/operators', '/stats/sales', '/stats/documents', '/pms/reports']
   if (isFirebaseRemoteMode() && !['Login', 'Tableau', 'Bookings'].includes(to.name) && !cloudSettingsRoutes.includes(to.path) && !cloudAdminRoutes.includes(to.path)) {
     next(isAuthenticated.value ? '/' : '/login')

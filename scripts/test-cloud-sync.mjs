@@ -22,7 +22,7 @@ cpSync(path.join(server, 'configs/configs.json'), path.join(process.env.MBAR_CON
 writeFileSync(path.join(sandbox, 'database/hotel/cloud-sync.json'), JSON.stringify({ enabled: true, baselines: {}, diagnostics: {} }))
 writeFileSync(path.join(sandbox, 'package.json'), '{"type":"module"}')
 symlinkSync(path.join(server, 'node_modules'), path.join(sandbox, 'node_modules'))
-for (const name of ['index.js', 'modules/firestoreOutbox.js', 'modules/firestore.js', 'modules/firebaseCredentials.js', 'modules/dbPaths.js', 'modules/log.js', 'modules/sse.js', 'hotel/modules/db.js', 'hotel/modules/events.js', 'pms/modules/firestore.js']) {
+for (const name of ['index.js', 'modules/firestoreOutbox.js', 'modules/firestore.js', 'modules/firebaseCredentials.js', 'modules/dbPaths.js', 'modules/log.js', 'modules/sse.js', 'hotel/modules/db.js', 'hotel/modules/events.js', 'pms/modules/firestore.js', 'beach/modules/db.js', 'beach/plan.js', 'beach/pricing.js']) {
   mkdirSync(path.dirname(path.join(sandbox, name)), { recursive: true })
   cpSync(path.join(server, name), path.join(sandbox, name))
 }

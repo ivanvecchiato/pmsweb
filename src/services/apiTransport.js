@@ -2,6 +2,7 @@ import axios from 'axios'
 import { useAuth } from '../composables/useAuth'
 import { collection, deleteDoc, doc, getDoc, getDocs, orderBy, query as buildFsQuery, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { expandBeachRate, validateBeachRate } from '../generated/beach/pricing.js'
+import { flattenBeachZones, validateBeachZones } from '../generated/beach/plan.js'
 import { getFirebaseAuth, getFirebaseDb, isFirebaseRemoteMode } from './firebaseClient'
 
 const API_CACHE_COLLECTION = import.meta.env.VITE_FIREBASE_API_COLLECTION || 'api_cache'
@@ -797,9 +798,11 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
     }
   }
 
-  if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/beach/getplan' && new URLSearchParams(query).get('mode') === 'flat') {
+  if (String(method).toLowerCase() === 'get' && endpoint === '/api/pms/beach/getplan' && ['flat', 'zones'].includes(new URLSearchParams(query).get('mode'))) {
     const snapshot = await getDocs(collection(db, 'pms_beach_plan'))
-    return { response: snapshot.docs.map(entry => entry.data()), source: 'pms_beach_plan' }
+    const zones = validateBeachZones(snapshot.docs.map(entry => entry.data()).sort((a, b) => a.id - b.id))
+    const response = new URLSearchParams(query).get('mode') === 'zones' ? zones : flattenBeachZones(zones)
+    return { response, source: 'pms_beach_plan' }
   }
 
   if (String(method).toLowerCase() === 'get' && (endpoint === '/api/pms/getrates' || endpoint === '/api/pms/gettimetable')) {
@@ -813,7 +816,7 @@ const readFromFirebaseCache = async ({ method, url, params, data }) => {
       snapshot.forEach((entry) => response.push(entry.data()))
       if (type === 'beach' && endpoint === '/api/pms/getrates' && new URLSearchParams(query).get('mode') !== 'canonical') {
         const plan = await getDocs(collection(db, 'pms_beach_plan'))
-        return { response: response.map(rate => expandBeachRate(rate, plan.docs.map(entry => entry.data()))), source: collectionName }
+        return { response: response.map(rate => expandBeachRate(rate, flattenBeachZones(validateBeachZones(plan.docs.map(entry => entry.data()))))), source: collectionName }
       }
       return { response, source: collectionName }
     }
@@ -943,7 +946,7 @@ export const installApiTransportBridge = async () => {
         createAxiosLikeResponse({ error: 'Operazione hotel cloud non ancora disponibile' }, 501, config))
     }
 
-    if (method === 'post' && ['/api/pms/saverate', '/api/pms/updatetimetable', '/api/pms/setconfigs'].includes(endpoint)) {
+    if (method === 'post' && ['/api/pms/saverate', '/api/pms/updatetimetable', '/api/pms/setconfigs', '/api/pms/beach/setup'].includes(endpoint)) {
       const user = getFirebaseAuth().currentUser
       const profileSnapshot = user ? await getDoc(doc(getFirebaseDb(), 'pms_web_users', user.uid)) : null
       const profile = profileSnapshot?.data()
@@ -953,6 +956,52 @@ export const installApiTransportBridge = async () => {
       }
 
       const data = parseAxiosData(config.data)
+      if (endpoint === '/api/pms/beach/setup') {
+        const db = getFirebaseDb()
+        const [plan, rates, bookings] = await Promise.all([
+          getDocs(collection(db, 'pms_beach_plan')),
+          getDocs(collection(db, 'pms_beach_rates')),
+          getDocs(collection(db, 'pms_beach_reservations'))
+        ])
+        const previous = flattenBeachZones(validateBeachZones(plan.docs.map(entry => entry.data())))
+        const zones = JSON.parse(JSON.stringify(data.zones))
+        let nextId = Math.max(0, ...previous.map(place => place.id), ...flattenBeachZones(zones).map(place => place.id || 0)) + 1
+        for (const zone of zones) {
+          for (const row of zone.rows) {
+            for (const place of row.places) {
+              if (place && place.id == null) place.id = nextId++
+            }
+          }
+        }
+        validateBeachZones(zones)
+        const places = flattenBeachZones(zones)
+        const positions = new Map(places.map(place => [place.id, `${place.zone_id}:${place.row}:${place.column}`]))
+        for (const entry of bookings.docs) {
+          const booking = entry.data()
+          const before = previous.find(place => place.id === Number(booking.placeId))
+          if (before && positions.get(before.id) !== `${before.zone_id}:${before.row}:${before.column}`) {
+            throw new Error(`Il posto ${before.id} ha prenotazioni e non può essere rimosso o spostato`)
+          }
+        }
+        const batch = writeBatch(db)
+        for (const entry of plan.docs) {
+          if (!zones.some(zone => String(zone.id) === entry.id)) batch.delete(doc(db, 'pms_beach_plan', entry.id))
+        }
+        for (const zone of zones) batch.set(doc(db, 'pms_beach_plan', String(zone.id)), zone)
+        const rows = new Set(places.map(place => `${place.zone_id}:${place.row}`))
+        for (const entry of rates.docs) {
+          const rate = validateBeachRate(entry.data(), previous)
+          const updated = {
+            ...rate,
+            rowPrices: rate.rowPrices.filter(row => rows.has(`${row.zoneId}:${row.row}`)),
+            placeOverrides: rate.placeOverrides.filter(override => positions.has(override.placeId))
+          }
+          if (JSON.stringify(updated) !== JSON.stringify(rate)) batch.set(doc(db, 'pms_beach_rates', entry.id), updated)
+        }
+        await batch.commit()
+        return createAxiosLikeResponse({ success: true, count: places.length }, 200, config)
+      }
+
       const pricingParams = new URLSearchParams(queryStringFromParams(config.params) || splitEndpointAndQuery(url).query)
       const pricingType = pricingParams.get('type') || 'hotel'
       if (endpoint === '/api/pms/saverate') {
@@ -961,7 +1010,7 @@ export const installApiTransportBridge = async () => {
         if (!['hotel', 'beach'].includes(pricingType)) throw new Error('Tipo modulo non valido')
         if (pricingType === 'beach') {
           const plan = await getDocs(collection(getFirebaseDb(), 'pms_beach_plan'))
-          const places = plan.docs.map(entry => entry.data())
+          const places = flattenBeachZones(validateBeachZones(plan.docs.map(entry => entry.data())))
           validateBeachRate(rate, places)
           if (rate.id === 0) rate.id = crypto.randomUUID()
         }

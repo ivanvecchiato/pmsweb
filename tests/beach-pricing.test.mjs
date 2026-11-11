@@ -6,7 +6,7 @@ import { webcrypto } from 'node:crypto'
 import axiosModule from 'axios'
 import { computed, ref } from 'vue'
 import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc'
-import { flattenBeachZones } from '../../../node/mbar-server/beach/plan.js'
+import { flattenBeachZones, validateBeachZones } from '../../../node/mbar-server/beach/plan.js'
 import { expandBeachRate, validateBeachRate } from '../src/generated/beach/pricing.js'
 
 const source = (await readFile(new URL('../src/services/apiTransport.js', import.meta.url), 'utf8'))
@@ -19,7 +19,11 @@ const places = [
 ]
 
 async function setup(role = 'admin') {
-  const store = new Map(places.map(place => [`pms_beach_plan/${place.id}`, place]))
+  const zones = [
+    { id: 1, name: 'Nord', code: 'A', rows: [{ place_type: places[0].place_type, places: [{ id: 11 }, { id: 12 }] }] },
+    { id: 2, name: 'Sud', code: 'B', rows: [{ place_type: places[2].place_type, places: [{ id: 21 }] }] }
+  ]
+  const store = new Map(zones.map(zone => [`pms_beach_plan/${zone.id}`, zone]))
   store.set('pms_web_users/admin', { enabled: true, role })
   store.set('pms_beach_timetable/2026-07-01', { date: '2026-07-01', pricelist: 0 })
   store.set('pms_hotel_timetable/2026-07-01', { date: '2026-07-01', pricelist: 'hotel' })
@@ -28,7 +32,7 @@ async function setup(role = 'admin') {
   axios.AxiosError = axiosModule.AxiosError
   const context = vm.createContext({
     axios, testEnv: {}, console, URL, URLSearchParams, Date, Response, crypto: webcrypto,
-    expandBeachRate, validateBeachRate,
+    expandBeachRate, validateBeachRate, flattenBeachZones, validateBeachZones, structuredClone,
     isFirebaseRemoteMode: () => true,
     useAuth: () => ({ currentUser: { value: { id: 7 } } }),
     getFirebaseAuth: () => ({ currentUser: { uid: 'admin' } }), getFirebaseDb: () => ({}),
@@ -41,8 +45,11 @@ async function setup(role = 'admin') {
     setDoc: async (path, value) => { store.set(path, structuredClone(value)) },
     writeBatch: () => {
       const writes = []
-      return { set: (path, value) => writes.push([path, value]), commit: async () => {
-        for (const [path, value] of writes) store.set(path, { ...store.get(path), ...structuredClone(value) })
+      return { set: (path, value) => writes.push([path, value]), delete: path => writes.push([path, null]), commit: async () => {
+        for (const [path, value] of writes) {
+          if (value === null) store.delete(path)
+          else store.set(path, { ...store.get(path), ...structuredClone(value) })
+        }
       } }
     }
   })
@@ -125,7 +132,7 @@ test('configuratore: salva e rilegge eccezioni, poi uniforma solo la fila selezi
 
 test('server: le sottoscrizioni ricevono listini e calendario spiaggia nelle rispettive basi locali', async () => {
   const server = await readFile(new URL('../../../node/mbar-server/pms/modules/hotelCloudSync.js', import.meta.url), 'utf8')
-  const start = server.indexOf("   for (const type of ['hotel', 'beach']) {")
+  const start = server.indexOf("   let receiveInitialBeachPlan;")
   const end = server.indexOf("   subscriptions.push(getFireDb().collection('pms_configs')", start)
   assert(start >= 0 && end > start)
   const database = () => {
@@ -141,10 +148,10 @@ test('server: le sottoscrizioni ricevono listini e calendario spiaggia nelle ris
   const listeners = new Map()
   const warnings = []
   const context = vm.createContext({
-    validateBeachRate, flattenBeachZones,
+    validateBeachRate, flattenBeachZones, validateBeachZones,
     db: { hotelPricesdb: hotelRates, hotelTimeTableDB: hotelTime },
     beachDb: { beachPricesdb: beachRates, beachTimeTableDB: beachTime,
-      planDB: { findMany: async () => [{ id: 1, code: 'A', name: 'A', rows: [{ place_type: { id: 1 }, places: [{ id: 11 }] }] }] } },
+      planDB: { documents: [], findMany: async function () { return this.documents }, save: async () => {} } },
     subscriptions: [], activeGeneration: 1, generation: 1, changes: Promise.resolve(),
     getFireDb: () => ({ collection: name => ({ onSnapshot: callback => { listeners.set(name, callback); return () => {} } }) }),
     restart: error => { throw error }, hasPendingFirestoreOperation: () => false,
@@ -157,7 +164,14 @@ test('server: le sottoscrizioni ricevono listini e calendario spiaggia nelle ris
     await context.flush()
   }
   const rate = { id: 'estate', rowPrices: [{ zoneId: 1, row: 1, price_per_place: 20 }], placeOverrides: [{ placeId: 11, price_per_place: 25 }] }
-  await notify('pms_beach_rates', rate)
+  // Il listino può arrivare prima della planimetria iniziale.
+  listeners.get('pms_beach_rates')({ docChanges: () => [{ type: 'added', doc: { id: rate.id, data: () => rate } }] })
+  const cloudZone = { id: 1, code: 'A', name: 'Nord', rows: [{ place_type: { id: 3 }, places: [{ id: 11, place_type: { id: 4 } }] }] }
+  const planDoc = { id: '1', data: () => cloudZone }
+  listeners.get('pms_beach_plan')({ docs: [planDoc], docChanges: () => [{ type: 'added', doc: planDoc }] })
+  await context.flush()
+  assert.equal(context.beachDb.planDB.documents[0].rows[0].place_type.id, 3)
+  assert.equal(context.beachDb.planDB.documents[0].rows[0].places[0].place_type.id, 4)
   await notify('pms_beach_timetable', { date: '2026-07-01', pricelist: 'estate' })
   assert.equal(beachRates.records[0].placeOverrides[0].price_per_place, 25)
   assert.equal(beachTime.records[0].pricelist, 'estate')
@@ -166,4 +180,106 @@ test('server: le sottoscrizioni ricevono listini e calendario spiaggia nelle ris
   await notify('pms_beach_rates', { ...rate, id: 'invalid', rowPrices: [{ zoneId: 999, row: 1, price_per_place: 20 }] })
   assert.equal(beachRates.records.length, 1)
   assert.equal(warnings.length, 1)
+})
+
+test('cloud: salva zone complete, assegna ID e conserva il tipo base distinto dall’override', async () => {
+  const { axios, store } = await setup()
+  const zones = (await axios.get('/api/pms/beach/getplan?mode=zones')).data
+  zones[0].name = 'Zona aggiornata'
+  zones[0].rows[0].place_type = { id: 3, description: 'Standard' }
+  zones[0].rows[0].places[0].place_type = { id: 4, description: 'Premium' }
+  zones[0].rows[0].places.push({})
+  const result = await axios.post('/api/pms/beach/setup', { zones })
+  assert.equal(result.data.count, 4)
+  const saved = (await axios.get('/api/pms/beach/getplan?mode=zones')).data
+  assert.equal(saved[0].name, 'Zona aggiornata')
+  assert.equal(saved[0].rows[0].place_type.id, 3)
+  assert.equal(saved[0].rows[0].places[0].place_type.id, 4)
+  assert.equal(saved[0].rows[0].places[2].id, 22)
+  assert.equal(store.get('pms_beach_plan/1').rows.length, 1)
+  store.set('pms_beach_reservations/booking', { placeId: 11 })
+  saved[0].rows[0].places[0] = null
+  await assert.rejects(axios.post('/api/pms/beach/setup', { zones: saved }), /ha prenotazioni/)
+  const staff = await setup('staff')
+  await assert.rejects(staff.axios.post('/api/pms/beach/setup', { zones }), /amministratore/)
+})
+
+test('cloud: la route configurazione spiaggia è accessibile agli amministratori e resta protetta per lo staff', async () => {
+  const router = await readFile(new URL('../src/router/index.js', import.meta.url), 'utf8')
+  const guard = router.slice(router.indexOf('router.beforeEach('), router.indexOf('export default router'))
+  for (const role of ['admin', 'staff']) {
+    let callback
+    const context = vm.createContext({
+      router: { beforeEach: value => { callback = value } },
+      isFirebaseRemoteMode: () => true,
+      useAuth: () => ({
+        isAuthenticated: { value: true }, userRole: { value: role },
+        canShowHotelBeachMenus: { value: true }, pmsType: { value: 'beach' },
+        hasPermission: () => true, isPmsTypeAllowed: () => true,
+        loadPmsType: async () => {}, validateSession: () => {}
+      }),
+      getAuthorizedFallbackRoute: () => '/'
+    })
+    vm.runInContext(guard, context)
+    let result = 'pending'
+    await callback({ path: '/listino_beach', name: 'BeachManagement', meta: { requiresAuth: true, permission: 'listino_beach', pmsTypes: ['beach'] } }, {}, value => { result = value })
+    assert.equal(result, role === 'admin' ? undefined : '/')
+  }
+})
+
+test('configuratore mappa: cambiare il nome conserva i tipi posto assenti dai tipi base delle file', async () => {
+  const source = await readFile(new URL('../src/views/beach/BeachLayoutConfig.vue', import.meta.url), 'utf8')
+  const { descriptor, errors } = parse(source)
+  assert.equal(errors.length, 0)
+  compileScript(descriptor, { id: 'layout' })
+  assert.equal(compileTemplate({ source: descriptor.template.content, filename: 'BeachLayoutConfig.vue', id: 'layout' }).errors.length, 0)
+  let saved = [{ id: 1, name: 'Area Centrale', code: 'A', rows: [{
+    place_type: { id: 1, description: 'Standard' },
+    places: [{ id: 11 }, { id: 12, place_type: { id: 2, description: 'Premium', color: '#123456', label: 'P' } }]
+  }] }]
+  const before = structuredClone(saved[0].rows)
+  const payloads = []
+  const context = vm.createContext({
+    ref, console, confirm: () => true, alert: () => {},
+    axios: {
+      get: async () => ({ data: structuredClone(saved) }),
+      post: async (url, payload) => {
+        assert.equal(url, '/api/pms/beach/setup')
+        saved = JSON.parse(JSON.stringify(payload.zones))
+        payloads.push(saved)
+        return { data: { success: true } }
+      }
+    }
+  })
+  const script = descriptor.scriptSetup.content.replace(/^import .*\r?\n/gm, '').replace('onMounted(loadZones);', '')
+  vm.runInContext(script + '\nglobalThis.editor = { loadZones, generateBeachMap, sectors }', context)
+  const editor = context.editor
+  await editor.loadZones()
+  assert.deepEqual(JSON.parse(JSON.stringify(editor.sectors.value[0].placeOverrides['0:1'])), before[0].places[1].place_type)
+  editor.sectors.value[0].name = 'Nome aggiornato'
+  await editor.generateBeachMap()
+  assert.equal(payloads[0][0].name, 'Nome aggiornato')
+  assert.deepEqual(payloads[0][0].rows, before)
+  assert.deepEqual(JSON.parse(JSON.stringify(editor.sectors.value[0].placeOverrides['0:1'])), before[0].places[1].place_type)
+  editor.sectors.value[0].placeOverrides['0:1'] = null
+  await editor.generateBeachMap()
+  assert.equal(Object.hasOwn(payloads[1][0].rows[0].places[1], 'place_type'), false)
+})
+
+test('configuratore cloud: salva lo stato reattivo Vue conservando il tipo completo del posto', async () => {
+  const { axios, store } = await setup()
+  const zone = store.get('pms_beach_plan/1')
+  zone.rows[0].places[1].place_type = { id: 8, description: 'Premium', color: '#123456' }
+  const before = structuredClone(zone.rows)
+  const source = await readFile(new URL('../src/views/beach/BeachLayoutConfig.vue', import.meta.url), 'utf8')
+  const { descriptor } = parse(source)
+  const context = vm.createContext({ ref, axios, console, confirm: () => true, alert: () => {} })
+  const script = descriptor.scriptSetup.content.replace(/^import .*\r?\n/gm, '').replace('onMounted(loadZones);', '')
+  vm.runInContext(script + '\nglobalThis.editor = { loadZones, generateBeachMap, sectors, error }', context)
+  await context.editor.loadZones()
+  context.editor.sectors.value[0].name = 'Nome cloud aggiornato'
+  await context.editor.generateBeachMap()
+  assert.equal(context.editor.error.value, '')
+  assert.equal(store.get('pms_beach_plan/1').name, 'Nome cloud aggiornato')
+  assert.deepEqual(store.get('pms_beach_plan/1').rows, before)
 })
